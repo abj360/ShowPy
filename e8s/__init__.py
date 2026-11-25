@@ -654,6 +654,10 @@ if TYPE_CHECKING:
         decode_event,
         events_since,
     )
+    from e8s.show.file_backend import (
+        SLOT_DIGITS,
+        FileBackend,
+    )
     from e8s.show.file_repository import (
         FileRepository,
     )
@@ -863,6 +867,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FacingSpec": ("e8s.choreo.form_models", "FacingSpec"),
     "FacingValue": ("e8s.choreo.path_models", "FacingValue"),
     "FigureEightParams": ("e8s.choreo.path_models", "FigureEightParams"),
+    "FileBackend": ("e8s.show.file_backend", "FileBackend"),
     "FileRepository": ("e8s.show.file_repository", "FileRepository"),
     "FillRecipe": ("e8s.choreo.recipe_models", "FillRecipe"),
     "Fix": ("e8s.choreo.engine_models", "Fix"),
@@ -977,6 +982,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "RoseFormParams": ("e8s.choreo.form_models", "RoseFormParams"),
     "Route": ("e8s.choreo.path_models", "Route"),
     "SHEET_ID_PATTERN": ("e8s.core.ids", "SHEET_ID_PATTERN"),
+    "SLOT_DIGITS": ("e8s.show.file_backend", "SLOT_DIGITS"),
     "ScatterRecipe": ("e8s.choreo.recipe_models", "ScatterRecipe"),
     "SchemaError": ("e8s.core.errors", "SchemaError"),
     "Segment": ("e8s.geo.curves", "Segment"),
@@ -1424,6 +1430,7 @@ __all__ = [
     "MIN_TEMPO",
     "RESERVED_IDS",
     "SHEET_ID_PATTERN",
+    "SLOT_DIGITS",
     "Anchor",
     "ApprovalState",
     "ArcCurve",
@@ -1473,6 +1480,7 @@ __all__ = [
     "FacingSpec",
     "FacingValue",
     "FigureEightParams",
+    "FileBackend",
     "FileRepository",
     "FillRecipe",
     "Fix",

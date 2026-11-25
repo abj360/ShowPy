@@ -26,6 +26,10 @@ Contains:
     test_regression_unreadable_lost_and_found_is_skipped: reads past a lost+found it cannot open
     test_read_layout_skips_housekeeping_names_only: skips every housekeeping name beside a layout-1
         show, and still refuses any other stray entry
+    test_read_layout_reads_a_root_holding_only_tmp_as_current: reads the root a first commit left
+        before linking its layout file as the current layout
+    test_read_layout_reads_a_layout_file_linked_while_listing: reads a layout file a concurrent
+        first commit linked after its name was looked up
 """
 
 import json
@@ -43,6 +47,7 @@ from e8s.show.layout import (
     HOUSEKEEPING_NAMES,
     LAYOUT_FILE,
     LAYOUT_FORMAT,
+    TEMP_DIR,
     read_layout,
 )
 
@@ -250,3 +255,35 @@ def test_read_layout_skips_housekeeping_names_only(tmp_path: Path) -> None:
     with pytest.raises(StorageError) as caught:
         read_layout(tmp_path)
     assert caught.value.code == ErrorCode.CORRUPT
+
+
+def test_read_layout_reads_a_root_holding_only_tmp_as_current(tmp_path: Path) -> None:
+    (tmp_path / TEMP_DIR).mkdir()
+    (tmp_path / TEMP_DIR / ".tmp-left").write_bytes(b"x")
+    assert read_layout(tmp_path) == CURRENT_LAYOUT
+    (tmp_path / TEMP_DIR / ".tmp-left").unlink()
+    (tmp_path / TEMP_DIR).rmdir()
+    (tmp_path / TEMP_DIR).write_bytes(b"not a folder")
+    with pytest.raises(StorageError) as caught:
+        read_layout(tmp_path)
+    assert caught.value.code == ErrorCode.CORRUPT
+
+
+def test_read_layout_reads_a_layout_file_linked_while_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reads a layout file that a racing first commit linked after its name was looked up."""
+    _write_layout(tmp_path, _layout_json(3))
+    (tmp_path / TEMP_DIR).mkdir()
+    real_lstat = Path.lstat
+    looked_up: list[Path] = []
+
+    def not_yet_linked(path: Path) -> os.stat_result:
+        if path.name == LAYOUT_FILE and not looked_up:
+            looked_up.append(path)
+            raise FileNotFoundError(path)
+        return real_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", not_yet_linked)
+    with pytest.raises(VersionError):
+        read_layout(tmp_path)
