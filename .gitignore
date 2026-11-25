@@ -28,3 +28,5 @@ fuzz/target/
 fuzz/artifacts/
 fuzz/corpus/
 mutants.out*/
+.mutmut/
+mutants-summary.json

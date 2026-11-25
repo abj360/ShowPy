@@ -19,10 +19,15 @@ Contains:
     core: installs the wheel without extras and checks imports and extra-gated calls fail closed
     rust: checks Rust formatting, lints and tests, builds the wasm crate, on arm64 hosts refuses
         any fused multiply-add outside libm's fma in the extension, then checks the crates'
-        licences, bans, advisories and sources and that the Rust notice file is current
+        licences, bans, advisories and sources, refuses a stale fuzz lock, checks the fuzz
+        crate's supply chain and that the Rust notice file is current
     wheels: builds the sdist and a dist-profile wheel from it, refuses an rpath or a linked
         libpython in its extension, then runs the ported packages' tests against that wheel in
         fresh venvs on each supported Python
+    rustfuzz: runs each cargo-fuzz target of the core's parsers, or the one named, on the pinned
+        nightly for a number of seconds each
+    mutants: records cargo-mutants' score on e8s-core and mutmut's on the Python modules that
+        ported packages keep in mutants-summary.json, failing only when a tool cannot run
     parity: compares the working tree's case outputs with a v0.4.0 oracle built into .parity/,
         failing on a gate; `--speed` also fails a timed case that is slower than the oracle
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
@@ -38,9 +43,11 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import nox
+from nox.command import CommandFailed
 
 PRETTIER_GLOB = "**/*.{md,yml,yaml,json}"
 HASH_SEEDS = ("1", "2")
@@ -107,6 +114,25 @@ CARGO_ABOUT = "cargo-about"
 CARGO_ABOUT_VERSION = "0.9.3"
 # cargo-about builds its command-line binary only with this feature.
 CARGO_ABOUT_FEATURES = ("--features", "cli")
+# cargo-fuzz 0.13.2 and cargo-mutants 27.1.0 (rust-version 1.88) are the newest releases; both
+# build on 1.100.0.
+CARGO_FUZZ = "cargo-fuzz"
+CARGO_FUZZ_VERSION = "0.13.2"
+CARGO_MUTANTS = "cargo-mutants"
+CARGO_MUTANTS_VERSION = "27.1.0"
+# cargo-mutants reads its version flag only after its cargo subcommand name.
+CARGO_MUTANTS_VERSION_ARGS = ("mutants", "--version")
+# cargo-fuzz needs a nightly compiler for its sanitizer flags; a dated one keeps runs repeatable.
+FUZZ_TOOLCHAIN = "nightly-2026-11-20"
+# rustup picks this toolchain over rust-toolchain.toml's pin for every cargo and rustc call.
+FUZZ_ENV = {"RUSTUP_TOOLCHAIN": FUZZ_TOOLCHAIN}
+FUZZ_DIR = "fuzz"
+FUZZ_MANIFEST = "fuzz/Cargo.toml"
+FUZZ_TARGETS = ("refs", "strict_json", "svg_path", "font", "selection", "timeline")
+FUZZ_SECONDS = "60"
+SECONDS_FLAG = "--seconds"
+RUSTFUZZ_USAGE = f"usage: nox -s rustfuzz -- [{'|'.join(FUZZ_TARGETS)}] [--seconds N]"
+MUTANTS_SCRIPT = "scripts/run_mutants.py"
 NOTICES_SCRIPT = "scripts/gen_third_party_notices.py"
 CARGO_TOOLS_MARK = "cargo_tools"
 CARGO_TOOLS_TESTS = "tests/unit/tooling/test_third_party_notices.py"
@@ -505,7 +531,13 @@ def _cargo_tool(name: str) -> str:
     return str(Path(CARGO_TOOLS_ROOT).resolve() / "bin" / f"{name}{suffix}")
 
 
-def _install_cargo_tool(session: nox.Session, name: str, version: str, *features: str) -> None:
+def _install_cargo_tool(
+    session: nox.Session,
+    name: str,
+    version: str,
+    *features: str,
+    version_args: tuple[str, ...] = ("--version",),
+) -> None:
     """Installs one cargo tool, locked, into CARGO_TOOLS_ROOT unless that version is there.
 
     Args:
@@ -513,10 +545,11 @@ def _install_cargo_tool(session: nox.Session, name: str, version: str, *features
         name: The crate that ships the tool, which is also the executable's name.
         version: The exact version to install.
         features: Extra `cargo install` arguments that select the crate's features.
+        version_args: The arguments that make the installed executable print its version.
     """
     tool = _cargo_tool(name)
     if Path(tool).is_file():
-        installed = subprocess.run([tool, "--version"], capture_output=True, encoding="utf-8")
+        installed = subprocess.run([tool, *version_args], capture_output=True, encoding="utf-8")
         if installed.stdout.strip() == f"{name} {version}":
             session.log(f"Found {name} {version}")
             return
@@ -538,8 +571,9 @@ def _install_cargo_tool(session: nox.Session, name: str, version: str, *features
 def rust(session: nox.Session) -> None:
     """Checks Rust formatting, lints and tests, builds the wasm crate and runs the FMA check.
 
-    Then checks every crate's licence, bans, advisories and source with cargo deny, and that the
-    Rust notice file the wheel ships is current.
+    Then checks every crate's licence, bans, advisories and source with cargo deny, refuses a
+    stale fuzz/Cargo.lock, checks the fuzz crate's advisories, bans and sources, and checks that
+    the Rust notice file the wheel ships is current.
 
     Every cargo command builds pyo3 against nox's own interpreter and environment, the project
     environment where e8s is installed: the crate tests embed that interpreter and import e8s.
@@ -577,8 +611,122 @@ def rust(session: nox.Session) -> None:
     _install_cargo_tool(session, CARGO_DENY, CARGO_DENY_VERSION)
     _install_cargo_tool(session, CARGO_ABOUT, CARGO_ABOUT_VERSION, *CARGO_ABOUT_FEATURES)
     session.run(_cargo_tool(CARGO_DENY), "--locked", "check", external=True)
+    # The fuzz crate keeps its own lock, which a core version or dependency change leaves stale;
+    # only the nightly builds it, so the stable gate refuses that lock here. It never ships, so
+    # cargo deny skips its licences (libfuzzer-sys carries NCSA) but checks what CI executes.
+    session.run("cargo", "fetch", "--locked", "--manifest-path", FUZZ_MANIFEST, external=True)
+    session.run(
+        _cargo_tool(CARGO_DENY),
+        "--manifest-path",
+        FUZZ_MANIFEST,
+        "--locked",
+        "check",
+        "advisories",
+        "bans",
+        "sources",
+        external=True,
+    )
     _uv_run(session, "python", NOTICES_SCRIPT, "--check")
     _uv_run(session, "pytest", "-m", CARGO_TOOLS_MARK, CARGO_TOOLS_TESTS)
+
+
+def _fuzz_plan(posargs: list[str]) -> tuple[tuple[str, ...], str]:
+    """Reads `[target] [--seconds N]` into the fuzz targets to run and the seconds each one runs.
+
+    Args:
+        posargs: The arguments given after `--`.
+
+    Returns:
+        plan: The named target, or every one of FUZZ_TARGETS, and the seconds per target,
+            FUZZ_SECONDS unless `--seconds` gives a positive whole number.
+
+    Raises:
+        ValueError: On an unknown target, more than one target, or a bad `--seconds` value.
+    """
+    rest = list(posargs)
+    seconds = FUZZ_SECONDS
+    if SECONDS_FLAG in rest:
+        at = rest.index(SECONDS_FLAG)
+        value = rest[at + 1] if at + 1 < len(rest) else ""
+        if not value.isdecimal() or int(value) == 0:
+            raise ValueError(f"{SECONDS_FLAG} needs a positive whole number; {RUSTFUZZ_USAGE}")
+        seconds = value
+        del rest[at : at + 2]
+    if len(rest) > 1 or (rest and rest[0] not in FUZZ_TARGETS):
+        raise ValueError(f"unknown arguments {rest}; {RUSTFUZZ_USAGE}")
+    return (tuple(rest) or FUZZ_TARGETS), seconds
+
+
+def _fuzz_targets(run: Callable[..., object], targets: Sequence[str], seconds: str) -> list[str]:
+    """Runs each fuzz target in turn, going on to the next after one fails.
+
+    Args:
+        run: The session's run, which raises CommandFailed when a command fails.
+        targets: The fuzz targets to run.
+        seconds: How long libFuzzer runs each target.
+
+    Returns:
+        failed: The targets whose run failed, such as on a crash, in run order.
+    """
+    failed: list[str] = []
+    for target in targets:
+        try:
+            run(
+                _cargo_tool(CARGO_FUZZ),
+                "run",
+                target,
+                "--fuzz-dir",
+                FUZZ_DIR,
+                "--",
+                f"-max_total_time={seconds}",
+                external=True,
+                env=FUZZ_ENV,
+            )
+        except CommandFailed:
+            failed.append(target)
+    return failed
+
+
+@nox.session
+def rustfuzz(session: nox.Session) -> None:
+    """Fuzzes the core's parsers: `nox -s rustfuzz -- [target] [--seconds N]`.
+
+    Installs FUZZ_TOOLCHAIN and cargo-fuzz, refuses a stale fuzz/Cargo.lock, then runs each
+    target, or the one named, for N seconds (FUZZ_SECONDS by default). A crash leaves its input
+    under fuzz/artifacts/ and the next target still runs; the session then fails, naming every
+    failed target. Not a default session: it runs on demand and in the nightly core workflow.
+    """
+    try:
+        targets, seconds = _fuzz_plan(session.posargs)
+    except ValueError as error:
+        session.error(str(error))
+    session.run(
+        "rustup", "toolchain", "install", FUZZ_TOOLCHAIN, "--profile", "minimal", external=True
+    )
+    _install_cargo_tool(session, CARGO_FUZZ, CARGO_FUZZ_VERSION)
+    session.run(
+        "cargo", "fetch", "--locked", "--manifest-path", FUZZ_MANIFEST, external=True, env=FUZZ_ENV
+    )
+    failed = _fuzz_targets(session.run, targets, seconds)
+    if failed:
+        session.error(
+            f"fuzz targets failed: {', '.join(failed)}; inputs under {FUZZ_DIR}/artifacts/"
+        )
+
+
+@nox.session
+def mutants(session: nox.Session) -> None:
+    """Records mutation scores for e8s-core and the kept Python modules, never gating on them.
+
+    Installs cargo-mutants, then scripts/run_mutants.py runs it on e8s-core and mutmut over the
+    modules listed under `stays` in tests/unit/rules/ported/*.toml, and writes both scores to
+    mutants-summary.json. Fails only when a tool cannot run. Not a default session: it runs on
+    demand and in the nightly core workflow.
+    """
+    _install_cargo_tool(
+        session, CARGO_MUTANTS, CARGO_MUTANTS_VERSION, version_args=CARGO_MUTANTS_VERSION_ARGS
+    )
+    _uv_run(session, "python", MUTANTS_SCRIPT, "--cargo-mutants", _cargo_tool(CARGO_MUTANTS))
 
 
 @nox.session
