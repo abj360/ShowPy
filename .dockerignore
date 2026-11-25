@@ -18,3 +18,9 @@ e8s/*.so
 e8s/*.pyd
 .cargo-tools
 .parity
+fuzz/target
+fuzz/artifacts
+fuzz/corpus
+.mutmut
+mutants.out
+mutants-summary.json

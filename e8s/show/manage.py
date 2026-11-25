@@ -17,7 +17,7 @@ from collections.abc import Sequence
 
 from e8s.cast.models import Cast
 from e8s.choreo.models import Placement, Set
-from e8s.choreo.path_models import Route, TransitionSpec, Waypoint
+from e8s.choreo.path_models import FacingOverride, Route, TransitionSpec, Waypoint
 from e8s.core.errors import (
     PathError,
     SchemaError,
@@ -30,6 +30,7 @@ from e8s.core.ids import (
     format_ref,
     format_tid,
     parse_ref,
+    parse_tid,
 )
 from e8s.sheet.models import Sheet
 from e8s.show.locks import require_unlocked
@@ -235,7 +236,7 @@ def add_set(
 
 
 def _subset_id(show: Show, after: str) -> SetId:
-    base = after.rstrip(SUBSET_LETTERS)
+    base = after.rstrip(SUBSET_LETTERS) or after[0]
     suffix = after[len(base) :]
     start = SUBSET_LETTERS.index(suffix[-1]) + 1 if suffix else 0
     for letter in SUBSET_LETTERS[start:]:
@@ -292,15 +293,21 @@ def insert_subset(
     return replace_sets(show, sets, force=force), new_id
 
 
+def _names_set(tid_text: str, set_id: str) -> bool:
+    try:
+        return set_id in parse_tid(tid_text)
+    except SchemaError:
+        return False
+
+
 def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
     dropped_forms = {f for f, form in show.forms.items() if form.set == set_id}
-    tids = {format_tid(t) for t in show.transition_ids() if set_id in t}
 
     def kept(pin: Pin) -> bool:
         return not (
             (pin.target == "set" and pin.id == set_id)
             or (pin.target == "form" and pin.id in dropped_forms)
-            or (pin.target == "transition" and pin.id in tids)
+            or (pin.target == "transition" and _names_set(pin.id, set_id))
         )
 
     return tuple(filter(kept, show.pins))
@@ -312,7 +319,9 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     Args:
         show: Show to edit.
         set_id: Set to delete.
-        merge_counts: Adds its counts to the next set so the total time stays the same.
+        merge_counts: Adds its counts to the next set, or to the previous set when it is the last,
+            so the total time stays the same. The first set always keeps 0 counts, so removing
+            the second of two sets drops its time.
         force: Allows deleting pinned placements, locked forms or locked paths.
 
     Returns:
@@ -325,9 +334,9 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     position = show.set_index(set_id)
     removed = show.sets[position]
     sets = [s for s in show.sets if s.id != set_id]
-    if merge_counts and position < len(sets):
-        following = sets[position]
-        sets[position] = following.replace(counts=following.counts + removed.counts)
+    receiver = min(position, len(sets) - 1)
+    if merge_counts and receiver > 0:
+        sets[receiver] = sets[receiver].replace(counts=sets[receiver].counts + removed.counts)
     if position == 0 and sets:
         sets[0] = sets[0].replace(counts=0.0)
     forms = {f: form for f, form in show.forms.items() if form.set != set_id}
@@ -377,6 +386,28 @@ def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> Tran
     return spec.replace(counts=counts)
 
 
+def _remapped_count(count: float, start: float, old: float, new: float) -> float:
+    if count <= start:
+        return count
+    if count <= start + old:
+        return start + (count - start) * new / old
+    return count + new - old
+
+
+def _remapped_overrides(
+    overrides: tuple[FacingOverride, ...], start: float, old: float, new: float
+) -> tuple[FacingOverride, ...]:
+    if old <= 0:
+        return overrides
+    return tuple(
+        o.replace(
+            start=_remapped_count(o.start, start, old, new),
+            end=_remapped_count(o.end, start, old, new),
+        )
+        for o in overrides
+    )
+
+
 def set_counts(
     show: Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False
 ) -> Show:
@@ -388,7 +419,8 @@ def set_counts(
         show: Show to edit.
         set_id: Set to retime.
         counts: New counts; 0 for the first set, positive otherwise.
-        rescale: Scales stored path windows, waypoint times and route windows proportionally.
+        rescale: Scales stored path windows, waypoint times and route windows proportionally, and
+            maps facing override counts: unchanged before the move, scaled inside it, shifted after.
         force: Allows retiming a pinned set or rescaling locked path rows.
 
     Returns:
@@ -400,10 +432,15 @@ def set_counts(
     """
     position = show.set_index(set_id)
     _require_counts(counts, is_first=position == 0)
+    old = show.sets[position].counts
+    start = sum(s.counts for s in show.sets[:position])
     sets = list(show.sets)
     sets[position] = sets[position].replace(counts=counts)
+    update: dict[str, object] = {}
+    if rescale:
+        update["facing_overrides"] = _remapped_overrides(show.facing_overrides, start, old, counts)
     specs = tuple(
         _retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
     )
-    return replace_sets(show, sets, force=force, transitions=specs)
+    return replace_sets(show, sets, force=force, transitions=specs, **update)
