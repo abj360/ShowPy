@@ -52,6 +52,7 @@ from e8s.show.documents import (
     script_doc,
     split_path,
 )
+from e8s.show.encode_cache import EncodeCache
 from e8s.show.migrate import require_current_show_doc
 from e8s.show.models import Show
 from e8s.show.set_keys import SetFolders, set_key, to_stored_path
@@ -233,12 +234,15 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
     return _text_or_bytes(path, stored)
 
 
-def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | None]:
+def show_changes(
+    show: Show, tree: Mapping[str, bytes], *, cache: EncodeCache | None = None
+) -> dict[str, bytes | None]:
     """Lists the stored writes and deletes that store `show` over `tree`, with removed sets' files.
 
     Paths are stored paths: set folders are keys, so a renumbered set keeps its folder. A tree of
     an older format version is migrated first, so files of a set folder the migration renamed
-    move with it instead of being deleted as stale.
+    move with it instead of being deleted as stale. With `cache`, only documents whose sources
+    the cache does not hold are encoded.
 
     >>> from e8s.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
@@ -249,7 +253,7 @@ def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | Non
     paths = [p for p in tree if p not in migration] + [
         p for p, d in migration.items() if d is not None
     ]
-    docs = encode_show(show)
+    docs = encode_show(show, cache=cache)
     kept = tuple(f"/sets/{set_key(s)}/" for s in show.sets)
     stale = [
         p
