@@ -312,7 +312,8 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     Args:
         show: Show to edit.
         set_id: Set to delete.
-        merge_counts: Adds its counts to the next set so the total time stays the same.
+        merge_counts: Adds its counts to the next set, or to the previous set when it is the last,
+            so the total time stays the same.
         force: Allows deleting pinned placements, locked forms or locked paths.
 
     Returns:
@@ -325,9 +326,9 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     position = show.set_index(set_id)
     removed = show.sets[position]
     sets = [s for s in show.sets if s.id != set_id]
-    if merge_counts and position < len(sets):
-        following = sets[position]
-        sets[position] = following.replace(counts=following.counts + removed.counts)
+    if merge_counts and sets:
+        receiver = min(position, len(sets) - 1)
+        sets[receiver] = sets[receiver].replace(counts=sets[receiver].counts + removed.counts)
     if position == 0 and sets:
         sets[0] = sets[0].replace(counts=0.0)
     forms = {f: form for f, form in show.forms.items() if form.set != set_id}

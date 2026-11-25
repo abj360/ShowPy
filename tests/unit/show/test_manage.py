@@ -366,8 +366,6 @@ def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
     assert ws.read("/sets/3/set.py") == SCRIPT_OLD_TWO.decode()
 
 
-@pytest.mark.defect("UP-9.7-53")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-53")
 def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None:
     """Keeps total counts, or refuses, when merging the last set's counts (audit 9.7)."""
     show = _three_set_show()
@@ -377,6 +375,14 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
     except E8sError:
         return
     assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
+
+
+def test_remove_last_set_merges_counts_into_previous_set_and_its_move() -> None:
+    show = _three_set_show()
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0)
+    edited = remove_set(show.replace(transitions=(spec,)), "3")
+    assert edited.set("2").counts == 12.0
+    assert edited.transitions[0].counts == 12.0
 
 
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
