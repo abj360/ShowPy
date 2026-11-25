@@ -414,6 +414,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("match", "e8s.choreo.match", "match"),
     ("match_by_order", "e8s.choreo.match", "match_by_order"),
     ("measure_to_count", "e8s.time.measures", "measure_to_count"),
+    ("merge", "e8s.show.merge", "merge"),
     ("merge_forms", "e8s.choreo.form_ops", "merge_forms"),
     ("migrate_documents", "e8s.show.documents", "migrate_documents"),
     ("migrate_json", "e8s.show.interchange", "migrate_json"),
