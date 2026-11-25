@@ -519,6 +519,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("set_sync", "e8s.time.timeline", "set_sync"),
     ("sheet_templates", "e8s.sheet.templates", "sheet_templates"),
     ("shift", "e8s.choreo.set_transforms", "shift"),
+    ("show_folder", "e8s.show.show_folders", "show_folder"),
     ("similarity_fit", "e8s.sheet.replace", "similarity_fit"),
     ("sine_wave_points", "e8s.choreo.form_fns", "sine_wave_points"),
     ("skew", "e8s.choreo.set_transforms", "skew"),
