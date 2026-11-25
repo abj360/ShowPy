@@ -82,7 +82,7 @@ pub enum ErrorCode {
     MissingSpot,
     /// A selector mixes `&` with `+` or `-` at one parenthesis level without parentheses.
     MixedOperators,
-    /// A named selection is defined under a name that already holds a selection.
+    /// A named selection or a proposal is created under a name that is already taken.
     NameTaken,
     /// A file repository path is longer than the file system allows.
     NameTooLong,
@@ -106,8 +106,10 @@ pub enum ErrorCode {
     Path,
     /// An edit changes a pinned placement.
     PinnedChanged,
-    /// A proposal that is already accepted or rejected is changed again.
+    /// A proposal that is already accepted, rejected or withdrawn is changed again.
     ProposalClosed,
+    /// An open proposal touches items that changed since its base revision, so it is not applied.
+    ProposalStale,
     /// A tempo ramp is cut short by the next tempo section.
     RampCut,
     /// A tempo ramp sets only one of `ramp_to` and `ramp_counts`.
@@ -244,6 +246,7 @@ impl ErrorCode {
             Self::Path => "PATH",
             Self::PinnedChanged => "PINNED_CHANGED",
             Self::ProposalClosed => "PROPOSAL_CLOSED",
+            Self::ProposalStale => "PROPOSAL_STALE",
             Self::RampCut => "RAMP_CUT",
             Self::RampIncomplete => "RAMP_INCOMPLETE",
             Self::RampLength => "RAMP_LENGTH",
