@@ -676,8 +676,10 @@ if TYPE_CHECKING:
         import_positions,
         migrate_json,
     )
-    from e8s.show.items import (
+    from e8s.show.item_table import (
         ITEM_TABLE,
+    )
+    from e8s.show.items import (
         changes,
         items,
     )
@@ -892,7 +894,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Hold": ("e8s.time.models", "Hold"),
     "ID_MAX_LENGTH": ("e8s.core.ids", "ID_MAX_LENGTH"),
     "ID_PATTERN": ("e8s.core.ids", "ID_PATTERN"),
-    "ITEM_TABLE": ("e8s.show.items", "ITEM_TABLE"),
+    "ITEM_TABLE": ("e8s.show.item_table", "ITEM_TABLE"),
     "IdChanges": ("e8s.show.change_models", "IdChanges"),
     "InMemoryAssetStore": ("e8s.show.assets", "InMemoryAssetStore"),
     "InMemoryRepository": ("e8s.show.memory_backend", "InMemoryRepository"),
