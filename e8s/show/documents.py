@@ -24,28 +24,17 @@ Contains:
     migrated_view(): returns stored documents as the migration would store them
 """
 
-import functools
 import json
-from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
-from functools import partial
+from collections.abc import Collection, Iterator, Mapping
 
 from e8s.core.errors import StorageError
 from e8s.core.json_types import JsonValue
-from e8s.core.types import FrozenModel
 from e8s.show.canvas_renames import renamed_canvas
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_dump import dump_dumped_json as dump_dumped_json
 from e8s.show.document_dump import dump_headed_json as dump_headed_json
 from e8s.show.document_dump import dump_json as dump_json
 from e8s.show.document_dump import dump_show_doc as dump_show_doc
-from e8s.show.document_paths import (
-    CAST_DOC,
-    CAST_FIELD,
-    ROLE_NAMES,
-    SET_DOC_NAME,
-    SPLIT_FIELDS,
-    docs_for_order,
-)
 from e8s.show.document_paths import FORMS_NAME as FORMS_NAME
 from e8s.show.document_paths import LEGACY_NOTES_DOC as LEGACY_NOTES_DOC
 from e8s.show.document_paths import NOTES_DOC as NOTES_DOC
@@ -55,6 +44,7 @@ from e8s.show.document_paths import SCRIPT_NAME as SCRIPT_NAME
 from e8s.show.document_paths import SET_ORDER_FIELD as SET_ORDER_FIELD
 from e8s.show.document_paths import SHEET_DOC as SHEET_DOC
 from e8s.show.document_paths import TIMELINE_DOC as TIMELINE_DOC
+from e8s.show.document_paths import docs_for_order
 from e8s.show.document_paths import forms_doc as forms_doc
 from e8s.show.document_paths import is_show_doc as is_show_doc
 from e8s.show.document_paths import is_storable_folder as is_storable_folder
@@ -64,17 +54,17 @@ from e8s.show.document_paths import script_doc as script_doc
 from e8s.show.document_paths import set_doc as set_doc
 from e8s.show.document_paths import split_path as split_path
 from e8s.show.document_reading import read_migrated, read_show
+from e8s.show.encode_cache import EncodeCache, document_groups, encode_groups
 from e8s.show.migrate import (
     CURRENT_VERSION,
     MigrationReport,
     ReportBuilder,
-    format_header,
     read_version,
     without_header,
 )
 from e8s.show.migrate import SHOW_DOC as SHOW_DOC
 from e8s.show.models import Show
-from e8s.show.role_documents import holds_layout1_documents, set_documents
+from e8s.show.role_documents import holds_layout1_documents
 from e8s.show.set_keys import set_key
 from e8s.show.storable import require_storable as require_storable
 
@@ -92,12 +82,20 @@ def expected_show_docs(show: Show) -> frozenset[str]:
     return docs_for_order([set_key(s) for s in show.sets])
 
 
-def encode_show(show: Show) -> dict[str, bytes]:
+def encode_show(show: Show, *, cache: EncodeCache | None = None) -> dict[str, bytes]:
     """Splits a show into documents under set keys; empty forms and paths are left out.
 
     show.json starts with `"format"` and `"version"`; the rest of every document is canonical.
     Each set is stored as set.json plus its drill, facing and labels role documents, and the
     cast as /cast/cast.json, out of show.json.
+
+    Args:
+        show: Show to encode; one that cannot be stored raises.
+        cache: Encoded documents to reuse, keyed by the identity of their sources; the bytes
+            are the same with or without it.
+
+    Returns:
+        documents: Stored path to canonical bytes.
 
     >>> from e8s.examples import two_set_show
     >>> sorted(encode_show(two_set_show()))[:4]
@@ -105,7 +103,9 @@ def encode_show(show: Show) -> dict[str, bytes]:
     >>> encode_show(two_set_show())["/show/show.json"].splitlines()[1:3]
     [b'  "format": "e8.show",', b'  "version": 2,']
     """
-    return {path: encode() for path, encode in _encoders(show).items()}
+    if cache is not None:
+        return cache.documents(show)
+    return encode_groups(document_groups(show))
 
 
 def encode_documents(show: Show, paths: Collection[str]) -> dict[str, bytes]:
@@ -115,48 +115,9 @@ def encode_documents(show: Show, paths: Collection[str]) -> dict[str, bytes]:
     >>> sorted(encode_documents(two_set_show(), ["/show/sheet.json", "/sets/9/set.json"]))
     ['/show/sheet.json']
     """
-    encoders = _encoders(show)
-    return {path: encoders[path]() for path in paths if path in encoders}
-
-
-def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
-    """Maps each stored document path of a show to a call that encodes it."""
-    require_storable(show)
-    keys = {s.id: set_key(s) for s in show.sets}
-    meta = show._json_dumped(exclude={*SPLIT_FIELDS, CAST_FIELD})
-    encoders: dict[str, Callable[[], bytes]] = {
-        SHOW_DOC: lambda: dump_show_doc(
-            {**format_header(), **meta, SET_ORDER_FIELD: list(keys.values())}
-        ),
-        SHEET_DOC: lambda: dump_dumped_json(show.sheet.to_json()),
-        TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.to_json()),
-        CAST_DOC: lambda: dump_dumped_json(show.cast.to_json()),
-    }
-    for current in show.sets:
-        folder = keys[current.id]
-        split = functools.cache(partial(set_documents, current))
-        encoders[set_doc(folder)] = partial(_dump_part, split, SET_DOC_NAME)
-        for name in ROLE_NAMES:
-            encoders[f"/sets/{folder}/{name}"] = partial(_dump_part, split, name)
-        forms = [f for _, f in sorted(show.forms.items()) if f.set == current.id]
-        if forms:
-            encoders[forms_doc(folder)] = partial(_dump_models, forms)
-    for spec in show.transitions:
-        folder_pair = (keys[spec.id[0]], keys[spec.id[1]])
-        encoders[paths_doc(folder_pair)] = partial(_dump_model, spec)
-    return encoders
-
-
-def _dump_model(model: FrozenModel) -> bytes:
-    return dump_dumped_json(model.to_json())
-
-
-def _dump_part(split: Callable[[], Mapping[str, JsonValue]], name: str) -> bytes:
-    return dump_dumped_json(split()[name])
-
-
-def _dump_models(models: Sequence[FrozenModel]) -> bytes:
-    return dump_dumped_json([m.to_json() for m in models])
+    wanted = set(paths)
+    groups = [g for g in document_groups(show) if not wanted.isdisjoint(g.paths)]
+    return {path: raw for path, raw in encode_groups(groups).items() if path in wanted}
 
 
 def decode_show(
