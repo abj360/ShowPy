@@ -85,9 +85,6 @@ pub fn loaded<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
 fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
     let class =
         loaded(py, ERRORS_MODULE)?.getattr(PyString::intern(py, err.kind().class_name()))?;
-    let code = loaded(py, CODES_MODULE)?
-        .getattr(CODE_ENUM)?
-        .getattr(PyString::intern(py, err.code().as_str()))?;
     let context = PyDict::new(py);
     for (key, value) in err.context() {
         match value {
@@ -100,10 +97,22 @@ fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
     let kwargs = PyDict::new(py);
     kwargs.set_item(intern!(py, "hint"), err.hint())?;
     kwargs.set_item(intern!(py, "context"), context)?;
-    kwargs.set_item(intern!(py, "code"), code)?;
+    if !has_default_code(&class, err)? {
+        let code = loaded(py, CODES_MODULE)?
+            .getattr(CODE_ENUM)?
+            .getattr(PyString::intern(py, err.code().as_str()))?;
+        kwargs.set_item(intern!(py, "code"), code)?;
+    }
     Ok(PyErr::from_value(
         class.call((err.message(),), Some(&kwargs))?,
     ))
+}
+
+/// Tells whether the error's code is the class's own `default_code`, which the class applies
+/// when no code is passed; the default is read from the Python class, never copied here.
+fn has_default_code(class: &Bound<'_, PyAny>, err: &CoreError) -> PyResult<bool> {
+    let default = class.getattr(intern!(class.py(), "default_code"))?;
+    Ok(default.extract::<&str>()? == err.code().as_str())
 }
 
 /// Turns a caught panic into the CORE_PANIC error of the guarded function.
