@@ -412,6 +412,13 @@ def test_import_json_rejects_the_old_stage_tag() -> None:
     assert "showpy.show.v1" in (caught.value.hint or "")
 
 
+def test_regression_include_typo_gets_a_close_match_hint() -> None:
+    """Hints `extensions` for an include name one transposition away from it."""
+    with pytest.raises(UnknownRefError) as caught:
+        export_json(two_set_show(), include=["extensoins"])
+    assert caught.value.hint.startswith("did you mean extensions")
+
+
 def test_regression_export_json_include_accepts_a_single_field_name() -> None:
     """Treats `include="title"` as one field instead of iterating its characters."""
     document = export_json(two_set_show(), include="title")

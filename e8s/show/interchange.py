@@ -110,7 +110,7 @@ def export_json(
         names = [include] if isinstance(include, str) else include
         keep = {ALWAYS_EXPORTED, *names}
         for name in sorted(keep - set(dumped) - {EXTENSIONS_FIELD}):
-            close = close_matches(name, dumped)
+            close = close_matches(name, [*dumped, EXTENSIONS_FIELD])
             raise UnknownRefError(
                 f"show has no field {name!r}",
                 hint=f"did you mean {', '.join(close)}?" if close else f"use {sorted(dumped)}",
