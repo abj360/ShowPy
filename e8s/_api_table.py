@@ -63,6 +63,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("FacingSpec", "e8s.choreo.form_models", "FacingSpec"),
     ("FacingValue", "e8s.choreo.path_models", "FacingValue"),
     ("FigureEightParams", "e8s.choreo.path_models", "FigureEightParams"),
+    ("FileAssetStore", "e8s.show.assets", "FileAssetStore"),
     ("FileRepository", "e8s.show.file_repository", "FileRepository"),
     ("FillRecipe", "e8s.choreo.recipe_models", "FillRecipe"),
     ("Fix", "e8s.choreo.engine_models", "Fix"),

@@ -13,6 +13,8 @@ Contains:
     missing_image_paths(): lists the paths a test module reads that a Dockerfile leaves out
     test_regression_docker_image_holds_every_path_the_noxfile_tests_read: fails when the image
         lacks a file that tests/unit/tooling/test_noxfile.py reads, such as the CI workflow
+    test_docker_image_holds_every_path_the_nightly_core_tests_read: the same for the fuzz crate
+        and the nightly core workflow that tests/unit/tooling/test_nightly_core.py reads
     test_regression_missing_dockerfile_fails_in_a_source_checkout: a moved or renamed Dockerfile
         fails the check instead of skipping it
     test_docker_path_check_flags_a_missing_and_an_ignored_path: proves the check can fail
@@ -35,6 +37,7 @@ DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile"
 LIBRARY_ROOT = REPO_ROOT / "e8s"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_noxfile.py"
+NIGHTLY_CORE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly_core.py"
 RUNTIME_STAGE = "runtime"
 BUILDER_STAGE = "builder"
 LOCKED_BUILD_ENV = "MATURIN_PEP517_ARGS=--locked"
@@ -201,6 +204,13 @@ def missing_image_paths(dockerfile: Path, dockerignore: Path, test_module: Path)
 def test_regression_docker_image_holds_every_path_the_noxfile_tests_read() -> None:
     assert ".github/workflows/ci.yml" in read_paths(NOXFILE_TESTS.read_text(encoding="utf-8"))
     missing = missing_image_paths(DOCKERFILE, DOCKERIGNORE, NOXFILE_TESTS)
+    assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
+
+
+def test_docker_image_holds_every_path_the_nightly_core_tests_read() -> None:
+    read = read_paths(NIGHTLY_CORE_TESTS.read_text(encoding="utf-8"))
+    assert {"fuzz", ".github/workflows/nightly-core.yml"} <= set(read)
+    missing = missing_image_paths(DOCKERFILE, DOCKERIGNORE, NIGHTLY_CORE_TESTS)
     assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
 
 

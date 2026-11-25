@@ -597,6 +597,7 @@ if TYPE_CHECKING:
         Anchor,
     )
     from e8s.show.assets import (
+        FileAssetStore,
         InMemoryAssetStore,
     )
     from e8s.show.backend import (
@@ -866,6 +867,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FacingSpec": ("e8s.choreo.form_models", "FacingSpec"),
     "FacingValue": ("e8s.choreo.path_models", "FacingValue"),
     "FigureEightParams": ("e8s.choreo.path_models", "FigureEightParams"),
+    "FileAssetStore": ("e8s.show.assets", "FileAssetStore"),
     "FileRepository": ("e8s.show.file_repository", "FileRepository"),
     "FillRecipe": ("e8s.choreo.recipe_models", "FillRecipe"),
     "Fix": ("e8s.choreo.engine_models", "Fix"),
@@ -1479,6 +1481,7 @@ __all__ = [
     "FacingSpec",
     "FacingValue",
     "FigureEightParams",
+    "FileAssetStore",
     "FileRepository",
     "FillRecipe",
     "Fix",
