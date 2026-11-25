@@ -9,15 +9,23 @@ Contains:
     test_put_show_encodes_through_the_repository_cache: put_show reuses the cache save_show filled
     test_cache_never_returns_bytes_for_a_reused_identity: fresh sets made and dropped one after
         another always encode to their own bytes, with and without eviction
+    test_cache_keeps_the_sources_of_each_cached_group_alive: a cached set outlives the show it
+        came from, so its identity cannot be reused, and is released once its group is evicted
+    test_changing_one_source_encodes_only_its_documents: a new form, transition, sheet, timeline,
+        cast or set order encodes exactly its own document, equal to a fresh encode
     test_cache_stays_under_its_byte_cap: evicts least recently used groups to stay within the cap
     test_cache_stores_no_group_larger_than_its_cap: still returns the documents, caching none
     test_encode_documents_returns_only_the_named_documents: picks documents out of their groups
 """
 
+import gc
+import weakref
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from e8s.choreo.form_ops import edit
 from e8s.choreo.models import PlacementPatch
 from e8s.show.document_paths import role_docs, set_doc
 from e8s.show.document_repository import encode_cache_of
@@ -40,6 +48,7 @@ EDITED_SET = 2
 ROUNDS = 40
 SMALL_CAP_BYTES = 20_000
 TINY_CAP_BYTES = 1
+GROUP = "brass"
 
 
 def _one_spot_edit(show: Show, x: float) -> Show:
@@ -90,6 +99,68 @@ def test_cache_never_returns_bytes_for_a_reused_identity(cap: int | None) -> Non
     for n in range(ROUNDS):
         edited = _one_spot_edit(base, float(n))
         assert cache.documents(edited) == encode_show(edited)
+
+
+def test_cache_keeps_the_sources_of_each_cached_group_alive() -> None:
+    show = _one_spot_edit(seeded_show(SEED, SPOTS, SETS), -1.0)
+    cache = EncodeCache(sum(len(raw) for raw in encode_show(show).values()))
+    cache.documents(show)
+    edited = weakref.ref(show.sets[EDITED_SET])
+    rebuilt = Show.from_json(show.to_json())
+    del show
+    gc.collect()
+    assert edited() is not None
+    cache.documents(rebuilt)
+    gc.collect()
+    assert edited() is None
+    assert cache.nbytes <= cache.max_bytes
+
+
+def _new_form(show: Show) -> Show:
+    form_id = min(show.forms)
+    form = show.forms[form_id]
+    return show.replace(
+        forms={**show.forms, form_id: edit(form, force=True, locked=not form.locked)}
+    )
+
+
+def _new_transition(show: Show) -> Show:
+    first, *rest = show.transitions
+    return show.replace(transitions=(first.replace(notes="moved"), *rest))
+
+
+def _new_sheet(show: Show) -> Show:
+    return show.replace(sheet=show.sheet.replace(name="Renamed field"))
+
+
+def _new_timeline(show: Show) -> Show:
+    first, *rest = show.timeline.tempos
+    tempos = (first.replace(counts_per_minute=first.counts_per_minute + 1.0), *rest)
+    return show.replace(timeline=show.timeline.replace(tempos=tempos))
+
+
+def _new_cast(show: Show) -> Show:
+    groups = {**show.cast.groups, GROUP: show.cast.groups[GROUP].replace(name="Horns")}
+    return show.replace(cast=show.cast.replace(groups=groups))
+
+
+def _new_set_order(show: Show) -> Show:
+    return show.replace(sets=tuple(reversed(show.sets)), transitions=())
+
+
+@pytest.mark.parametrize(
+    "change",
+    [_new_form, _new_transition, _new_sheet, _new_timeline, _new_cast, _new_set_order],
+    ids=["forms", "paths", "sheet", "timeline", "cast", "set-order"],
+)
+def test_changing_one_source_encodes_only_its_documents(change: Callable[[Show], Show]) -> None:
+    cache = EncodeCache()
+    show = seeded_show(SEED, SPOTS, SETS)
+    cache.documents(show)
+    before = cache.misses
+    changed = change(show)
+    assert cache.documents(changed) == encode_show(changed)
+    assert cache.misses - before == 1
 
 
 def test_cache_stays_under_its_byte_cap() -> None:
