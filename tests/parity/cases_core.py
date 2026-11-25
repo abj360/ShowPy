@@ -18,6 +18,7 @@ Contains:
     reference_and_transition_corpus(): the ID, reference and transition parsers on text
     reference_and_transition_corpus_timed(): the timed share of the parsers, on mostly valid text
     reference_and_transition_corpus_malformed_timed(): the timed share of the parsers' error path
+    non_finite_inputs_raise_e8s_errors(): records the error class of inputs v0.4.0 mishandled
     CASES: the core area's cases
 """
 
@@ -362,6 +363,31 @@ def reference_and_transition_corpus_malformed_timed(e8s: ModuleType) -> Mapping[
     return _parse_all(e8s, _corpus(e8s, TIMED_STRINGS)[len(WORDS) :][:TIMED_STRINGS])
 
 
+def non_finite_inputs_raise_e8s_errors(e8s: ModuleType) -> Mapping[str, Output]:
+    """Records the error class and code of facing_vector on non-finite input and of format_number
+    on an int too large for a float.
+
+    Args:
+        e8s: The e8s module under test.
+
+    Returns:
+        outputs: Per call, the exception class name and its code, or the foreign class name.
+    """
+
+    def outcome(function: Callable[..., object], *args: object) -> JsonValue:
+        try:
+            function(*args)
+        except Exception as error:
+            code = getattr(error, "code", None)
+            return {"error": type(error).__name__, "code": None if code is None else str(code)}
+        return {"error": None, "code": None}
+
+    return {
+        "facing_vector": [outcome(e8s.facing_vector, v) for v in (math.inf, -math.inf, math.nan)],
+        "format_number": [outcome(e8s.format_number, 10**400)],
+    }
+
+
 CASES = (
     Case(
         area="core",
@@ -396,5 +422,10 @@ CASES = (
         name="reference_and_transition_corpus_malformed_timed",
         run=reference_and_transition_corpus_malformed_timed,
         timed=True,
+    ),
+    Case(
+        area="core",
+        name="non_finite_inputs_raise_e8s_errors",
+        run=non_finite_inputs_raise_e8s_errors,
     ),
 )
