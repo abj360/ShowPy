@@ -1559,7 +1559,7 @@
   "add_guide": "(sheet: e8s.sheet.models.Sheet, item: e8s.sheet.models.GuideLine) -> e8s.sheet.models.Sheet",
   "add_hold": "(tl: e8s.time.models.Timeline, hold: e8s.time.models.Hold) -> e8s.time.models.Timeline",
   "add_marker": "(tl: e8s.time.models.Timeline, marker: e8s.time.models.Marker) -> e8s.time.models.Timeline",
-  "add_set": "(show: e8s.show.models.Show, set_id: str, counts: float, after: str | None = None, placements: collections.abc.Sequence[e8s.choreo.models.Placement] | None = None, *, force: bool = False) -> e8s.show.models.Show",
+  "add_set": "(show: e8s.show.models.Show, set_id: str, counts: float, after: str | None = None, placements: collections.abc.Sequence[e8s.choreo.models.Placement] | None = None, *, before: str | None = None, force: bool = False) -> e8s.show.models.Show",
   "add_spot": "(show: 'Show', point: Point, group: str, set_id: str, *, force: bool = False) -> 'Show'",
   "add_spots_along": "(show: 'Show', curve: e8s.geo.curve_base.Curve, n: int, group: str, set_id: str, *, force: bool = False) -> 'Show'",
   "add_tempo": "(tl: e8s.time.models.Timeline, section: e8s.time.models.TempoSection) -> e8s.time.models.Timeline",

@@ -112,6 +112,38 @@ def test_add_set_copies_previous_positions_without_forms() -> None:
     assert third.get("T2").point == (-3.0, 1.0)
 
 
+def test_add_set_before_the_first_set_opens_the_show() -> None:
+    show = add_set(two_set_show(), "0", 4.0, before="1")
+    assert show.set_ids() == ["0", "1", "2"]
+    assert [s.counts for s in show.sets] == [0.0, 4.0, 8.0]
+    assert show.set("0").get("T1").point == two_set_show().set("1").get("T1").point
+
+
+def test_add_set_before_the_first_set_keeps_the_old_openers_paths() -> None:
+    spec = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=8.0,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=1)},
+    )
+    show = add_set(_with_paths(two_set_show(), spec), "0", 4.0, before="1")
+    assert [t.id for t in show.transitions] == [make_tid("1", "2")]
+
+
+def test_add_set_before_a_later_set_equals_after_its_predecessor() -> None:
+    show = two_set_show()
+    assert add_set(show, "1B", 2.0, before="2") == add_set(show, "1B", 2.0, after="1")
+
+
+def test_add_set_refuses_both_after_and_before() -> None:
+    with pytest.raises(SchemaError):
+        add_set(two_set_show(), "1B", 2.0, after="1", before="2")
+
+
+def test_add_set_before_the_first_set_refuses_zero_counts() -> None:
+    with pytest.raises(TimeRangeError):
+        add_set(two_set_show(), "0", 0.0, before="1")
+
+
 def test_add_set_after_drops_paths_between_neighbours() -> None:
     spec = TransitionSpec(
         id=make_tid("1", "2"),
