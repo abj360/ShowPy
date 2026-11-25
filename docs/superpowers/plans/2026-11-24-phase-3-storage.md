@@ -964,6 +964,14 @@ running named checks: `one_winner_per_parent`, `read_your_writes`, `failed_commi
       `npx --no-install prettier --check .github/workflows/nightly.yml`. **Step 3:** Commit
       `ci: fuzz the storage machines nightly`.
 
+**Note, 2026-11-24:** HypoFuzz was replaced by Atheris on licence grounds. HypoFuzz's licence
+requires a paid licence for testing commercial software and for the CI pipelines of commercial
+products, and the maintainer will build a commercial platform on e8s. Atheris (google/atheris)
+is Apache-2.0. The job runs each storage test, every `@given` test and every
+`RuleBasedStateMachine` of `tests/property/test_storage_*.py`, under libFuzzer for a fixed
+300 s slot, with one cached corpus per test. An empty glob fails the job. The commit subject is
+`ci: fuzz the storage machines nightly with Atheris`.
+
 ---
 
 ## Lane X: exit (serial, after every lane merges)
