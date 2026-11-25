@@ -18,18 +18,24 @@ Contains:
 """
 
 import itertools
+import math
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from typing import NamedTuple
 
+from e8s.cast.models import Cast
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
 from e8s.core.errors import SchemaError, field_errors
 from e8s.core.ids import SetId, TransitionId, check_id
 from e8s.core.json_types import JsonValue
+from e8s.core.types import FrozenModel
+from e8s.sheet.models import Sheet
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_paths import (
+    CAST_DOC,
+    CAST_FIELD,
     LEGACY_NOTES_DOC,
     REVISION_FIELD,
     SET_ORDER_FIELD,
@@ -73,6 +79,7 @@ from e8s.show.role_documents import (
     require_no_role_documents,
     with_cast,
 )
+from e8s.time.models import Timeline
 
 
 class _Reading(NamedTuple):
@@ -90,18 +97,25 @@ class _Reading(NamedTuple):
     cache: DecodeCache | None = None
     digests: Mapping[str, str] = {}
 
-    def cached[T](self, path: str, decode: Callable[[], T], also: Sequence[str] = ()) -> T:
+    def cached[T](
+        self, path: str, decode: Callable[[], T], also: Sequence[str] = (), variant: str = ""
+    ) -> T:
         """Returns a cached decode of a document and the `also` documents it reads, or decodes it.
 
         The cache key joins the digests of the documents present, so a change to any of them,
-        or one appearing or going, misses the cache.
+        or one appearing or going, misses the cache. `variant` names any other input the decode
+        reads, such as the counts given to paths, so each input value gets its own entry.
         """
         digest = self.digests.get(path)
         present = [p for p in also if self.source.has(p)]
         if self.cache is None or digest is None or any(p not in self.digests for p in present):
             return decode()
-        key = " ".join([digest, *(f"{p}={self.digests[p]}" for p in present)])
-        return self.cache.get_or_decode(path, key, decode)
+        parts = [
+            digest,
+            *(f"{p}={self.digests[p]}" for p in present),
+            *([variant] if variant else []),
+        ]
+        return self.cache.get_or_decode(path, " ".join(parts), decode)
 
 
 def _set(reading: _Reading, key: str) -> Set:
@@ -171,13 +185,29 @@ def _set_order(order: object) -> list[str]:
 
 
 def _transition_specs(reading: _Reading, stored: list[tuple[str, Set]]) -> list[TransitionSpec]:
+    """Decodes the paths of each consecutive pair, each given its destination set's counts."""
     specs: list[TransitionSpec] = []
     for (key_a, set_a), (key_b, set_b) in itertools.pairwise(stored):
         folder = (key_a, key_b)
         found = reading.cached(paths_doc(folder), partial(_paths, reading, folder))
         _require_paths_for(folder, TransitionId(set_a.id, set_b.id), found)
-        specs.extend(found)
+        specs.extend(_counted(reading, folder, spec, set_b.counts) for spec in found)
     return specs
+
+
+def _is_same_float(a: float, b: float) -> bool:
+    """Tells whether two floats are one value, signed zeros told apart."""
+    return a == b and math.copysign(1.0, a) == math.copysign(1.0, b)
+
+
+def _counted(
+    reading: _Reading, folder: tuple[str, str], spec: TransitionSpec, counts: float
+) -> TransitionSpec:
+    """Returns paths with the destination set's counts; paths already holding them are reused."""
+    if _is_same_float(spec.counts, counts):
+        return spec
+    rebuild = partial(_with_counts, spec, counts, reading.context)
+    return reading.cached(paths_doc(folder), rebuild, variant=f"counts={counts!r}")
 
 
 def _with_counts(
@@ -186,6 +216,29 @@ def _with_counts(
     """Gives paths the destination set's counts, validated in the decode's ID context."""
     fields = {name: getattr(spec, name) for name in type(spec)._field_names()}
     return TransitionSpec._validated(fields | {"counts": counts}, context=context)
+
+
+def _validated_part[M: FrozenModel](reading: _Reading, path: str, model: type[M]) -> M:
+    return model._validated(load_object(reading.source, path), context=reading.context)
+
+
+def _part[M: FrozenModel](reading: _Reading, path: str, model: type[M]) -> M | JsonObject:
+    """Returns a show-level document decoded once per digest, or its object when it is invalid.
+
+    An invalid document goes into the Show as parsed, so the Show's own validation refuses it
+    and names the failing fields under the Show's field, as a whole-show decode does.
+    """
+    try:
+        return reading.cached(path, partial(_validated_part, reading, path, model))
+    except SchemaError:
+        return load_object(reading.source, path)
+
+
+def _show_fields(reading: _Reading, meta: JsonObject, *, is_current: bool) -> Mapping[str, object]:
+    """Returns show.json's fields with the cast; a stored cast document is decoded once."""
+    if is_current and reading.source.has(CAST_DOC) and CAST_FIELD not in meta:
+        return {**meta, CAST_FIELD: _part(reading, CAST_DOC, Cast)}
+    return with_cast(reading.source, meta, is_required=is_current)
 
 
 def _assemble(reading: _Reading, meta: JsonObject, revision: str, *, is_current: bool) -> Show:
@@ -198,7 +251,7 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str, *, is_current:
     require_listed_role_folders(reading.source.paths(), order)
     require_known_cast_documents(reading.source.paths())
     kept = {k: v for k, v in meta.items() if k != SET_ORDER_FIELD}
-    rest = with_cast(reading.source, kept, is_required=is_current)
+    rest = _show_fields(reading, kept, is_current=is_current)
     stored = [
         (k, reading.cached(set_doc(k), partial(_set, reading, k), also=role_docs(k))) for k in order
     ]
@@ -207,20 +260,14 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str, *, is_current:
         found = reading.cached(forms_doc(key), partial(_forms, reading, key))
         _require_forms_for(key, current.id, found)
         forms.update((f.id, f) for f in found)
-    sets = [current for _, current in stored]
-    counts = {s.id: s.counts for s in sets}
-    specs = [
-        _with_counts(spec, counts[spec.id[1]], reading.context)
-        for spec in _transition_specs(reading, stored)
-    ]
     return Show._validated(
         {
             **rest,
-            "sheet": load_object(reading.source, SHEET_DOC),
-            "timeline": load_object(reading.source, TIMELINE_DOC),
-            "sets": sets,
+            "sheet": _part(reading, SHEET_DOC, Sheet),
+            "timeline": _part(reading, TIMELINE_DOC, Timeline),
+            "sets": [current for _, current in stored],
             "forms": forms,
-            "transitions": specs,
+            "transitions": _transition_specs(reading, stored),
             "revision": revision,
         },
         context=reading.context,
@@ -328,6 +375,29 @@ def migrate_dump(
     return migrated.show, migrated.report.build(), migrated.beside
 
 
+class _OlderTreeError(Exception):
+    """Carries the show.json of an older format out of a cached decode, so none is cached.
+
+    Attributes:
+        meta: The parsed show.json.
+        version: Its format version.
+    """
+
+    def __init__(self, meta: JsonObject, version: int) -> None:
+        super().__init__(version)
+        self.meta = meta
+        self.version = version
+
+
+def _current_meta(source: Source) -> JsonObject:
+    """Parses show.json; an older format raises _OlderTreeError, so the decode cache keeps none."""
+    meta = load_object(source, SHOW_DOC)
+    version = version_of(meta, name=SHOW_DOC)
+    if version < CURRENT_VERSION:
+        raise _OlderTreeError(meta, version)
+    return meta
+
+
 def read_show(
     docs: Mapping[str, bytes],
     revision: str = "",
@@ -345,12 +415,12 @@ def read_show(
     True
     """
     source = raw_source(docs)
+    reading = _Reading(source, CHECKED_CONTEXT, cache, digests or {})
     try:
-        meta = load_object(source, SHOW_DOC)
-        version = version_of(meta, name=SHOW_DOC)
-        if version < CURRENT_VERSION:
-            return _migrated_show(source, meta, version, revision).show
-        reading = _Reading(source, CHECKED_CONTEXT, cache, digests or {})
+        try:
+            meta = reading.cached(SHOW_DOC, partial(_current_meta, source))
+        except _OlderTreeError as older:
+            return _migrated_show(source, older.meta, older.version, revision).show
         return _assemble(reading, without_header(meta), revision, is_current=True)
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc

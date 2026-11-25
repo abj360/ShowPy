@@ -23,7 +23,8 @@ Contains:
     test_uncached_invalid_document_is_refused: refuses an invalid document never seen before
     test_cache_serves_unchanged_documents: decodes only the changed document on a one-set edit
     test_cache_respects_its_bound: evicts the oldest entry past max_entries
-    test_one_spot_edit_decodes_only_changed_documents: counts per-document decodes on a warm cache
+    test_one_spot_edit_decodes_only_changed_documents: counts per-document decodes on a warm cache:
+        a cast edit decodes only the cast document, a set edit only that set
     test_regression_show_json_alone_changing_is_still_validated_whole: refuses a show invalid
         only through the combination while every cached set is reused
     test_regression_trailing_newline_paths_are_refused: refuses `$`-anchored look-alike paths
@@ -59,6 +60,12 @@ Contains:
     test_regression_cf_characters_in_paths_are_refused: refuses invisible format characters
     test_regression_odd_transition_folder_is_refused: refuses a new transition folder that does
         not name two set keys, and keeps a stored one
+    test_one_spot_commit_decodes_only_changed_documents: loads only the edited set's documents
+        and decodes one cache entry on a warm one-spot commit
+    test_commit_check_still_refuses_every_invalid_tree: refuses each broken tree with a warm
+        decode cache and with none
+    test_commit_check_validates_the_whole_show_model: runs the Show model's validation on every
+        commit that changes a show document, with every part served from cache
 """
 
 import json
@@ -73,6 +80,7 @@ import pytest
 from e8s.cast.models import Shape
 from e8s.cast.spots import set_shape
 from e8s.choreo.forms import line_form
+from e8s.choreo.models import PlacementPatch
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import LockedError, SchemaError, StorageError
 from e8s.core.ids import SpotId
@@ -82,6 +90,7 @@ from e8s.show._notes_document import NotesDocument
 from e8s.show.anchors import Anchor
 from e8s.show.collab_models import Comment
 from e8s.show.decode_cache import DecodeCache
+from e8s.show.document_paths import CAST_DOC, SHEET_DOC, TIMELINE_DOC, role_docs
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.documents import (
     SHOW_DOC,
@@ -319,7 +328,7 @@ def _count_decodes(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 def test_one_spot_edit_decodes_only_changed_documents(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Counts decodes on a warm cache: a cast edit decodes none, a set edit decodes one set."""
+    """Counts decodes on a warm cache: a cast edit decodes the cast, a set edit one set."""
     repo = InMemoryRepository()
     ws = open_workspace(repo, SHOW_ID)
     save_show(ws, seeded_show(3, 30, 8), AT)
@@ -328,7 +337,7 @@ def test_one_spot_edit_decodes_only_changed_documents(monkeypatch: pytest.Monkey
     calls.clear()
     shape = Shape(kind="rectangle")
     save_show(ws, set_shape(show, show.cast.spots[0].id, shape), AT)
-    assert calls == []
+    assert calls == [CAST_DOC]
     ws = open_workspace(repo, SHOW_ID)
     show = load_show(ws)
     calls.clear()
@@ -607,3 +616,85 @@ def test_regression_odd_transition_folder_is_refused(folder: str) -> None:
     assert repo.head(SHOW_ID) == head
     require_new_set_keys([path], [path])
     _commit(repo, head, {"/transitions/1-2/notes.txt": b"x"})
+
+
+def _one_spot_docs() -> tuple[Show, dict[str, bytes], dict[str, bytes]]:
+    show = seeded_show(3, 30, 8)
+    entity = show.cast.ids()[0]
+    edited = show.sets[2].with_placements({entity: PlacementPatch(x=-1.0)}, force=True)
+    after = show.replace(sets=(*show.sets[:2], edited, *show.sets[3:]))
+    return show, encode_show(show), encode_show(after)
+
+
+def test_one_spot_commit_decodes_only_changed_documents() -> None:
+    show, base, after = _one_spot_docs()
+    cache = DecodeCache()
+    _validate({}, base, cache)
+    folder = show.sets[2].key or show.sets[2].id
+    set_docs = {set_doc(folder), *role_docs(folder)}
+    assert {p for p in after if base.get(p) != after[p]} <= set_docs
+    by_digest = {blob_digest(raw): raw for raw in after.values()}
+    loaded: list[str] = []
+
+    def blob(digest: str) -> bytes:
+        loaded.append(digest)
+        return by_digest[digest]
+
+    misses = cache.misses
+    require_valid_digests(_digests(base), _digests(after), blob, cache)
+    assert loaded
+    assert set(loaded) <= {blob_digest(after[p]) for p in set_docs}
+    assert cache.misses - misses == 1
+
+
+def _broken_trees() -> dict[str, Callable[[dict[str, bytes]], dict[str, bytes]]]:
+    def with_json(path: str, change: Callable[[dict[str, Any]], object]) -> Callable[..., Any]:
+        def broken(docs: dict[str, bytes]) -> dict[str, bytes]:
+            return {**docs, path: dump_json(change(json.loads(docs[path])))}
+
+        return broken
+
+    first = set_doc("1")
+    return {
+        "garbage show.json": lambda docs: {**docs, SHOW_DOC: b"garbage"},
+        "repeated set": with_json(SHOW_DOC, lambda meta: {**meta, "sets": ["1", "1"]}),
+        "dashed set ids": lambda docs: {**docs, **_dashed_docs()},
+        "older format": with_json(SHOW_DOC, lambda meta: {**meta, "version": 1}),
+        "bad sheet": lambda docs: {**docs, SHEET_DOC: b'{"unexpected": 1}'},
+        "bad timeline": lambda docs: {**docs, TIMELINE_DOC: b"[]"},
+        "bad cast": lambda docs: {**docs, CAST_DOC: b'{"groups": 5}'},
+        "no timeline": lambda docs: {p: raw for p, raw in docs.items() if p != TIMELINE_DOC},
+        "bad set": lambda docs: {**docs, first: b'{"id": "1"}'},
+        "bad paths": lambda docs: {**docs, paths_doc(("1", "2")): b'{"unexpected": []}'},
+        "orphan forms": lambda docs: {**docs, forms_doc("9"): b"[]"},
+        "set id refused": with_json(set_doc("2"), lambda body: {**body, "id": "=1+2"}),
+    }
+
+
+@pytest.mark.parametrize("name", sorted(_broken_trees()))
+@pytest.mark.parametrize("is_warm", [True, False])
+def test_commit_check_still_refuses_every_invalid_tree(name: str, *, is_warm: bool) -> None:
+    base = encode_show(two_set_show())
+    cache = DecodeCache() if is_warm else None
+    if cache is not None:
+        _validate({}, base, cache)
+    with pytest.raises(SchemaError):
+        _validate(base, _broken_trees()[name](base), cache)
+
+
+def test_commit_check_validates_the_whole_show_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, base, after = _one_spot_docs()
+    cache = DecodeCache()
+    _validate({}, base, cache)
+    assembled: list[object] = []
+    original = Show.model_validate
+
+    def recording(data: object, **kwargs: Any) -> Show:
+        assembled.append(data)
+        return original(data, **kwargs)
+
+    monkeypatch.setattr(Show, "model_validate", recording)
+    _validate(base, after, cache)
+    assert len(assembled) == 1
+    _validate(after, {**after, "/renders/a.txt": b"x"}, cache)
+    assert len(assembled) == 1

@@ -21,6 +21,7 @@ Contains:
 import hashlib
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from functools import partial
 from types import MappingProxyType
 
 from e8s.core.error_codes import ErrorCode
@@ -67,6 +68,7 @@ CONTROL_CATEGORY = "Cc"
 REQUIRED_DOCS = (SHOW_DOC, SHEET_DOC, TIMELINE_DOC)
 DOT_SEGMENTS = ("", ".", "..")
 FOLDER_DEPTH = 3
+FORMAT_CHECKED = "format-checked"
 PAIR_SIZE = 2
 FORMAT_CATEGORY = "Cf"
 
@@ -308,6 +310,21 @@ def require_structured_files(
             require_structured(path, blob(after[path]))
 
 
+def _require_current_format(
+    digest: str, blob: Callable[[str], bytes], cache: DecodeCache | None
+) -> None:
+    """Checks show.json is in the current format version, once per digest with a cache."""
+    check = partial(_check_current_format, digest, blob)
+    if cache is None:
+        check()
+    else:
+        cache.get_or_decode(SHOW_DOC, f"{digest} {FORMAT_CHECKED}", check)
+
+
+def _check_current_format(digest: str, blob: Callable[[str], bytes]) -> None:
+    require_current_show_doc(blob(digest))
+
+
 def require_valid_digests(
     before: Mapping[str, str],
     after: Mapping[str, str],
@@ -319,8 +336,9 @@ def require_valid_digests(
     Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
     When any show document changes, the show.json the commit leaves must be in the current
     format version, else SchemaError code OLD_FORMAT: show.json versions the whole tree.
-    Documents whose digest sits in `cache` at the same path are reused; every changed
-    document is decoded fresh, and the show is validated whole either way.
+    Documents whose digest sits in `cache` at the same path are reused, so a commit loads and
+    decodes only the documents it changed; the show model is validated whole either way, so
+    every rule across documents is checked on every commit that changes a show document.
 
     Args:
         before: Path to blob digest before the commit.
@@ -345,7 +363,7 @@ def require_valid_digests(
     if not any(is_show_doc(p) for p in changed):
         return None
     if SHOW_DOC in after:
-        require_current_show_doc(blob(after[SHOW_DOC]))
+        _require_current_format(after[SHOW_DOC], blob, cache)
     _require_required_docs(after)
     require_cast_beside_roles(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)

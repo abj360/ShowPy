@@ -26,10 +26,12 @@ class DecodeCache:
 
     Attributes:
         max_entries: Most documents kept; the least recently used one leaves first.
+        misses: Documents decoded so far because they were not cached.
     """
 
     def __init__(self, max_entries: int = DECODE_CACHE_SIZE) -> None:
         self.max_entries = max_entries
+        self.misses = 0
         self._entries: OrderedDict[tuple[str, str], object] = OrderedDict()
         self._lock = threading.Lock()
 
@@ -62,6 +64,7 @@ class DecodeCache:
                 return cast(T, self._entries[key])
         document = decode()
         with self._lock:
+            self.misses += 1
             self._entries[key] = document
             self._entries.move_to_end(key)
             while len(self._entries) > self.max_entries:
