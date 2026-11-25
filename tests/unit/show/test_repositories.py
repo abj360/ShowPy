@@ -38,6 +38,8 @@ Contains:
         differs from its NFC form, in memory or on disk, writing nothing
     test_stored_show_id_outside_the_id_rule_keeps_committing: extends a show stored under a
         hyphenated ID before the rule existed
+    test_regression_root_write_on_a_stored_hyphenated_show_is_a_conflict: raises ConflictError,
+        not the new-show refusal, for a write expecting the root on a stored show
 """
 
 import contextlib
@@ -452,3 +454,13 @@ def test_stored_show_id_outside_the_id_rule_keeps_committing(tmp_path: Path) -> 
     )
     assert legacy.head(LAYOUT_1_HYPHENATED_ID) == extended.id
     assert legacy.shows() == [LAYOUT_1_HYPHENATED_ID]
+
+
+def test_regression_root_write_on_a_stored_hyphenated_show_is_a_conflict() -> None:
+    """Raises ConflictError naming the head when a stored hyphenated show is written from root."""
+    repo, revision = _stored_hyphenated_show()
+    with pytest.raises(ConflictError) as caught:
+        repo.transaction(
+            STORED_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision="", at=AT
+        )
+    assert caught.value.context["head"] == revision.id
