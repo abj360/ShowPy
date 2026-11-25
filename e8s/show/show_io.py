@@ -3,15 +3,18 @@ show_io.py --- reads and writes a whole show through a workspace
 
 Contains:
     load_show(): reads the whole show at the workspace revision
-    save_show(): writes the whole show, refusing when another write landed meanwhile
+    save_show(): writes the whole show and its text forms' fonts, refusing when another write
+        landed meanwhile
 """
 
 from datetime import datetime
 
 from e8s.core.errors import StorageError
+from e8s.geo.fonts import FontRegistry
 from e8s.show.files import (
     show_changes,
 )
+from e8s.show.font_documents import font_changes
 from e8s.show.history_models import Revision
 from e8s.show.models import Show
 from e8s.show.workspace import Workspace
@@ -44,13 +47,20 @@ def load_show(ws: Workspace) -> Show:
     return show
 
 
-def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
+def save_show(
+    ws: Workspace, show: Show, at: datetime, *, font_registry: FontRegistry | None = None
+) -> Revision:
     """Writes the whole show against `show.revision`, the revision it was loaded at.
 
     Raises ConflictError listing every revision (short ID, time, paths) saved since, so the
     caller sees what changed meanwhile; reload, reapply and save again. Stored documents that
     are not canonical are re-encoded in a revision of their own first; if the edit
     then conflicts, that revision stays, it changes no content, and the retry builds on it.
+
+    Each font of a text form that is not bundled is stored as `/assets/fonts/<sha256>.json` in
+    the same revision as the form, and a stored font no text form uses is deleted; history keeps
+    it. Fonts come from `font_registry`, or, when it is None, from the bundled fonts and the
+    fonts already stored at `show.revision`. A font found nowhere raises MissingFontError.
 
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.examples import two_set_show
@@ -60,5 +70,6 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent
     ''
     """
-    changes = show_changes(show, ws.tree_at(show.revision))
+    tree = ws.tree_at(show.revision)
+    changes = show_changes(show, tree) | font_changes(show, tree, font_registry)
     return ws._commit_normalizing(changes, at=at, expected_revision=show.revision, is_complete=True)

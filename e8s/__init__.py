@@ -658,6 +658,9 @@ if TYPE_CHECKING:
     from e8s.show.file_repository import (
         FileRepository,
     )
+    from e8s.show.font_documents import (
+        load_fonts,
+    )
     from e8s.show.history import (
         changelog,
         diff_paths,
@@ -1203,6 +1206,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line": ("e8s.geo.shapes", "line"),
     "line_form": ("e8s.choreo.forms", "line_form"),
     "load_font": ("e8s.geo.fonts", "load_font"),
+    "load_fonts": ("e8s.show.font_documents", "load_fonts"),
     "load_paths": ("e8s.show.paths_store", "load_paths"),
     "load_show": ("e8s.show.show_io", "load_show"),
     "lock": ("e8s.choreo.paths", "lock"),
@@ -1788,6 +1792,7 @@ __all__ = [
     "line",
     "line_form",
     "load_font",
+    "load_fonts",
     "load_paths",
     "load_show",
     "lock",
