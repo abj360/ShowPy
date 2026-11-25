@@ -35,7 +35,9 @@ pub const RESERVED_IDS: [&str; 24] = [
 ];
 const DOUBLE_DOT: &str = "..";
 const CONTEXT_TEXT_CHARS: usize = 80;
-const RESERVED_HINT: &str = "not all, props or a Windows device name (con, com1, con.txt)";
+const ID_HINT: &str = r"use 1 to 64 ASCII letters, digits, _ and . matching ^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$ (no leading or trailing . and no ..), not all, props or a Windows device name (con, com1, con.txt)";
+const SHEET_ID_HINT: &str = r"use 1 to 64 ASCII letters, digits, _, . and - matching ^[A-Za-z0-9_](?:[A-Za-z0-9_.\-]{0,62}[A-Za-z0-9_])?$ (no leading or trailing . or - and no ..), not all, props or a Windows device name (con, com1, con.txt)";
+const VERSION_HINT: &str = r"use 1 to 64 ASCII letters, digits, . - and + matching ^[A-Za-z0-9](?:[A-Za-z0-9.+\-]{0,62}[A-Za-z0-9])?$ (a letter or digit at both ends and no ..), not all, props or a Windows device name (con, com1, con.txt)";
 
 /// Names the three ID shapes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,21 +80,11 @@ impl IdRule {
         c.is_ascii_alphanumeric() || (c == '_' && self != Self::Version)
     }
 
-    fn hint(self) -> String {
-        let pattern = self.pattern();
+    fn hint(self) -> &'static str {
         match self {
-            Self::Id => format!(
-                "use 1 to 64 ASCII letters, digits, _ and . matching {pattern} (no leading or \
-                 trailing . and no ..), {RESERVED_HINT}"
-            ),
-            Self::Sheet => format!(
-                "use 1 to 64 ASCII letters, digits, _, . and - matching {pattern} (no leading or \
-                 trailing . or - and no ..), {RESERVED_HINT}"
-            ),
-            Self::Version => format!(
-                "use 1 to 64 ASCII letters, digits, . - and + matching {pattern} (a letter or \
-                 digit at both ends and no ..), {RESERVED_HINT}"
-            ),
+            Self::Id => ID_HINT,
+            Self::Sheet => SHEET_ID_HINT,
+            Self::Version => VERSION_HINT,
         }
     }
 }
@@ -277,10 +269,17 @@ mod tests {
         };
         err.context()
             .iter()
-            .find_map(|(key, value)| match (key.as_str(), value) {
+            .find_map(|(key, value)| match (key.as_ref(), value) {
                 ("position", crate::base::ContextValue::Int(at)) => Some(*at),
                 _ => None,
             })
+    }
+
+    #[test]
+    fn hints_name_their_patterns() {
+        for rule in [IdRule::Id, IdRule::Sheet, IdRule::Version] {
+            assert!(rule.hint().contains(rule.pattern()), "{rule:?}");
+        }
     }
 
     #[test]
