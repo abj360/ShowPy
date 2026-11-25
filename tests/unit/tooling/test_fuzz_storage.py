@@ -11,7 +11,10 @@ Contains:
     test_regression_storage_fuzz_refuses_a_file_without_a_target: a matching file with no
         target exits non-zero
     test_list_prints_the_ids_as_one_json_line: the matrix input
-    test_regression_runner_leaves_the_active_hypothesis_profile_unchanged: main sets no profile
+    test_regression_runner_leaves_the_active_hypothesis_profile_unchanged: a known profile
+        loaded before main is still the active one after it
+    test_regression_command_line_loads_the_nightly_profile_before_discovery: the script run as
+        __main__ discovers targets under the nightly profile
     test_fuzz_runs_a_target_under_libfuzzer: argv, corpus, artifact prefix and instrumentation
     test_fuzz_passing_target_exits_zero: a clean run returns 0 and leaves no crash
     test_regression_storage_fuzz_crash_exits_non_zero_and_keeps_the_input: a raising target
@@ -30,7 +33,9 @@ Contains:
 
 import importlib
 import json
+import os
 import re
+import subprocess
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
@@ -120,6 +125,24 @@ class CrashMachine(RuleBasedStateMachine):
     def boom(self):
         raise RuntimeError("machine invariant broken")
 """
+PROBE = """
+import json
+import os
+from pathlib import Path
+
+from hypothesis import given, settings, strategies as st
+
+Path(os.environ["PROFILE_RECORD"]).write_text(
+    json.dumps({"no_deadline": settings().deadline is None})
+)
+
+
+@given(st.binary())
+def test_probe(data):
+    pass
+"""
+KNOWN_PROFILE = "known-storage-fuzz-test-profile"
+KNOWN_EXAMPLES = 17
 ALPHA_IDS = ["test_storage_alpha::SaveMachine", "test_storage_alpha::test_roundtrip"]
 BETA_IDS = ["test_storage_beta::CrashMachine", "test_storage_beta::test_crash"]
 FUZZ_INPUT = b"\x00" * 8
@@ -275,15 +298,39 @@ def test_fuzz_runs_a_target_under_libfuzzer(runner: ModuleType, package: Path) -
 def test_regression_runner_leaves_the_active_hypothesis_profile_unchanged(
     runner: ModuleType, package: Path
 ) -> None:
-    before = settings()
-    assert fuzz(runner, package, "--list") == 0
-    assert fuzz(runner, package, "--target", ALPHA_IDS[1]) == 0
-    after = settings()
-    assert (after.derandomize, after.deadline, after.max_examples) == (
-        before.derandomize,
-        before.deadline,
-        before.max_examples,
+    original = settings.get_current_profile_name()
+    settings.register_profile(KNOWN_PROFILE, derandomize=True, max_examples=KNOWN_EXAMPLES)
+    settings.load_profile(KNOWN_PROFILE)
+    try:
+        assert fuzz(runner, package, "--list") == 0
+        assert fuzz(runner, package, "--target", ALPHA_IDS[1]) == 0
+        assert settings.get_current_profile_name() == KNOWN_PROFILE
+        assert (settings().derandomize, settings().max_examples) == (True, KNOWN_EXAMPLES)
+    finally:
+        settings.load_profile(original)
+
+
+def test_regression_command_line_loads_the_nightly_profile_before_discovery(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "scripts" / "fuzz_storage.py"
+    script.parent.mkdir()
+    script.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+    make_package(tmp_path, {"test_storage_probe.py": PROBE})
+    record = tmp_path / "profile.json"
+    env = {**os.environ, "PROFILE_RECORD": str(record)}
+    env.pop("HYPOTHESIS_PROFILE", None)
+    done = subprocess.run(
+        [sys.executable, "-I", str(script), "--list"],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=tmp_path,
+        check=False,
     )
+    assert done.returncode == 0, done.stderr
+    assert json.loads(record.read_text(encoding="utf-8")) == {"no_deadline": True}
+    assert json.loads(done.stdout) == ["test_storage_probe::test_probe"]
 
 
 def test_fuzz_runs_the_state_machine_target(runner: ModuleType, package: Path) -> None:
