@@ -673,8 +673,10 @@ if TYPE_CHECKING:
         import_positions,
         migrate_json,
     )
-    from e8s.show.items import (
+    from e8s.show.item_table import (
         ITEM_TABLE,
+    )
+    from e8s.show.items import (
         changes,
         items,
     )
@@ -693,6 +695,9 @@ if TYPE_CHECKING:
     )
     from e8s.show.memory_backend import (
         InMemoryRepository,
+    )
+    from e8s.show.merge import (
+        merge,
     )
     from e8s.show.migrate import (
         CURRENT_VERSION,
@@ -900,7 +905,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Hold": ("e8s.time.models", "Hold"),
     "ID_MAX_LENGTH": ("e8s.core.ids", "ID_MAX_LENGTH"),
     "ID_PATTERN": ("e8s.core.ids", "ID_PATTERN"),
-    "ITEM_TABLE": ("e8s.show.items", "ITEM_TABLE"),
+    "ITEM_TABLE": ("e8s.show.item_table", "ITEM_TABLE"),
     "IdChanges": ("e8s.show.change_models", "IdChanges"),
     "InMemoryAssetStore": ("e8s.show.assets", "InMemoryAssetStore"),
     "InMemoryRepository": ("e8s.show.memory_backend", "InMemoryRepository"),
@@ -1221,6 +1226,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "match": ("e8s.choreo.match", "match"),
     "match_by_order": ("e8s.choreo.match", "match_by_order"),
     "measure_to_count": ("e8s.time.measures", "measure_to_count"),
+    "merge": ("e8s.show.merge", "merge"),
     "merge_forms": ("e8s.choreo.form_ops", "merge_forms"),
     "migrate_documents": ("e8s.show.documents", "migrate_documents"),
     "migrate_json": ("e8s.show.interchange", "migrate_json"),
@@ -1810,6 +1816,7 @@ __all__ = [
     "match",
     "match_by_order",
     "measure_to_count",
+    "merge",
     "merge_forms",
     "migrate_documents",
     "migrate_json",
