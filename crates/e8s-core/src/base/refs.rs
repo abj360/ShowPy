@@ -163,17 +163,32 @@ pub fn bad_tid_pair(shown: &str) -> CoreError {
 ///
 /// Returns a SchemaError unless the text splits into exactly two non-empty parts.
 pub fn split_tid(host: &dyn TextHost, text: &str) -> CoreResult<(String, String)> {
-    let normalized = text.replace(ASCII_ARROW, ARROW);
-    let parts = normalized
-        .split(ARROW)
-        .map(|part| strip(host, part))
-        .collect::<CoreResult<Vec<&str>>>()?;
-    match parts.as_slice() {
-        [from, to] if !from.is_empty() && !to.is_empty() => {
-            Ok(((*from).to_owned(), (*to).to_owned()))
+    let mut parts: [&str; 3] = [""; 3];
+    let mut count = 0;
+    let mut rest = text;
+    loop {
+        let unicode = rest.find(ARROW).map(|at| (at, ARROW.len()));
+        let ascii = rest.find(ASCII_ARROW).map(|at| (at, ASCII_ARROW.len()));
+        let cut = match (unicode, ascii) {
+            (Some(left), Some(right)) => Some(if left.0 <= right.0 { left } else { right }),
+            (left, right) => left.or(right),
+        };
+        if count < parts.len() {
+            parts[count] = cut.map_or(rest, |(at, _)| &rest[..at]);
         }
-        _ => Err(bad_tid(&str_repr(host, text)?).with_context("text", text)),
+        count += 1;
+        match cut {
+            Some((at, width)) => rest = &rest[at + width..],
+            None => break,
+        }
     }
+    if count == 2 {
+        let (from, to) = (strip(host, parts[0])?, strip(host, parts[1])?);
+        if !from.is_empty() && !to.is_empty() {
+            return Ok((from.to_owned(), to.to_owned()));
+        }
+    }
+    Err(bad_tid(&str_repr(host, text)?).with_context("text", text.to_owned()))
 }
 
 /// Writes two set IDs as `12→13`.
