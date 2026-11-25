@@ -10,7 +10,8 @@ Contains:
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.digests: returns the content digest of each path's blob
-    require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
+    require_new_set_keys(): checks every set key and transition folder a commit stores in a
+        folder the base lacks
     require_distinct_folders(): refuses a new set folder matching another folder ignoring case
     require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
         and refuses a decoded show the encoder could not store again
@@ -66,6 +67,8 @@ CONTROL_CATEGORY = "Cc"
 REQUIRED_DOCS = (SHOW_DOC, SHEET_DOC, TIMELINE_DOC)
 DOT_SEGMENTS = ("", ".", "..")
 FOLDER_DEPTH = 3
+PAIR_SIZE = 2
+FORMAT_CATEGORY = "Cf"
 
 
 def _bad_path(path: str) -> StorageError:
@@ -88,7 +91,10 @@ def _reserved_path(path: str, root: str) -> StorageError:
 
 
 def _is_forbidden(char: str) -> bool:
-    return char == FORBIDDEN_CHARACTER or unicodedata.category(char) == CONTROL_CATEGORY
+    return char == FORBIDDEN_CHARACTER or unicodedata.category(char) in (
+        CONTROL_CATEGORY,
+        FORMAT_CATEGORY,
+    )
 
 
 def require_known_path(path: str) -> None:
@@ -201,8 +207,30 @@ def _set_keys_in(path: str) -> list[str]:
     return []
 
 
+def _transition_folder(path: str) -> str | None:
+    parts = path.split("/")
+    if len(parts) <= FOLDER_DEPTH or parts[1] != TRANSITIONS_ROOT:
+        return None
+    return parts[2]
+
+
+def _require_pair_folders(before: Iterable[str], written: Iterable[str]) -> None:
+    """Refuses a transition folder new to the tree that does not name exactly two set keys."""
+    stored = {_transition_folder(path) for path in before}
+    new = {_transition_folder(path) for path in written} - stored
+    for folder in sorted(folder for folder in new if folder is not None):
+        keys = folder.split(PAIR_SEPARATOR)
+        if len(keys) != PAIR_SIZE or not all(keys):
+            raise SchemaError(
+                f"transition folder {bounded_repr(folder)} does not name two set keys",
+                hint=f"store a transition's files under /{TRANSITIONS_ROOT}/"
+                f"<key a>{PAIR_SEPARATOR}<key b>/",
+                context={"folder": folder},
+            )
+
+
 def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
-    """Checks every set key a commit stores in a folder the base tree lacks.
+    """Checks every set key and transition folder a commit stores in a folder the base lacks.
 
     Folders already stored are grandfathered, so v0.1 and v0.2 set IDs keep saving until stored IDs
     are migrated; a new folder, however the show was built, must pass check_id.
@@ -219,6 +247,7 @@ def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
     set key
     """
     stored = {key for path in before for key in _set_keys_in(path)}
+    _require_pair_folders(before, written)
     for key in sorted({key for path in written for key in _set_keys_in(path)} - stored):
         if check_id(key, kind="set key") != key:
             raise SchemaError(

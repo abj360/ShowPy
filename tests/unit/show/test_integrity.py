@@ -56,6 +56,9 @@ Contains:
     test_regression_stored_json_is_parsed_strictly_everywhere: refuses a repeated key in every
         structured file, and keeps loose JSON parsing out of the show layer's source
     test_regression_notes_write_parses_strictly: refuses a notes document with a repeated key
+    test_regression_cf_characters_in_paths_are_refused: refuses invisible format characters
+    test_regression_odd_transition_folder_is_refused: refuses a new transition folder that does
+        not name two set keys, and keeps a stored one
 """
 
 import json
@@ -95,6 +98,7 @@ from e8s.show.integrity import (
     LazyBlobs,
     blob_digest,
     require_known_path,
+    require_new_set_keys,
     require_valid_digests,
     require_valid_tree,
 )
@@ -584,3 +588,22 @@ def test_regression_notes_write_parses_strictly() -> None:
     with pytest.raises(SchemaError) as caught:
         ws.write(NOTES_DOC, _structured_with_repeated_key(NOTES_DOC), at=AT)
     assert caught.value.code == ErrorCode.STRICT_JSON
+
+
+@pytest.mark.parametrize("char", ["\u00ad", "\u200b", "\u200e", "\u202e", "\u2066", "\ufeff"])
+def test_regression_cf_characters_in_paths_are_refused(char: str) -> None:
+    with pytest.raises(StorageError) as caught:
+        require_known_path(f"/renders/a{char}b.txt")
+    assert caught.value.code == "BAD_PATH"
+
+
+@pytest.mark.parametrize("folder", ["1", "1-2-3", "1-", "1--2"])
+def test_regression_odd_transition_folder_is_refused(folder: str) -> None:
+    path = f"/transitions/{folder}/notes.txt"
+    repo, head = _repo()
+    with pytest.raises(SchemaError) as caught:
+        _commit(repo, head, {path: b"x"})
+    assert caught.value.context["folder"] == folder
+    assert repo.head(SHOW_ID) == head
+    require_new_set_keys([path], [path])
+    _commit(repo, head, {"/transitions/1-2/notes.txt": b"x"})
