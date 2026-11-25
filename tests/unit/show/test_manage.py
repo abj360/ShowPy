@@ -395,8 +395,6 @@ def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
         add_set(two_set_show(), "3", 4.0, placements=rows)
 
 
-@pytest.mark.defect("UP-9.7-55")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-55")
 def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     """Names the subset after set "A" with "A" as its base, not "B" (audit 9.7 sets defects)."""
     base = two_set_show()
@@ -406,6 +404,14 @@ def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     except SchemaError:
         return
     assert new_id.startswith("A")
+
+
+def test_regression_insert_subset_after_a_is_aa_and_after_aa_is_ab() -> None:
+    base = two_set_show()
+    renamed = base.replace(sets=(base.sets[0].replace(id="A"), base.sets[1]))
+    with_aa, first = insert_subset(renamed, "A", 3.0)
+    _, second = insert_subset(with_aa, "AA", 1.0)
+    assert (first, second) == ("AA", "AB")
 
 
 def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:

@@ -235,7 +235,7 @@ def add_set(
 
 
 def _subset_id(show: Show, after: str) -> SetId:
-    base = after.rstrip(SUBSET_LETTERS)
+    base = after.rstrip(SUBSET_LETTERS) or after[0]
     suffix = after[len(base) :]
     start = SUBSET_LETTERS.index(suffix[-1]) + 1 if suffix else 0
     for letter in SUBSET_LETTERS[start:]:
