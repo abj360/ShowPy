@@ -26,9 +26,9 @@ Contains:
     test_regression_unreadable_lost_and_found_is_skipped: reads past a lost+found it cannot open
     test_read_layout_skips_housekeeping_names_only: skips every housekeeping name beside a layout-1
         show, and still refuses any other stray entry
-    test_read_layout_reads_a_root_holding_only_tmp_as_current: reads the root a first commit left
+    test_regression_root_holding_only_tmp_is_current: reads the root a first commit left
         before linking its layout file as the current layout
-    test_read_layout_reads_a_layout_file_linked_while_listing: reads a layout file a concurrent
+    test_regression_layout_file_linked_while_listing_is_read: reads a layout file a concurrent
         first commit linked after its name was looked up
 """
 
@@ -257,7 +257,7 @@ def test_read_layout_skips_housekeeping_names_only(tmp_path: Path) -> None:
     assert caught.value.code == ErrorCode.CORRUPT
 
 
-def test_read_layout_reads_a_root_holding_only_tmp_as_current(tmp_path: Path) -> None:
+def test_regression_root_holding_only_tmp_is_current(tmp_path: Path) -> None:
     (tmp_path / TEMP_DIR).mkdir()
     (tmp_path / TEMP_DIR / ".tmp-left").write_bytes(b"x")
     assert read_layout(tmp_path) == CURRENT_LAYOUT
@@ -269,7 +269,7 @@ def test_read_layout_reads_a_root_holding_only_tmp_as_current(tmp_path: Path) ->
     assert caught.value.code == ErrorCode.CORRUPT
 
 
-def test_read_layout_reads_a_layout_file_linked_while_listing(
+def test_regression_layout_file_linked_while_listing_is_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Reads a layout file that a racing first commit linked after its name was looked up."""
