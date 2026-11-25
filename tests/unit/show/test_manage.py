@@ -385,6 +385,11 @@ def test_remove_last_set_merges_counts_into_previous_set_and_its_move() -> None:
     assert edited.transitions[0].counts == 12.0
 
 
+def test_regression_remove_second_of_two_sets_keeps_the_first_at_zero_counts() -> None:
+    edited = remove_set(two_set_show(), "2")
+    assert [(s.id, s.counts) for s in edited.sets] == [("1", 0.0)]
+
+
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
     """Rejects two placements for one spot instead of keeping the last (audit 9.7)."""
     rows = (
