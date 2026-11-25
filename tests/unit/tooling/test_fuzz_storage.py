@@ -11,6 +11,7 @@ Contains:
     test_regression_storage_fuzz_refuses_a_file_without_a_target: a matching file with no
         target exits non-zero
     test_list_prints_the_ids_as_one_json_line: the matrix input
+    test_regression_runner_leaves_the_active_hypothesis_profile_unchanged: main sets no profile
     test_fuzz_runs_a_target_under_libfuzzer: argv, corpus, artifact prefix and instrumentation
     test_fuzz_passing_target_exits_zero: a clean run returns 0 and leaves no crash
     test_regression_storage_fuzz_crash_exits_non_zero_and_keeps_the_input: a raising target
@@ -37,6 +38,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from hypothesis import settings
 
 from tests.unit.tooling.test_dockerfile import DOCKERFILE, DOCKERIGNORE, missing_image_paths
 from tests.unit.tooling.test_noxfile import (
@@ -268,6 +270,20 @@ def test_fuzz_runs_a_target_under_libfuzzer(runner: ModuleType, package: Path) -
     assert f"-max_total_time={SECONDS}" in fake.argv
     assert f"-artifact_prefix={package / 'fuzz-crashes' / safe}/" in fake.argv
     assert ":" not in safe
+
+
+def test_regression_runner_leaves_the_active_hypothesis_profile_unchanged(
+    runner: ModuleType, package: Path
+) -> None:
+    before = settings()
+    assert fuzz(runner, package, "--list") == 0
+    assert fuzz(runner, package, "--target", ALPHA_IDS[1]) == 0
+    after = settings()
+    assert (after.derandomize, after.deadline, after.max_examples) == (
+        before.derandomize,
+        before.deadline,
+        before.max_examples,
+    )
 
 
 def test_fuzz_runs_the_state_machine_target(runner: ModuleType, package: Path) -> None:

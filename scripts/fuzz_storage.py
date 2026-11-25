@@ -220,7 +220,10 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _register_profile() -> None:
-    """Loads the nightly Hypothesis profile: no deadline, no derandomization."""
+    """Loads the nightly Hypothesis profile: no deadline, no derandomization.
+
+    Only the command line calls this, so tests that call main keep their own profile.
+    """
     settings.register_profile(NIGHTLY_PROFILE, deadline=None, derandomize=False)
     settings.load_profile(os.environ.get(PROFILE_ENV, NIGHTLY_PROFILE))
 
@@ -245,7 +248,6 @@ def main(
     args = parser.parse_args(argv)
     if args.list == (args.target is not None):
         parser.error("give --list, or --target with optional --seconds or --replay")
-    _register_profile()
     try:
         if args.list:
             print(json.dumps(list(discover_targets(root))))
@@ -264,4 +266,5 @@ def main(
 
 
 if __name__ == "__main__":
+    _register_profile()
     raise SystemExit(main())
