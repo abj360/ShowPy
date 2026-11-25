@@ -13,6 +13,7 @@ Contains:
     test_assemble_refuses_a_placement_with_roles_removed: names the set's given items
     test_assemble_names_the_part_a_model_refuses: names the cast items for a cast refusal
     test_assemble_refuses_a_show_the_layout_cannot_store: names the structural items
+    test_regression_refusal_reason_does_not_follow_value_order: gives one refusal for any order
 """
 
 from collections.abc import Callable
@@ -254,3 +255,19 @@ def test_assemble_refuses_a_show_the_layout_cannot_store() -> None:
     assert ItemKey(kind="form", path=("f3",)) in refused.keys
     assert ItemKey(kind="set", path=(THIRD_SET,)) in refused.keys
     assert all(key.kind != "placement" for key in refused.keys)
+
+
+HALF_REMOVED: tuple[tuple[str, JsonValue], ...] = (("drill", None), ("facing", {"facing": 90.0}))
+
+
+def test_regression_refusal_reason_does_not_follow_value_order() -> None:
+    base = _base()
+    given: list[tuple[ItemKey, JsonValue]] = [
+        (ItemKey(kind="placement", path=("2", spot), role=role), value)
+        for spot in ("T2", "T3")
+        for role, value in HALF_REMOVED
+    ]
+    forward = _refusal(base, *given)
+    backward = _refusal(base, *reversed(given))
+    assert forward.error.message == backward.error.message
+    assert forward.keys == backward.keys

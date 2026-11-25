@@ -106,7 +106,7 @@ def _placements(key: str, current: Set | None, entries: Entries) -> tuple[Placem
     )
     order = as_texts(entries[order_key]) if order_key in entries else list(placed)
     members = dict(placed)
-    for entity, found in roles.items():
+    for entity, found in sorted(roles.items()):
         if all_removed(found):
             members.pop(entity, None)
         else:

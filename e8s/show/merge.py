@@ -22,7 +22,7 @@ from e8s.core.readonly import thaw_json
 from e8s.core.types import JsonAny
 from e8s.show.change_models import ChangeSet, ItemChange, ItemKey, MergeConflict, MergeResult
 from e8s.show.item_assembly import assemble
-from e8s.show.item_reading import Refusal
+from e8s.show.item_reading import Refusal, sorted_keys
 from e8s.show.item_table import PLACEMENTS
 from e8s.show.items import changes
 from e8s.show.models import Show
@@ -94,9 +94,9 @@ def _settle_all(
     values: dict[ItemKey, JsonValue] = {}
     combined = set(mine.keys() ^ other.keys())
     conflicts: list[MergeConflict] = []
-    for key in combined:
+    for key in sorted_keys(combined):
         values[key] = _thawed((mine[key] if key in mine else other[key]).after)
-    for key in sorted(mine.keys() & other.keys(), key=ItemKey.sort_key):
+    for key in sorted_keys(mine.keys() & other.keys()):
         settled = _settle(key, mine[key], other[key])
         if isinstance(settled, MergeConflict):
             conflicts.append(settled)
