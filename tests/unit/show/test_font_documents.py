@@ -13,6 +13,7 @@ Contains:
     test_unused_font_documents_are_deleted: a whole-show save drops fonts no form uses
     test_stored_font_bytes_are_the_source_bytes: the file holds the exact bytes
     test_bad_font_document_names_are_refused_on_load: a non-hash name raises SchemaError
+    test_regression_one_spot_save_keeps_the_font_and_encodes_only_the_edit: B1 and M2 together
     test_load_fonts_without_documents_is_bundled: an empty tree gives the bundled registry
 """
 
@@ -22,18 +23,22 @@ import numpy as np
 import pytest
 
 from e8s.choreo.forms import slots, text_form
+from e8s.choreo.models import PlacementPatch
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import FontError, MissingFontError, SchemaError
 from e8s.core.ids import FormId
 from e8s.core.util import asset_uri
 from e8s.examples import two_set_show
 from e8s.geo.fonts import bundled_fonts, register_font
+from e8s.show.document_repository import encode_cache_of
+from e8s.show.documents import encode_show as encode_show_documents
 from e8s.show.font_documents import FONTS_ROOT, load_fonts
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.fonts import tiny_bytes
+from tests.fixtures.generators import seeded_show
 
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 SET_ID = "1"
@@ -155,3 +160,28 @@ def test_load_fonts_without_documents_is_bundled() -> None:
     ws = open_workspace(InMemoryRepository(), "show-1")
     save_show(ws, two_set_show(), AT)
     assert load_fonts(ws) is bundled_fonts()
+
+
+def test_regression_one_spot_save_keeps_the_font_and_encodes_only_the_edit() -> None:
+    data = tiny_bytes()
+    registry, uri = register_font(bundled_fonts(), data)
+    base = seeded_show(5, 12, 4)
+    members = [str(entity) for entity in base.cast.ids()[:12]]
+    form = text_form(
+        "tiny", members, "I", fonts=[uri], height=2.0, at=(0, 5), n=12,
+        set_id=base.sets[0].id, font_registry=registry,
+    )  # fmt: skip
+    show = base.replace(forms={TINY_FORM: form})
+    repo = InMemoryRepository()
+    ws = open_workspace(repo, show.id)
+    saved = save_show(ws, show, AT, font_registry=registry)
+    cache = encode_cache_of(repo)
+    assert cache is not None
+    before = cache.misses
+    entity = show.cast.ids()[0]
+    edited_set = show.sets[2].with_placements({entity: PlacementPatch(x=-1.0)}, force=True)
+    sets = (*show.sets[:2], edited_set, *show.sets[3:])
+    revision = save_show(ws, show.replace(sets=sets, revision=saved.id), AT + timedelta(seconds=1))
+    assert cache.misses - before < len(encode_show_documents(show))
+    assert _font_path(data) not in revision.changed
+    assert ws.tree_at(revision.id)[_font_path(data)] == data
