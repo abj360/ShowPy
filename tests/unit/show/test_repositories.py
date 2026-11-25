@@ -419,15 +419,36 @@ def test_regression_new_show_id_follows_the_id_rule(
     assert _folders(tmp_path) == set()
 
 
-def test_stored_show_id_outside_the_id_rule_keeps_committing() -> None:
-    """Extends a show stored under a hyphenated ID, which only new shows are refused."""
+STORED_HYPHENATED_ID = "show-1"
+LAYOUT_1_HYPHENATED_ID = "my-show"
+
+
+def _stored_hyphenated_show() -> tuple[InMemoryRepository, Revision]:
+    """Stores a show under a hyphenated ID through the backend, as releases before the rule did."""
     repo = InMemoryRepository()
     seed = _create(repo, "seed")
     tree = dict(repo.backend.tree("seed", seed))
     revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(tree)))
-    repo.backend.commit(SHOW_ID, revision, tree, {})
+    repo.backend.commit(STORED_HYPHENATED_ID, revision, tree, {})
+    return repo, revision
+
+
+def test_stored_show_id_outside_the_id_rule_keeps_committing(tmp_path: Path) -> None:
+    """Extends shows stored under hyphenated IDs, in memory and in a layout-1 root."""
+    repo, revision = _stored_hyphenated_show()
     landed = repo.transaction(
-        SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
+        STORED_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
     )
-    assert repo.head(SHOW_ID) == landed.id
-    assert repo.paths(SHOW_ID) == sorted([*tree, "/renders/a.txt"])
+    assert repo.head(STORED_HYPHENATED_ID) == landed.id
+    assert "/renders/a.txt" in repo.paths(STORED_HYPHENATED_ID)
+    documents = repo.documents("seed")
+    blobs = {blob_digest(documents[path]): documents[path] for path in documents}
+    _FileBackend(tmp_path).commit(
+        LAYOUT_1_HYPHENATED_ID, revision, dict(repo.backend.tree("seed", repo.head("seed"))), blobs
+    )
+    legacy = FileRepository(tmp_path)
+    extended = legacy.transaction(
+        LAYOUT_1_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
+    )
+    assert legacy.head(LAYOUT_1_HYPHENATED_ID) == extended.id
+    assert legacy.shows() == [LAYOUT_1_HYPHENATED_ID]
