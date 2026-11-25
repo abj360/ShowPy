@@ -72,7 +72,7 @@ class NoTargetsError(Exception):
 
 def _import_atheris() -> AtherisModule:
     """Imports atheris, which only Linux x86_64 hosts install."""
-    import atheris
+    import atheris  # pyright: ignore[reportMissingModuleSource]
 
     return atheris
 

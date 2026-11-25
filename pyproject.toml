@@ -145,8 +145,6 @@ include = ["e8s", "tests", "scripts"]
 typeCheckingMode = "basic"
 pythonVersion = "3.13"
 stubPath = "typings"
-# typings/atheris.pyi stands in for a package that installs on Linux x86_64 only.
-reportMissingModuleSource = "none"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "e8s"]
