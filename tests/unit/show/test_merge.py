@@ -14,6 +14,8 @@ Contains:
     test_set_order_changes_merge_when_they_touch_different_sets: merges an added and a removed set
     test_a_removed_and_a_changed_item_conflict: names a deleted spot's placement the other moved
     test_order_edits_that_cannot_combine_conflict_with_the_reason: names a spot moved and removed
+    test_regression_merge_never_reverses_an_order_both_sides_keep: refuses an order that puts
+        two spots in the opposite order from the one both sides keep
     test_placement_orders_merge_element_by_element: merges a spot added and a placement reordered
     test_items_changed_alike_on_both_sides_merge: keeps a set both sides added alike
     test_merge_with_no_change_on_one_side_returns_the_other_show: returns that show itself
@@ -169,6 +171,23 @@ def test_order_edits_that_cannot_combine_conflict_with_the_reason() -> None:
     (conflict,) = [c for c in result.conflicts if c.key.kind == "spot_order"]
     assert conflict.reason == "T1 moved on one side and removed on the other"
     assert merge(base, deleted, moved).conflicts == _swapped(result)
+
+
+def _spot_order(show: Show, order: list[str]) -> Show:
+    spots = {spot.id: spot for spot in show.cast.spots}
+    return show.replace(cast=show.cast.replace(spots=tuple(spots[SpotId(i)] for i in order)))
+
+
+def test_regression_merge_never_reverses_an_order_both_sides_keep() -> None:
+    base = two_set_show()
+    swapped = _spot_order(base, ["T1", "T2", "T4", "T3"])
+    moved = _spot_order(base, ["T2", "T3", "T1", "T4"])
+    result = merge(base, swapped, moved)
+    assert result.show is None
+    (conflict,) = result.conflicts
+    assert conflict.key == ItemKey(kind="spot_order", path=())
+    assert conflict.reason == "the two reorders cannot both keep their order"
+    assert merge(base, moved, swapped).conflicts == _swapped(result)
 
 
 def test_placement_orders_merge_element_by_element() -> None:

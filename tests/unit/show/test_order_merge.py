@@ -17,6 +17,7 @@ import pytest
 from e8s.show.order_merge import Element, OrderConflict, merge_order
 
 BASE = ["1", "2", "3", "4"]
+REVERSED = "the two reorders cannot both keep their order"
 COMBINING: dict[str, tuple[list[str], list[str], tuple[str, ...]]] = {
     "insert and remove": (["1", "1A", "2", "3", "4"], ["1", "2", "4"], ("1", "1A", "2", "4")),
     "move and append": (["2", "1", "3", "4"], [*BASE, "5"], ("2", "1", "3", "4", "5")),
@@ -28,6 +29,7 @@ CONFLICTING: dict[str, tuple[list[str], list[str], str]] = {
     "placed differently": (["1", "9", *BASE[1:]], [*BASE, "9"], "9 placed differently"),
     "moved after each other": (["2", "3", "1", "4"], ["1", "3", "2", "4"], "moved after each"),
     "listed twice": (["1", "1", "2"], BASE, "an order lists one element twice"),
+    "reverses a kept pair": (["1", "2", "4", "3"], ["2", "3", "1", "4"], REVERSED),
 }
 
 

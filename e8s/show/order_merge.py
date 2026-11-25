@@ -13,8 +13,10 @@ are ordered by the base position of their anchor, then by the natural sort of th
 result does not depend on which side is which.
 
 Two edits conflict when an element is moved on one side and removed on the other, when the two
-sides place one element differently, or when each side anchors a move on an element the other
-side moved, so that neither can land first.
+sides place one element differently, when each side anchors a move on an element the other side
+moved, so that neither can land first, or when the laid-out order puts two elements in the
+opposite order from the one both sides keep them in. That last check compares each element with
+every element both sides put before it, in O(n log n).
 
 Contains:
     OrderConflict: holds why two edits of one order cannot combine
@@ -33,6 +35,7 @@ type _NaturalKey = tuple[tuple[tuple[tuple[int, int, str], ...], str], ...]
 NO_PREVIOUS = -1
 START_POSITION = -1
 LABEL_SEPARATOR = "/"
+REVERSED_PAIR = "the two reorders cannot both keep their order"
 
 
 @dataclass(frozen=True)
@@ -195,6 +198,32 @@ def _laid_out(
     return laid
 
 
+def _keeps_shared_order(
+    ours: Sequence[Element], theirs: Sequence[Element], laid: Sequence[Element]
+) -> bool:
+    """Reports whether the laid-out order keeps every pair that both sides hold in one order.
+
+    Walks our order with a max Fenwick tree over their positions: an element must come after,
+    in the laid-out order, every element that both sides put before it.
+    """
+    their_position = {element: position for position, element in enumerate(theirs)}
+    laid_position = {element: position for position, element in enumerate(laid)}
+    latest = [START_POSITION] * (len(theirs) + 1)
+    for element in ours:
+        if element not in their_position:
+            continue
+        slot, earlier = their_position[element], START_POSITION
+        while slot > 0:
+            earlier, slot = max(earlier, latest[slot]), slot - (slot & -slot)
+        if earlier > laid_position[element]:
+            return False
+        slot = their_position[element] + 1
+        while slot < len(latest):
+            latest[slot] = max(latest[slot], laid_position[element])
+            slot += slot & -slot
+    return True
+
+
 def merge_order(
     base: Sequence[Element], ours: Sequence[Element], theirs: Sequence[Element]
 ) -> tuple[Element, ...] | OrderConflict:
@@ -228,4 +257,6 @@ def merge_order(
     stuck = {e for run in (*mine.runs, *other.runs) for e in run.elements} - set(laid)
     if stuck:
         return OrderConflict(reason=f"{_listed(stuck)} moved after each other on the two sides")
+    if not _keeps_shared_order(ours, theirs, laid):
+        return OrderConflict(reason=REVERSED_PAIR)
     return tuple(laid)

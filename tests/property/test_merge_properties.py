@@ -4,20 +4,21 @@
 test_merge_properties.py --- checks the three-way merge over random edits of a seeded show
 
 Edits cover placements (drill, facing, labels), the title, sets and their order, the spot order,
-pins, spot deletion, forms, path rows, routes, the sheet, the timeline, groups, selections and
-facing overrides.
+pins, spot deletion, forms, path rows, routes, the sheet, the timeline, groups, selections,
+facing overrides, and single moves within the spot order and a set's placement order.
 
 Contains:
     test_merge_with_an_unchanged_side_returns_the_other: returns the edited side itself
     test_merge_is_symmetric_in_ours_and_theirs: gives one show, or the same conflicts with the
         sides swapped, whichever side is which
     test_clean_merge_is_lossless: keeps every item neither side changed, every change one side
-        made, every change both made alike, and exactly the elements of each merged order
+        made, every change both made alike, and exactly the elements of each merged order, in
+        the order of every pair both sides keep alike
 """
 
 from functools import cache
 
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from e8s.cast.models import Group
@@ -40,13 +41,16 @@ SEEDED_SPOTS = 6
 SEEDED_SETS = 3
 PLACEMENT_KINDS = 4
 STRUCTURE_KINDS = 10
-EDIT_KINDS = 19
+CONTENT_KINDS = 19
+EDIT_KINDS = 21
 ADDED_SET_IDS = ("9", "9A", "9B")
 ADDED_GROUPS = (("extra_x", "X"), ("extra_y", "Y"), ("extra_z", "Z"))
 VARIANTS = 3
 ROUTE_SHARE_STEP = 0.1
 OVERRIDE_END = 1.0
 ORDER_KINDS = frozenset({"set_order", "spot_order", "pin_order"})
+SWAP_THIRD_AND_FOURTH_SPOTS = (CONTENT_KINDS, 3, 2.0)
+FIRST_SPOT_AFTER_THIRD = (CONTENT_KINDS, 0, 2.0)
 type _Element = str | tuple[str, ...]
 seeds = st.integers(min_value=0, max_value=3)
 edits = st.lists(
@@ -134,7 +138,7 @@ def _content(show: Show, kind: int, pick: int, spot: str) -> Show:
             return define_selection(show, f"sel_{variant}", spot, replace=True)
         case 18:
             end = OVERRIDE_END + variant
-            if end > sum(current.counts for current in show.sets):
+            if end > sum(current.counts for current in show.sets[1:]):
                 return show
             override = FacingOverride(
                 entities=(SpotId(spot),), mode=FacingMode.AUDIENCE, start=0.0, end=end
@@ -142,6 +146,23 @@ def _content(show: Show, kind: int, pick: int, spot: str) -> Show:
             return add_facing_override(show, override)
         case _:
             return _paths(show, kind, pick)
+
+
+def _moved[T](members: tuple[T, ...], pick: int, value: float) -> tuple[T, ...]:
+    rest = list(members)
+    member = rest.pop(pick % len(rest))
+    rest.insert(int(abs(value)) % (len(rest) + 1), member)
+    return tuple(rest)
+
+
+def _reordered(show: Show, kind: int, pick: int, value: float) -> Show:
+    if kind == CONTENT_KINDS:
+        spots = _moved(show.cast.spots, pick, value)
+        return show.replace(cast=show.cast.replace(spots=spots))
+    position = pick % len(show.sets)
+    current = show.sets[position]
+    moved = current.replace(placements=_moved(current.placements, pick // 3, value))
+    return show.replace(sets=tuple(moved if i == position else s for i, s in enumerate(show.sets)))
 
 
 def _edited(show: Show, kind: int, pick: int, value: float) -> Show:
@@ -159,8 +180,10 @@ def _edited(show: Show, kind: int, pick: int, value: float) -> Show:
             return show.replace(title=f"title {pick % 3}")
         case _ if kind < STRUCTURE_KINDS:
             return _structural(show, kind, pick, spot)
-        case _:
+        case _ if kind < CONTENT_KINDS:
             return _content(show, kind, pick, spot)
+        case _:
+            return _reordered(show, kind, pick, value)
 
 
 def _applied(show: Show, steps: list[tuple[int, int, float]]) -> Show:
@@ -214,6 +237,21 @@ def _merged_elements(mine: ItemChange, other: ItemChange) -> set[_Element]:
     return (ours | theirs) - (base - ours) - (base - theirs)
 
 
+def _keeps_shared_order(
+    ours: list[_Element], theirs: list[_Element], merged: list[_Element]
+) -> bool:
+    """Reports whether every pair both sides hold in one order keeps that order when merged."""
+    other = {element: i for i, element in enumerate(theirs)}
+    at = {element: i for i, element in enumerate(merged)}
+    shared = [element for element in ours if element in other]
+    return all(
+        at[first] < at[second]
+        for i, first in enumerate(shared)
+        for second in shared[i + 1 :]
+        if other[first] < other[second]
+    )
+
+
 def _settled(
     mine: ItemChange | None, other: ItemChange | None, before: JsonAny
 ) -> tuple[bool, JsonAny]:
@@ -226,6 +264,7 @@ def _settled(
 
 
 @given(seeds, edits, edits)
+@example(0, [SWAP_THIRD_AND_FOURTH_SPOTS], [FIRST_SPOT_AFTER_THIRD])
 def test_clean_merge_is_lossless(
     seed: int, our_steps: list[tuple[int, int, float]], their_steps: list[tuple[int, int, float]]
 ) -> None:
@@ -252,3 +291,6 @@ def test_clean_merge_is_lossless(
         elements = _elements(found)
         assert len(set(elements)) == len(elements)
         assert set(elements) == _merged_elements(mine_change, other_change)
+        assert _keeps_shared_order(
+            _elements(mine_change.after), _elements(other_change.after), elements
+        ), key
