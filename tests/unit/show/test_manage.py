@@ -476,8 +476,6 @@ def test_regression_set_counts_rescale_shifts_facing_overrides() -> None:
     assert (edited.facing_overrides[0].start, edited.facing_overrides[0].end) == shifted
 
 
-@pytest.mark.defect("UP-9.7-85")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-85")
 def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> None:
     """Drops or reports a transition pin on a vanished pair (audit 9.7 sets).
 
@@ -487,6 +485,16 @@ def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> 
     show = _three_set_show().replace(pins=(Pin(target="transition", id="2->3"),))
     edited = remove_set(show, "2", force=True)
     assert not edited.pins or not validate_show(edited).ok
+
+
+def test_regression_remove_set_keeps_unparsable_and_unrelated_transition_pins() -> None:
+    pins = (
+        Pin(target="transition", id="not a tid"),
+        Pin(target="transition", id="1->2"),
+        Pin(target="transition", id="2→3"),
+    )
+    edited = remove_set(_three_set_show().replace(pins=pins), "3", force=True)
+    assert [pin.id for pin in edited.pins] == ["not a tid", "1->2"]
 
 
 def test_regression_error_messages_truncate_echoed_input() -> None:

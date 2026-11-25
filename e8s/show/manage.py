@@ -30,6 +30,7 @@ from e8s.core.ids import (
     format_ref,
     format_tid,
     parse_ref,
+    parse_tid,
 )
 from e8s.sheet.models import Sheet
 from e8s.show.locks import require_unlocked
@@ -292,15 +293,21 @@ def insert_subset(
     return replace_sets(show, sets, force=force), new_id
 
 
+def _names_set(tid_text: str, set_id: str) -> bool:
+    try:
+        return set_id in parse_tid(tid_text)
+    except SchemaError:
+        return False
+
+
 def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
     dropped_forms = {f for f, form in show.forms.items() if form.set == set_id}
-    tids = {format_tid(t) for t in show.transition_ids() if set_id in t}
 
     def kept(pin: Pin) -> bool:
         return not (
             (pin.target == "set" and pin.id == set_id)
             or (pin.target == "form" and pin.id in dropped_forms)
-            or (pin.target == "transition" and pin.id in tids)
+            or (pin.target == "transition" and _names_set(pin.id, set_id))
         )
 
     return tuple(filter(kept, show.pins))
