@@ -366,8 +366,6 @@ def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
     assert ws.read("/sets/3/set.py") == SCRIPT_OLD_TWO.decode()
 
 
-@pytest.mark.defect("UP-9.7-53")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-53")
 def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None:
     """Keeps total counts, or refuses, when merging the last set's counts (audit 9.7)."""
     show = _three_set_show()
@@ -377,6 +375,19 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
     except E8sError:
         return
     assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
+
+
+def test_remove_last_set_merges_counts_into_previous_set_and_its_move() -> None:
+    show = _three_set_show()
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0)
+    edited = remove_set(show.replace(transitions=(spec,)), "3")
+    assert edited.set("2").counts == 12.0
+    assert edited.transitions[0].counts == 12.0
+
+
+def test_regression_remove_second_of_two_sets_keeps_the_first_at_zero_counts() -> None:
+    edited = remove_set(two_set_show(), "2")
+    assert [(s.id, s.counts) for s in edited.sets] == [("1", 0.0)]
 
 
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
@@ -389,8 +400,6 @@ def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
         add_set(two_set_show(), "3", 4.0, placements=rows)
 
 
-@pytest.mark.defect("UP-9.7-55")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-55")
 def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     """Names the subset after set "A" with "A" as its base, not "B" (audit 9.7 sets defects)."""
     base = two_set_show()
@@ -400,6 +409,14 @@ def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     except SchemaError:
         return
     assert new_id.startswith("A")
+
+
+def test_regression_insert_subset_after_a_is_aa_and_after_aa_is_ab() -> None:
+    base = two_set_show()
+    renamed = base.replace(sets=(base.sets[0].replace(id="A"), base.sets[1]))
+    with_aa, first = insert_subset(renamed, "A", 3.0)
+    _, second = insert_subset(with_aa, "AA", 1.0)
+    assert (first, second) == ("AA", "AB")
 
 
 def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
@@ -450,8 +467,6 @@ def test_regression_stale_save_conflict_message_is_bounded() -> None:
     assert len(str(excinfo.value)) <= MAX_CONFLICT_MESSAGE_CHARS
 
 
-@pytest.mark.defect("UP-9.7-60")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-60")
 def test_regression_set_counts_rescale_shifts_facing_overrides() -> None:
     """Shifts later facing overrides when a set is rescaled (audit 9.7)."""
     show = _three_set_show()
@@ -464,8 +479,27 @@ def test_regression_set_counts_rescale_shifts_facing_overrides() -> None:
     assert (edited.facing_overrides[0].start, edited.facing_overrides[0].end) == shifted
 
 
-@pytest.mark.defect("UP-9.7-85")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-85")
+def test_regression_set_counts_rescale_maps_overrides_before_inside_and_after_the_move() -> None:
+    show = _three_set_show()
+    windows = ((1.0, 2.0), (9.0, 10.0), (13.0, 14.0))
+    overrides = tuple(
+        FacingOverride(entities="all", mode=FacingMode.TO_TARGET, start=a, end=b)
+        for a, b in windows
+    )
+    edited = set_counts(show.replace(facing_overrides=overrides), "3", 8.0, rescale=True)
+    assert [(o.start, o.end) for o in edited.facing_overrides] == [
+        (1.0, 2.0),
+        (10.0, 12.0),
+        (17.0, 18.0),
+    ]
+
+
+def test_set_counts_without_rescale_leaves_overrides_alone() -> None:
+    override = FacingOverride(entities="all", mode=FacingMode.TO_TARGET, start=9.0, end=11.0)
+    show = _three_set_show().replace(facing_overrides=(override,))
+    assert set_counts(show, "2", 16.0).facing_overrides == (override,)
+
+
 def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> None:
     """Drops or reports a transition pin on a vanished pair (audit 9.7 sets).
 
@@ -475,6 +509,16 @@ def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> 
     show = _three_set_show().replace(pins=(Pin(target="transition", id="2->3"),))
     edited = remove_set(show, "2", force=True)
     assert not edited.pins or not validate_show(edited).ok
+
+
+def test_regression_remove_set_keeps_unparsable_and_unrelated_transition_pins() -> None:
+    pins = (
+        Pin(target="transition", id="not a tid"),
+        Pin(target="transition", id="1->2"),
+        Pin(target="transition", id="2→3"),
+    )
+    edited = remove_set(_three_set_show().replace(pins=pins), "3", force=True)
+    assert [pin.id for pin in edited.pins] == ["not a tid", "1->2"]
 
 
 def test_regression_error_messages_truncate_echoed_input() -> None:
