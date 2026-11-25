@@ -189,8 +189,13 @@ class FileBackend:
             self._seen[show_id] = (seq, revision_id)
 
     def head(self, show_id: str) -> str:
-        """Returns the revision in the last slot, or the root revision before the first."""
+        """Returns the revision in the last slot, or the root revision before the first.
+
+        The manifest is checked once per backend, as for every other read, so a warm head still
+        looks up one slot.
+        """
         with _mapped_io(show_id, self._folder(show_id)):
+            self._check_manifest(show_id)
             return self._head(show_id)[1]
 
     def _head(self, show_id: str) -> tuple[int, str]:

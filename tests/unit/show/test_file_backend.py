@@ -75,6 +75,8 @@ SHOW_ID = "slots"
 RENDER = "/renders/a.txt"
 COLD_REVISIONS = 1000
 COLD_LOOKUPS_MAX = 22
+# The cold head checks the show's manifest once: one lookup, then one read that looks it up.
+MANIFEST_LOOKUPS = 2
 RACERS = 8
 RACE_TRIALS = 200
 RACE_TIMEOUT_S = 120.0
@@ -168,7 +170,8 @@ def test_cold_head_needs_at_most_22_lookups_at_1000_revisions(
     landed = _landed(FileBackend(tmp_path), COLD_REVISIONS)
     recorder = _LstatRecorder(monkeypatch)
     assert FileBackend(tmp_path).head(SHOW_ID) == landed[-1].id
-    assert len(recorder.paths) <= COLD_LOOKUPS_MAX
+    assert len(recorder.slots()) <= COLD_LOOKUPS_MAX
+    assert len(recorder.paths) <= COLD_LOOKUPS_MAX + MANIFEST_LOOKUPS
     assert recorder.slots()[-1] == COLD_REVISIONS
 
 
@@ -462,12 +465,13 @@ def test_tampered_blobs_are_corrupt(tmp_path: Path) -> None:
 def test_regression_folder_collision_is_corrupt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Refuses to read a show whose folder another show's manifest holds."""
+    """Refuses to read, or report the head of, a show whose folder another show's manifest holds."""
     monkeypatch.setattr(file_backend, "show_folder", lambda _: "shared-" + "0" * 16)
     _landed(FileBackend(tmp_path), 1)
-    with pytest.raises(StorageError) as caught:
-        FileBackend(tmp_path).log("collides")
-    assert caught.value.code == "CORRUPT"
+    for read in (FileBackend(tmp_path).log, FileBackend(tmp_path).head):
+        with pytest.raises(StorageError) as caught:
+            read("collides")
+        assert caught.value.code == "CORRUPT"
 
 
 def test_file_repository_writes_layout_2_and_keeps_layout_1_roots(tmp_path: Path) -> None:
