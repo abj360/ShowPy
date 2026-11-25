@@ -368,6 +368,7 @@
       "PATH": "'PATH'",
       "PINNED_CHANGED": "'PINNED_CHANGED'",
       "PROPOSAL_CLOSED": "'PROPOSAL_CLOSED'",
+      "PROPOSAL_STALE": "'PROPOSAL_STALE'",
       "RAMP_CUT": "'RAMP_CUT'",
       "RAMP_INCOMPLETE": "'RAMP_INCOMPLETE'",
       "RAMP_LENGTH": "'RAMP_LENGTH'",
@@ -448,6 +449,7 @@
       "amplitude": "Finite"
     }
   },
+  "FileAssetStore": "(root: pathlib.Path) -> None",
   "FileRepository": "(root: str | pathlib.Path)",
   "FillRecipe": {
     "model": {
@@ -1552,7 +1554,7 @@
       "cycles": "WaveCycles"
     }
   },
-  "accept": "(ws: e8s.show.workspace.Workspace, proposal: e8s.show.collab_models.Proposal, at: datetime.datetime) -> e8s.show.history_models.Revision",
+  "accept": "(ws: e8s.show.workspace.Workspace, proposal_id: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
   "add_cue": "(tl: e8s.time.models.Timeline, cue: e8s.time.models.Cue) -> e8s.time.models.Timeline",
   "add_facing_override": "(show: e8s.show.models.Show, override: e8s.choreo.path_models.FacingOverride) -> e8s.show.models.Show",
   "add_group": "(show: 'Show', group: e8s.cast.models.Group) -> 'Show'",
@@ -1639,7 +1641,7 @@
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: str = 'detected', members: collections.abc.Sequence[str] = ()) -> e8s.choreo.form_models.Form",
   "diff_paths": "(a: e8s.choreo.path_models.TransitionSpec, b: e8s.choreo.path_models.TransitionSpec) -> e8s.show.history_models.PathDiff",
   "diff_sets": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set, tol: float = 1e-06) -> e8s.show.history_models.SetDiff",
-  "diff_show": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> dict[str, Any]",
+  "diff_show": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> dict[str, JsonValue]",
   "difference": "(a: Area, b: Area) -> Area",
   "digest": "(data: bytes) -> str",
   "direction_of_travel": "(show: e8s.show.models.Show, entity: str, tid: tuple[str, str], tau: float) -> Degrees | None",
@@ -1689,6 +1691,7 @@
   "from_json": "(d: dict[str, Any]) -> e8s.time.models.Timeline",
   "gate": "(form: e8s.choreo.form_models.Form, hinge: Literal['start', 'end'] | int, deg: Degrees, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "generated_form": "(form_id: str, members: collections.abc.Sequence[str], fn: str, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, registry: e8s.choreo.form_fns.FormFnRegistry = ..., *, set_id: str = '', n: int | None = None, **params: Any) -> e8s.choreo.form_models.Form",
+  "get_proposal": "(ws: e8s.show.workspace.Workspace, proposal_id: str) -> e8s.show.collab_models.Proposal",
   "get_sheet": "(ref: SheetRef, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.sheet.models.Sheet",
   "glyph_strokes": "(char: str, font: str) -> Glyph",
   "gym_floor": "() -> e8s.sheet.models.Sheet",
@@ -1706,6 +1709,7 @@
   "is_device_name": "(text: str) -> bool",
   "is_label_dependent": "(expr: str) -> bool",
   "is_similarity": "(matrix: Matrix) -> bool",
+  "is_stale": "(ws: e8s.show.workspace.Workspace, proposal_id: str) -> bool",
   "items": "(show: e8s.show.models.Show) -> dict[e8s.show.change_models.ItemKey, JsonValue]",
   "jcs": "(obj: object) -> bytes",
   "join": "(*curves: AnyCurve, bridge: bool = False) -> e8s.geo.curves.CompositeCurve",
@@ -1767,7 +1771,8 @@
   "polyline_form": "(form_id: str, members: collections.abc.Sequence[str], *pts: Point, closed: bool = False, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "position_at": "(show: e8s.show.models.Show, entity: str, t: Count) -> Points",
   "preview_proposal": "(show: e8s.show.models.Show, proposal: e8s.show.collab_models.Proposal) -> e8s.show.collab_models.ProposalPreview",
-  "propose": "(show: e8s.show.models.Show, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str) -> e8s.show.collab_models.Proposal",
+  "proposals": "(ws: e8s.show.workspace.Workspace) -> list[e8s.show.collab_models.Proposal]",
+  "propose": "(ws: e8s.show.workspace.Workspace, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str, at: datetime.datetime) -> e8s.show.collab_models.Proposal",
   "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",
   "reachable_region": "(start: Point, counts: Count, max_speed: float) -> Polygon",
   "read_layout": "(root: pathlib.Path) -> int",
@@ -1782,7 +1787,7 @@
   "register_unit": "(registry: e8s.core.units.UnitRegistry, name: str, meters_per_unit: float) -> e8s.core.units.UnitRegistry",
   "regroup": "(show: 'Show', sel: Selector, group: str) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
   "regular_polygon": "(center: Point, radius: Meters, n: int, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
-  "reject": "(proposal: e8s.show.collab_models.Proposal, reason: str) -> e8s.show.collab_models.Proposal",
+  "reject": "(ws: e8s.show.workspace.Workspace, proposal_id: str, reason: str, at: datetime.datetime) -> e8s.show.collab_models.Proposal",
   "relabel": "(show: 'Show', scheme: e8s.cast.models.LabelScheme) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
   "remove_audio": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
   "remove_cue": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
@@ -1901,5 +1906,6 @@
   "where": "(set_: e8s.choreo.models.Set, predicate: collections.abc.Callable[[e8s.choreo.models.Placement], bool]) -> e8s.core.selection.Selection",
   "window": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, start: float, end: float, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "with_set": "(show: e8s.show.models.Show, new: e8s.choreo.models.Set) -> e8s.show.models.Show",
+  "withdraw": "(ws: e8s.show.workspace.Workspace, proposal_id: str, at: datetime.datetime) -> e8s.show.collab_models.Proposal",
   "zigzag": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points"
 }
