@@ -20,6 +20,7 @@ from typing import Final
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
 from e8s.core.ids import format_tid
+from e8s.core.strict_json import parse_strict_json
 from e8s.core.util import close_matches
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import (
@@ -61,8 +62,8 @@ def _encode(proposal: Proposal) -> bytes:
     return dump_json(proposal.to_json())
 
 
-def _decode(raw: bytes) -> Proposal:
-    return Proposal._validated_json(raw)
+def _decode(raw: bytes, path: str) -> Proposal:
+    return Proposal.from_json(parse_strict_json(raw, document=path))
 
 
 def propose(
@@ -153,7 +154,7 @@ def proposals(ws: Workspace) -> list[Proposal]:
     """
     tree = ws.tree_at(ws.revision)
     paths = sorted(p for p in tree if p.startswith(PROPOSALS_ROOT) and p.endswith(PROPOSAL_SUFFIX))
-    return [_decode(bytes(tree[p])) for p in paths]
+    return [_decode(bytes(tree[p]), p) for p in paths]
 
 
 def get_proposal(ws: Workspace, proposal_id: str) -> Proposal:
@@ -176,7 +177,7 @@ def get_proposal(ws: Workspace, proposal_id: str) -> Proposal:
             hint=f"did you mean {', '.join(close)}?" if close else "proposals() lists them",
             context={"proposal": proposal_id},
         )
-    return _decode(bytes(tree[path]))
+    return _decode(bytes(tree[path]), path)
 
 
 def _touched(ops: Sequence[ChangeOp]) -> set[str]:

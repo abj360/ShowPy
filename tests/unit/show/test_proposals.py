@@ -4,6 +4,8 @@
 test_proposals.py --- tests the proposal record's invariants and the stored proposal lifecycle
 
 Contains:
+    test_regression_stored_proposal_is_parsed_as_strict_json: refuses NaN, repeated keys and a BOM
+        in a stored proposal with STRICT_JSON
     test_proposal_survives_reopening_the_repository: reads a proposal back from a file repository
     test_rejected_proposal_keeps_its_reason: stores the reason and refuses a second close
     test_withdrawn_proposal_cannot_be_accepted: names the withdrawn state when accepting
@@ -31,11 +33,13 @@ from e8s.choreo.models import Placement
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, E8sError, SchemaError, UnknownRefError
 from e8s.core.ids import SetId, SpotId
+from e8s.show.backend import digest
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import PlacementOp, Proposal, ProposalState
 from e8s.show.events import events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import diff_show
+from e8s.show.history_models import Revision
 from e8s.show.manage import add_set
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.proposals import (
@@ -215,3 +219,24 @@ def test_accept_of_a_stale_proposal_is_proposal_stale() -> None:
     assert info.value.code == ErrorCode.PROPOSAL_STALE
     assert info.value.context["overlap"] == ["placement T1 in set 2"]
     assert get_proposal(designer, "p1").state == "open"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"id": "p1", "base_revision": NaN, "change": []}',
+        b'{"id": "p1", "id": "p2", "base_revision": "", "change": []}',
+        b'\xef\xbb\xbf{"id": "p1", "base_revision": "", "change": []}',
+    ],
+)
+def test_regression_stored_proposal_is_parsed_as_strict_json(raw: bytes) -> None:
+    repo, agent, _ = open_session(two_set_show(), AT)
+    backend = repo.backend
+    tree = {**backend.tree(SHOW_ID, agent.revision), "/proposals/p1.json": digest(raw)}
+    revision = Revision(id=digest(raw), parent=agent.revision, at=AT + STEP)
+    backend.commit(SHOW_ID, revision, tree, {digest(raw): raw})
+    agent.refresh()
+    for read in (lambda: get_proposal(agent, "p1"), lambda: proposals(agent)):
+        with pytest.raises(SchemaError) as info:
+            read()
+        assert info.value.code == ErrorCode.STRICT_JSON
