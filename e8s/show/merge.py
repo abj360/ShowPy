@@ -141,14 +141,22 @@ def merge(base: Show, ours: Show, theirs: Show) -> MergeResult:
     reported as conflicts on the items involved, never repaired. Untouched objects are shared
     with `base`, and no input is changed.
 
+    The elements a side moved are those outside its longest run kept in base order, picked the
+    same way every time; so where an insertion lands beside a heavily reordered stretch follows
+    that pick.
+
     Args:
         base: The show both sides were edited from.
         ours: One side's edit.
         theirs: The other side's edit.
 
     Returns:
-        result: The merged show, keeping `base.revision`, or the conflicts in key order. When one
-            side changed no item, the other side itself.
+        result: The merged show, or the conflicts in key order. A merge that combines both sides
+            keeps `base.revision`. When one side changed no item, the other side's own object is
+            returned as it is, with its own revision and no storability check.
+
+    Raises:
+        SchemaError: A show holds two stored values for one item, which `changes` refuses.
 
     >>> from e8s.choreo.models import PlacementPatch
     >>> from e8s.examples import two_set_show
