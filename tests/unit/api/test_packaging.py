@@ -32,7 +32,8 @@ LIBRARY_ROOT = REPO_ROOT / "e8s"
 CARGO_MANIFEST = REPO_ROOT / "Cargo.toml"
 BINDING_BUILD_SCRIPT = REPO_ROOT / "crates" / "e8s-py" / "build.rs"
 CORE_AREAS = ("core", "geo", "time", "sheet", "cast", "engine", "forms")
-CORE_STUB_ROOT = REPO_ROOT / "e8s" / "_core"
+CORE_STUB_ROOT = Path(e8s.__file__).resolve().parent / "_core"
+STUB_FILES = frozenset({f"e8s/_core/{area}.pyi" for area in CORE_AREAS})
 EXTENSIONS = frozenset({"e8s/_core.abi3.so", "e8s/_core.pyd"})
 DIST_INFO_SUFFIX = ".dist-info"
 LICENSES_FOLDER = "licenses"
@@ -110,6 +111,13 @@ def test_core_extension_imports_with_its_seven_submodules() -> None:
         assert module.__doc__
         names = {name for name in vars(module) if not name.startswith("__")}
         assert names == _stub_names(area), area
+
+
+def test_core_stubs_ship_with_the_installed_package() -> None:
+    assert {path.name for path in CORE_STUB_ROOT.glob("*.pyi")} >= {
+        f"{area}.pyi" for area in CORE_AREAS
+    }
+    assert (CORE_STUB_ROOT.parent / "py.typed").is_file()
 
 
 def test_schema_is_a_package_resource() -> None:
@@ -233,6 +241,8 @@ def test_wheel_holds_every_tracked_package_file_plus_the_extension(built_wheel: 
     extension = package & EXTENSIONS
     assert len(extension) == 1, sorted(extension)
     assert package - extension == tracked_package_files(REPO_ROOT)
+    assert package >= STUB_FILES
+    assert "e8s/py.typed" in package
     inside = [name.split("/", 1)[1] for name in metadata]
     licences = {name.split("/", 1)[1] for name in inside if name.startswith(f"{LICENSES_FOLDER}/")}
     assert licences == LICENSE_FILES
@@ -271,6 +281,10 @@ def unexpected_sdist_files(names: set[str], tracked: set[str]) -> list[str]:
 
 def test_sdist_carries_the_toolchain_pin(sdist_files: set[str]) -> None:
     assert {"rust-toolchain.toml", "Cargo.toml", "Cargo.lock"} <= sdist_files
+
+
+def test_sdist_carries_the_core_stubs(sdist_files: set[str]) -> None:
+    assert (STUB_FILES | {"e8s/py.typed"}) <= sdist_files
 
 
 def test_sdist_holds_only_the_build_inputs(sdist_files: set[str]) -> None:
