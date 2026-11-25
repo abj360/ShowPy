@@ -17,6 +17,7 @@ Contains:
     unit_conversions_timed(): the timed share of the unit helpers
     reference_and_transition_corpus(): the ID, reference and transition parsers on text
     reference_and_transition_corpus_timed(): the timed share of the parsers, on mostly valid text
+    reference_and_transition_corpus_malformed_timed(): the timed share of the parsers' error path
     CASES: the core area's cases
 """
 
@@ -349,6 +350,18 @@ def reference_and_transition_corpus_timed(e8s: ModuleType) -> Mapping[str, Outpu
     }
 
 
+def reference_and_transition_corpus_malformed_timed(e8s: ModuleType) -> Mapping[str, Output]:
+    """Parses 3,000 malformed texts; the timed share of the parsers' error path.
+
+    Args:
+        e8s: The e8s module under test.
+
+    Returns:
+        outputs: Each parser's recorded outcome for every text.
+    """
+    return _parse_all(e8s, _corpus(e8s, TIMED_STRINGS)[len(WORDS) :][:TIMED_STRINGS])
+
+
 CASES = (
     Case(
         area="core",
@@ -376,6 +389,12 @@ CASES = (
         area="core",
         name="reference_and_transition_corpus_timed",
         run=reference_and_transition_corpus_timed,
+        timed=True,
+    ),
+    Case(
+        area="core",
+        name="reference_and_transition_corpus_malformed_timed",
+        run=reference_and_transition_corpus_malformed_timed,
         timed=True,
     ),
 )
