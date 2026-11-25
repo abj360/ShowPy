@@ -108,16 +108,23 @@ fn is_device(name: &str) -> bool {
 /// Tells whether text is a Windows device name, alone or before a dot, ignoring case.
 ///
 /// Windows opens `con`, and `con.txt` too, as the console device instead of a file or folder.
+///
+/// # Errors
+///
+/// Returns the host's error for non-ASCII text it cannot case-fold.
+pub fn is_device_name(host: &dyn TextHost, text: &str) -> CoreResult<bool> {
+    Ok(is_folded_device(&casefold(host, text)?))
+}
+
+/// Tells whether case-folded text is a Windows device name, alone or before a dot.
 #[must_use]
-pub fn is_device_name(host: &dyn TextHost, text: &str) -> bool {
-    let folded = casefold(host, text);
+pub fn is_folded_device(folded: &str) -> bool {
     is_device(folded.split('.').next().unwrap_or_default())
 }
 
-fn is_reserved(host: &dyn TextHost, text: &str) -> bool {
-    let folded = casefold(host, text);
-    let head = folded.split('.').next().unwrap_or_default();
-    matches!(folded.as_ref(), "all" | "props") || is_device(head)
+fn is_reserved(host: &dyn TextHost, text: &str) -> CoreResult<bool> {
+    let folded = casefold(host, text)?;
+    Ok(matches!(folded.as_ref(), "all" | "props") || is_folded_device(&folded))
 }
 
 fn matches_shape(rule: IdRule, text: &str) -> bool {
@@ -131,18 +138,21 @@ fn matches_shape(rule: IdRule, text: &str) -> bool {
         && text.chars().all(|c| rule.is_body(c))
 }
 
-fn passes(host: &dyn TextHost, text: &str, rule: IdRule) -> bool {
-    matches_shape(rule, text) && !text.contains(DOUBLE_DOT) && !is_reserved(host, text)
+fn passes(host: &dyn TextHost, text: &str, rule: IdRule) -> CoreResult<bool> {
+    if !matches_shape(rule, text) || text.contains(DOUBLE_DOT) {
+        return Ok(false);
+    }
+    Ok(!is_reserved(host, text)?)
 }
 
 /// Finds the character index of the first character that breaks the rule in text that fails it.
-fn first_bad_position(host: &dyn TextHost, text: &str, rule: IdRule) -> usize {
+fn first_bad_position(host: &dyn TextHost, text: &str, rule: IdRule) -> CoreResult<usize> {
     let chars: Vec<char> = text.chars().collect();
     let (Some(first), Some(last)) = (chars.first(), chars.last()) else {
-        return 0;
+        return Ok(0);
     };
-    if rule.is_edge(*first) || is_reserved(host, text) {
-        return 0;
+    if rule.is_edge(*first) || is_reserved(host, text)? {
+        return Ok(0);
     }
     let mut candidates = Vec::new();
     if rule.is_edge(*last) {
@@ -156,7 +166,7 @@ fn first_bad_position(host: &dyn TextHost, text: &str, rule: IdRule) -> usize {
         text.find(DOUBLE_DOT)
             .map(|byte| text[..byte].chars().count() + 1),
     );
-    candidates.into_iter().min().unwrap_or(0)
+    Ok(candidates.into_iter().min().unwrap_or(0))
 }
 
 /// Checks text that is already NFC against one rule.
@@ -171,15 +181,15 @@ pub fn check_normalized(
     text: &str,
     kind: &str,
 ) -> CoreResult<()> {
-    if passes(host, text, rule) {
+    if passes(host, text, rule)? {
         return Ok(());
     }
     let shown: String = text.chars().take(CONTEXT_TEXT_CHARS).collect();
-    let position = i64::try_from(first_bad_position(host, text, rule)).unwrap_or(i64::MAX);
+    let position = i64::try_from(first_bad_position(host, text, rule)?).unwrap_or(i64::MAX);
     Err(CoreError::new(
         ErrorKind::Schema,
         ErrorCode::Schema,
-        format!("bad {kind} id {}", str_repr(host, &shown)),
+        format!("bad {kind} id {}", str_repr(host, &shown)?),
         rule.hint(),
     )
     .with_context("kind", kind)
@@ -194,7 +204,7 @@ pub fn check_normalized(
 ///
 /// Returns the SchemaError of `check_normalized` for the normalized text.
 pub fn check_text(host: &dyn TextHost, rule: IdRule, text: &str, kind: &str) -> CoreResult<String> {
-    let normalized = nfc(host, text);
+    let normalized = nfc(host, text)?;
     check_normalized(host, rule, &normalized, kind)?;
     Ok(normalized.into_owned())
 }
@@ -226,15 +236,18 @@ pub fn check_sheet_id(host: &dyn TextHost, text: &str, kind: &str) -> CoreResult
 /// Lists pairs of distinct IDs that are equal once case is folded.
 ///
 /// Returns the pairs `(a, b)` with `a < b`, sorted.
-#[must_use]
+///
+/// # Errors
+///
+/// Returns the host's error for non-ASCII text it cannot case-fold.
 pub fn find_case_clashes<'a>(
     host: &dyn TextHost,
     ids: impl IntoIterator<Item = &'a str>,
-) -> Vec<(String, String)> {
+) -> CoreResult<Vec<(String, String)>> {
     let mut folded: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
     for id in ids {
         folded
-            .entry(casefold(host, id).into_owned())
+            .entry(casefold(host, id)?.into_owned())
             .or_default()
             .insert(id);
     }
@@ -250,7 +263,7 @@ pub fn find_case_clashes<'a>(
         }
     }
     pairs.sort();
-    pairs
+    Ok(pairs)
 }
 
 #[cfg(test)]
@@ -329,8 +342,10 @@ mod tests {
 
     #[test]
     fn case_clashes_are_sorted_pairs() {
-        let pairs = find_case_clashes(&StdText, ["T1", "t1", "B2", "T1"]);
+        let pairs = find_case_clashes(&StdText, ["T1", "t1", "B2", "T1"]).unwrap_or_default();
         assert_eq!(pairs, [("T1".to_owned(), "t1".to_owned())]);
-        assert!(find_case_clashes(&StdText, ["a", "b"]).is_empty());
+        assert_eq!(find_case_clashes(&StdText, ["a", "b"]), Ok(Vec::new()));
+        assert!(find_case_clashes(&StdText, ["caf\u{e9}"]).is_err());
+        assert!(is_device_name(&StdText, "\u{212a}").is_err());
     }
 }

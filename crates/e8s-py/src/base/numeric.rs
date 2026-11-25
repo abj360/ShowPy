@@ -19,8 +19,8 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyType};
 
-use super::failure::{exception_of, guarded};
 use super::host::repr_of;
+use crate::errors::{guard, to_py_err};
 
 static REAL: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 const ERRORS_MODULE: &str = "e8s.core.errors";
@@ -68,14 +68,14 @@ fn read_number(value: &Bound<'_, PyAny>) -> PyResult<Number> {
 fn format_number(value: &Bound<'_, PyAny>, max_decimals: i64) -> PyResult<String> {
     let exact_int = value.is_instance_of::<PyInt>() && !value.is_instance_of::<PyBool>();
     if exact_int && value.extract::<f64>().is_ok_and(f64::is_finite) {
-        guarded("format_number", || numbers::check_decimals(max_decimals))?;
+        guard("format_number", || numbers::check_decimals(max_decimals))?;
         return Ok(value.str()?.to_string_lossy().into_owned());
     }
     match read_number(value)? {
-        Number::Float(number) => guarded("format_number", || {
+        Number::Float(number) => guard("format_number", || {
             numbers::format_number(number, max_decimals)
         }),
-        Number::Reject(shown) => guarded("format_number", || {
+        Number::Reject(shown) => guard("format_number", || {
             numbers::check_decimals(max_decimals)?;
             Err(reject_number("format", &shown))
         }),
@@ -91,11 +91,11 @@ fn format_number(value: &Bound<'_, PyAny>, max_decimals: i64) -> PyResult<String
 fn normalize_angle(deg: &Bound<'_, PyAny>) -> PyResult<f64> {
     if let Ok(float) = deg.cast::<PyFloat>() {
         let degrees = float.value();
-        return guarded("normalize_angle", || numbers::normalize_angle(degrees));
+        return guard("normalize_angle", || numbers::normalize_angle(degrees));
     }
     match read_number(deg)? {
-        Number::Float(number) => guarded("normalize_angle", || numbers::normalize_angle(number)),
-        Number::Reject(shown) => guarded("normalize_angle", || Err(reject_angle(&shown))),
+        Number::Float(number) => guard("normalize_angle", || numbers::normalize_angle(number)),
+        Number::Reject(shown) => guard("normalize_angle", || Err(reject_angle(&shown))),
     }
 }
 
@@ -106,7 +106,7 @@ fn normalize_angle(deg: &Bound<'_, PyAny>) -> PyResult<f64> {
 /// 20.0
 #[pyfunction]
 fn angle_diff(a: f64, b: f64) -> PyResult<f64> {
-    guarded("angle_diff", || units::angle_diff(a, b))
+    guard("angle_diff", || units::angle_diff(a, b))
 }
 
 /// Converts a facing to a unit direction; 0° faces the audience (0, -1).
@@ -116,7 +116,7 @@ fn angle_diff(a: f64, b: f64) -> PyResult<f64> {
 /// (0.0, -1.0)
 #[pyfunction]
 fn facing_vector(theta: f64) -> PyResult<(f64, f64)> {
-    guarded("facing_vector", || units::facing_vector(theta))
+    guard("facing_vector", || units::facing_vector(theta))
 }
 
 /// Converts a direction to a facing in [0, 360).
@@ -127,11 +127,11 @@ fn facing_vector(theta: f64) -> PyResult<(f64, f64)> {
 #[pyfunction]
 fn vector_facing(v: &Bound<'_, PyAny>) -> PyResult<f64> {
     let (x, y): (f64, f64) = (v.get_item(0)?.extract()?, v.get_item(1)?.extract()?);
-    let outcome = guarded("vector_facing", || Ok(units::vector_facing(x, y)))?;
+    let outcome = guard("vector_facing", || Ok(units::vector_facing(x, y)))?;
     outcome.map_err(|err| {
         let py = v.py();
         if err.kind() != ErrorKind::ZeroLength {
-            return exception_of(py, &err);
+            return to_py_err(py, &err);
         }
         let context = PyDict::new(py);
         let built = context
@@ -182,11 +182,18 @@ fn build_with(
 /// >>> round_to(2.345)
 /// 2.35
 #[pyfunction]
-#[pyo3(signature = (value, step = 0.01))]
-fn round_to(value: &Bound<'_, PyAny>, step: f64) -> PyResult<f64> {
+#[pyo3(signature = (value, step = None))]
+#[pyo3(text_signature = "(value, step=0.01)")]
+fn round_to(value: &Bound<'_, PyAny>, step: Option<&Bound<'_, PyAny>>) -> PyResult<f64> {
     match read_number(value)? {
-        Number::Reject(shown) => guarded("round_to", || Err(reject_number("round", &shown))),
-        Number::Float(number) => guarded("round_to", || rounding::round_to(number, step)),
+        Number::Reject(shown) => guard("round_to", || Err(reject_number("round", &shown))),
+        Number::Float(number) => {
+            let step = match step {
+                Some(step) if number.is_finite() => step.extract::<f64>()?,
+                _ => rounding::DEFAULT_STEP,
+            };
+            guard("round_to", || rounding::round_to(number, step))
+        }
     }
 }
 
@@ -217,9 +224,9 @@ fn require_size(
     let Ok(size) = requested.extract::<i64>() else {
         return require_huge_size(requested, cap, what, error);
     };
-    let outcome = guarded("require_size", || Ok(caps::require_size(size, cap, what)))?;
+    let outcome = guard("require_size", || Ok(caps::require_size(size, cap, what)))?;
     outcome.map_err(|err| match error {
-        None => exception_of(py, &err),
+        None => to_py_err(py, &err),
         Some(class) => {
             let context =
                 context_of(py, &err).and_then(|context| build_with(class, &err, &context));

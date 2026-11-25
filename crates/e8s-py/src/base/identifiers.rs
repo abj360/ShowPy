@@ -11,17 +11,16 @@
 //!     format_tid(): writes a transition ID as `12→13`
 //!     add_functions(): adds the functions above to a module
 
-use std::panic::AssertUnwindSafe;
-
 use e8s_core::base::ids::{self, IdRule};
 use e8s_core::base::refs;
 use e8s_core::base::text::StdText;
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
 use pyo3::types::PyString;
 
-use super::failure::guarded;
-use super::host::{PyText, read_text, repr_of};
+use super::host::{read_text, repr_of, run};
+use crate::errors::guard;
 
 const TID_PARTS: usize = 2;
 
@@ -34,14 +33,12 @@ fn check<'py>(
 ) -> PyResult<Bound<'py, PyString>> {
     let raw = read_text(text);
     if raw.is_ascii() {
-        guarded(name, || ids::check_normalized(&StdText, rule, &raw, kind))?;
+        guard(name, || ids::check_normalized(&StdText, rule, &raw, kind))?;
         return Ok(text.clone());
     }
-    let host = PyText::new(text.py());
-    let normalized = guarded(
-        name,
-        AssertUnwindSafe(|| ids::check_text(&host, rule, &raw, kind)),
-    )?;
+    let normalized = run(text.py(), name, |host| {
+        ids::check_text(host, rule, &raw, kind)
+    })?;
     Ok(PyString::new(text.py(), &normalized))
 }
 
@@ -102,8 +99,14 @@ fn check_sheet_id<'py>(text: &Bound<'py, PyString>, kind: &str) -> PyResult<Boun
 /// >>> is_device_name("COM1.txt"), is_device_name("com10")
 /// (True, False)
 #[pyfunction]
-fn is_device_name(text: &Bound<'_, PyString>) -> bool {
-    ids::is_device_name(&PyText::new(text.py()), &read_text(text))
+fn is_device_name(text: &Bound<'_, PyString>) -> PyResult<bool> {
+    let raw = read_text(text);
+    if raw.is_ascii() {
+        return guard("is_device_name", || ids::is_device_name(&StdText, &raw));
+    }
+    let folded = text.call_method0(intern!(text.py(), "casefold"))?;
+    let folded = read_text(folded.cast::<PyString>()?).into_owned();
+    guard("is_device_name", || Ok(ids::is_folded_device(&folded)))
 }
 
 /// Lists pairs of distinct IDs that are equal once case is folded.
@@ -123,16 +126,9 @@ fn find_case_clashes_py(ids: &Bound<'_, PyAny>) -> PyResult<Vec<(String, String)
         .try_iter()?
         .map(|item| item?.extract::<PyBackedStr>())
         .collect::<PyResult<Vec<_>>>()?;
-    let host = PyText::new(ids.py());
-    guarded(
-        "find_case_clashes",
-        AssertUnwindSafe(|| {
-            Ok(ids::find_case_clashes(
-                &host,
-                items.iter().map(|item| &**item),
-            ))
-        }),
-    )
+    run(ids.py(), "find_case_clashes", |host| {
+        ids::find_case_clashes(host, items.iter().map(|item| &**item))
+    })
 }
 
 /// Reads a reference such as `sheet:hs-field@2`.
@@ -151,12 +147,8 @@ fn find_case_clashes_py(ids: &Bound<'_, PyAny>) -> PyResult<Vec<(String, String)
 /// ('sheet', 'gym', '1')
 #[pyfunction]
 fn parse_ref(text: &Bound<'_, PyString>) -> PyResult<(String, String, Option<String>)> {
-    let host = PyText::new(text.py());
     let raw = read_text(text);
-    let parts = guarded(
-        "parse_ref",
-        AssertUnwindSafe(|| refs::parse_ref(&host, &raw)),
-    )?;
+    let parts = run(text.py(), "parse_ref", |host| refs::parse_ref(host, &raw))?;
     Ok((parts.kind, parts.id, parts.version))
 }
 
@@ -168,11 +160,9 @@ fn parse_ref(text: &Bound<'_, PyString>) -> PyResult<(String, String, Option<Str
 #[pyfunction]
 #[pyo3(signature = (kind, ref_id, version = None))]
 fn format_ref(py: Python<'_>, kind: &str, ref_id: &str, version: Option<&str>) -> PyResult<String> {
-    let host = PyText::new(py);
-    guarded(
-        "format_ref",
-        AssertUnwindSafe(|| refs::format_ref(&host, kind, ref_id, version)),
-    )
+    run(py, "format_ref", |host| {
+        refs::format_ref(host, kind, ref_id, version)
+    })
 }
 
 /// Reads a transition ID written with `→` or `->` into its two set IDs; a third part is refused.
@@ -185,12 +175,8 @@ fn format_ref(py: Python<'_>, kind: &str, ref_id: &str, version: Option<&str>) -
 /// ('12', '13')
 #[pyfunction]
 fn split_tid(text: &Bound<'_, PyString>) -> PyResult<(String, String)> {
-    let host = PyText::new(text.py());
     let raw = read_text(text);
-    guarded(
-        "split_tid",
-        AssertUnwindSafe(|| refs::split_tid(&host, &raw)),
-    )
+    run(text.py(), "split_tid", |host| refs::split_tid(host, &raw))
 }
 
 /// Writes a transition ID as `a→b`, refusing a tuple that is not a pair.
@@ -203,7 +189,7 @@ fn format_tid(tid: &Bound<'_, PyAny>) -> PyResult<String> {
     let parts = tid.len()?;
     if parts != TID_PARTS {
         let shown = repr_of(tid);
-        return guarded("format_tid", || {
+        return guard("format_tid", || {
             Err(refs::bad_tid_pair(&shown)
                 .with_context("parts", i64::try_from(parts).unwrap_or(-1)))
         });

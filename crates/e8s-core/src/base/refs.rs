@@ -32,41 +32,55 @@ pub struct RefParts {
     pub version: Option<String>,
 }
 
+type RefText<'a> = (&'a str, &'a str, Option<&'a str>);
+
 /// Splits stripped text at `kind:id@version`; None when the text has another shape.
-fn split_ref<'a>(
-    host: &dyn TextHost,
-    text: &'a str,
-) -> Option<(&'a str, &'a str, Option<&'a str>)> {
+fn split_ref<'a>(host: &dyn TextHost, text: &'a str) -> CoreResult<Option<RefText<'a>>> {
     let mut chars = text.char_indices();
-    if !chars.next()?.1.is_ascii_alphabetic() {
-        return None;
+    if !chars.next().is_some_and(|(_, c)| c.is_ascii_alphabetic()) {
+        return Ok(None);
     }
-    let colon = loop {
-        match chars.next()? {
-            (at, ':') => break at,
-            (_, c) if c == '-' || is_word(host, c) => {}
-            _ => return None,
+    let mut colon = None;
+    for (at, c) in chars {
+        if c == ':' {
+            colon = Some(at);
+            break;
         }
+        if c != '-' && !is_word(host, c)? {
+            return Ok(None);
+        }
+    }
+    let Some(colon) = colon else {
+        return Ok(None);
     };
     let rest = &text[colon + 1..];
-    let id_end = rest
-        .char_indices()
-        .find(|(_, c)| matches!(c, '@' | ':') || is_space(host, *c))
-        .map_or(rest.len(), |(at, _)| at);
+    let mut id_end = rest.len();
+    for (at, c) in rest.char_indices() {
+        if matches!(c, '@' | ':') || is_space(host, c)? {
+            id_end = at;
+            break;
+        }
+    }
     if id_end == 0 {
-        return None;
+        return Ok(None);
     }
     let (id, tail) = rest.split_at(id_end);
     let kind = &text[..colon];
     if tail.is_empty() {
-        return Some((kind, id, None));
+        return Ok(Some((kind, id, None)));
     }
-    let version = tail.strip_prefix('@')?;
-    let is_bad = |c: char| c == '@' || is_space(host, c);
-    if version.is_empty() || version.chars().any(is_bad) {
-        return None;
+    let Some(version) = tail.strip_prefix('@') else {
+        return Ok(None);
+    };
+    if version.is_empty() {
+        return Ok(None);
     }
-    Some((kind, id, Some(version)))
+    for c in version.chars() {
+        if c == '@' || is_space(host, c)? {
+            return Ok(None);
+        }
+    }
+    Ok(Some((kind, id, Some(version))))
 }
 
 /// Reads a reference such as `sheet:hs-field@2`.
@@ -79,11 +93,11 @@ fn split_ref<'a>(
 /// Returns a SchemaError for text that is not `kind:id` or `kind:id@version`, or whose id or
 /// version fails its check.
 pub fn parse_ref(host: &dyn TextHost, text: &str) -> CoreResult<RefParts> {
-    let Some((kind, id, version)) = split_ref(host, strip(host, text)) else {
+    let Some((kind, id, version)) = split_ref(host, strip(host, text)?)? else {
         return Err(CoreError::new(
             ErrorKind::Schema,
             ErrorCode::Schema,
-            format!("bad reference {}", str_repr(host, text)),
+            format!("bad reference {}", str_repr(host, text)?),
             "write references as kind:id or kind:id@version",
         )
         .with_context("text", text));
@@ -150,15 +164,15 @@ pub fn bad_tid_pair(shown: &str) -> CoreError {
 /// Returns a SchemaError unless the text splits into exactly two non-empty parts.
 pub fn split_tid(host: &dyn TextHost, text: &str) -> CoreResult<(String, String)> {
     let normalized = text.replace(ASCII_ARROW, ARROW);
-    let parts: Vec<&str> = normalized
+    let parts = normalized
         .split(ARROW)
         .map(|part| strip(host, part))
-        .collect();
+        .collect::<CoreResult<Vec<&str>>>()?;
     match parts.as_slice() {
         [from, to] if !from.is_empty() && !to.is_empty() => {
             Ok(((*from).to_owned(), (*to).to_owned()))
         }
-        _ => Err(bad_tid(&str_repr(host, text)).with_context("text", text)),
+        _ => Err(bad_tid(&str_repr(host, text)?).with_context("text", text)),
     }
 }
 

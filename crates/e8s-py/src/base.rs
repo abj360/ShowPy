@@ -1,13 +1,11 @@
 //! base --- bindings of the base area: numbers, caps, angle helpers, IDs and references
 //!
 //! Contains:
-//!     failure: raises core errors without importing the error classes per error
 //!     host: gives non-ASCII text the answers of Python's own Unicode tables
 //!     numeric: binds number text, angle wrapping, rounding and the size caps
 //!     identifiers: binds the ID checks, references and transition IDs
 //!     add_all(): adds every public function and constant of the base area to a module
 
-mod failure;
 mod host;
 mod identifiers;
 mod numeric;

@@ -2,22 +2,25 @@
 //!
 //! Contains:
 //!     PyText: answers the core's Unicode questions by asking Python's `str` and `unicodedata`
+//!     run(): runs one core call with a Python host, raising Python's own error if a question failed
 //!     read_text(): reads a Python string, replacing a lone surrogate with U+FFFD
 //!     repr_of(): returns the Python `repr` of any object
 
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 
-use e8s_core::base::text::{StdText, TextHost};
+use e8s_core::base::text::TextHost;
+use e8s_core::base::{CoreError, CoreResult, ErrorCode, ErrorKind};
+use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::sync::PyOnceLock;
 use pyo3::types::PyString;
 
-const NFC_FORM: &str = "NFC";
+use crate::errors::{guard, loaded, to_py_err};
+
 /// The most characters the class memo holds, so hostile text cannot grow it without bound.
 const MEMO_CHARS: usize = 4096;
-static NORMALIZE: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 
 thread_local! {
     /// Remembers Python's answers about each non-ASCII character: its tables never change.
@@ -26,79 +29,115 @@ thread_local! {
 
 /// Answers the core's Unicode questions for non-ASCII text by asking Python.
 ///
-/// A failed call falls back to Rust's own tables, which the core's `StdText` holds.
+/// A question that raises in Python is stored, and the core call stops with a placeholder
+/// error; `run` then raises the stored Python exception, so nothing is ever guessed.
 pub struct PyText<'py> {
     py: Python<'py>,
+    failure: RefCell<Option<PyErr>>,
+}
+
+fn host_failed() -> CoreError {
+    CoreError::new(
+        ErrorKind::Schema,
+        ErrorCode::Schema,
+        "Python could not answer a Unicode question",
+        "see the Python error that caused this one",
+    )
 }
 
 impl<'py> PyText<'py> {
     /// Creates a host that asks the interpreter behind `py`.
     pub const fn new(py: Python<'py>) -> Self {
-        Self { py }
+        Self {
+            py,
+            failure: RefCell::new(None),
+        }
     }
 
-    fn ask(&self, text: &str, method: &str) -> Option<Bound<'py, PyAny>> {
-        PyString::new(self.py, text).call_method0(method).ok()
+    fn settle<T>(&self, answer: PyResult<T>) -> CoreResult<T> {
+        answer.map_err(|err| {
+            let mut slot = self.failure.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(err);
+            }
+            host_failed()
+        })
     }
 
-    fn ask_text(&self, text: &str, method: &str) -> Option<String> {
-        self.ask(text, method)?.extract().ok()
-    }
-
-    fn ask_flag(&self, c: char, method: &str) -> Option<bool> {
-        self.ask(c.encode_utf8(&mut [0; 4]), method)?.extract().ok()
+    fn ask_class(&self, c: char) -> PyResult<(bool, bool)> {
+        let text = PyString::new(self.py, c.encode_utf8(&mut [0; 4]));
+        let alnum = text.call_method0(intern!(self.py, "isalnum"))?.extract()?;
+        let space = text.call_method0(intern!(self.py, "isspace"))?.extract()?;
+        Ok((alnum, space))
     }
 
     /// Returns whether Python calls the character alphanumeric and whether it calls it space.
-    fn classify(&self, c: char) -> (bool, bool) {
-        let known = CLASSES.with(|classes| classes.borrow().get(&c).copied());
-        if let Some(answer) = known {
-            return answer;
+    fn classify(&self, c: char) -> CoreResult<(bool, bool)> {
+        if let Some(known) = CLASSES.with(|classes| classes.borrow().get(&c).copied()) {
+            return Ok(known);
         }
-        let answer = (
-            self.ask_flag(c, "isalnum")
-                .unwrap_or_else(|| StdText.is_alnum(c)),
-            self.ask_flag(c, "isspace")
-                .unwrap_or_else(|| StdText.is_space(c)),
-        );
+        let answer = self.settle(self.ask_class(c))?;
         CLASSES.with(|classes| {
             let mut classes = classes.borrow_mut();
             if classes.len() < MEMO_CHARS {
                 classes.insert(c, answer);
             }
         });
-        answer
+        Ok(answer)
     }
 }
 
 impl TextHost for PyText<'_> {
-    fn nfc(&self, text: &str) -> String {
-        let normalized = NORMALIZE
-            .import(self.py, "unicodedata", "normalize")
-            .and_then(|normalize| normalize.call1((NFC_FORM, text)))
-            .and_then(|result| result.extract());
-        normalized.unwrap_or_else(|_| StdText.nfc(text))
+    fn nfc(&self, text: &str) -> CoreResult<String> {
+        let asked = loaded(self.py, "unicodedata")
+            .and_then(|module| {
+                let form = intern!(self.py, "NFC");
+                module.call_method1(intern!(self.py, "normalize"), (form, text))
+            })
+            .and_then(|normalized| normalized.extract());
+        self.settle(asked)
     }
 
-    fn casefold(&self, text: &str) -> String {
-        self.ask_text(text, "casefold")
-            .unwrap_or_else(|| StdText.casefold(text))
+    fn casefold(&self, text: &str) -> CoreResult<String> {
+        let asked = PyString::new(self.py, text)
+            .call_method0(intern!(self.py, "casefold"))
+            .and_then(|folded| folded.extract());
+        self.settle(asked)
     }
 
-    fn repr(&self, text: &str) -> String {
-        PyString::new(self.py, text)
+    fn repr(&self, text: &str) -> CoreResult<String> {
+        let asked = PyString::new(self.py, text)
             .repr()
-            .map(|shown| shown.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| StdText.repr(text))
+            .map(|shown| shown.to_string_lossy().into_owned());
+        self.settle(asked)
     }
 
-    fn is_alnum(&self, c: char) -> bool {
-        self.classify(c).0
+    fn is_alnum(&self, c: char) -> CoreResult<bool> {
+        Ok(self.classify(c)?.0)
     }
 
-    fn is_space(&self, c: char) -> bool {
-        self.classify(c).1
+    fn is_space(&self, c: char) -> CoreResult<bool> {
+        Ok(self.classify(c)?.1)
     }
+}
+
+/// Runs one core call with a Python host under the error boundary.
+///
+/// # Errors
+///
+/// Returns the Python exception a Unicode question raised, else the e8s exception of the core's
+/// error, else the one `guard` builds for a panic.
+pub fn run<T>(
+    py: Python<'_>,
+    name: &'static str,
+    call: impl FnOnce(&PyText<'_>) -> CoreResult<T>,
+) -> PyResult<T> {
+    let host = PyText::new(py);
+    let outcome = guard(name, AssertUnwindSafe(|| Ok(call(&host))))?;
+    outcome.map_err(|err| {
+        let stored = host.failure.borrow_mut().take();
+        stored.unwrap_or_else(|| to_py_err(py, &err))
+    })
 }
 
 /// Reads a Python string; a lone surrogate, which has no UTF-8 form, becomes U+FFFD.

@@ -14,11 +14,16 @@ Contains:
     test_regression_check_id_rejects_a_lone_surrogate: raises SchemaError, not UnicodeEncodeError
     test_parse_ref_reads_unicode_kinds_and_refuses_unicode_spaces: follows `\\w` and `\\s`
     test_format_tid_formats_any_pair_and_refuses_other_lengths: pairs of str-able parts only
+    test_regression_a_failing_unicode_question_raises_its_own_error: propagates Python's error
+        from a Unicode table instead of guessing an answer
+    test_round_to_checks_the_value_before_the_step: raises SchemaError for a bad value and
+        TypeError for a step that is not a number, as v0.4.0 did
     test_core_constants_match_the_model_layer: keeps the ID patterns and reserved names in step
 """
 
 import inspect
 import math
+import unicodedata
 from fractions import Fraction
 from typing import cast
 
@@ -115,3 +120,31 @@ def test_core_constants_match_the_model_layer() -> None:
     assert ID_PATTERN.pattern == core.ID_PATTERN_SOURCE
     assert SHEET_ID_PATTERN.pattern == core.SHEET_ID_PATTERN_SOURCE
     assert core.RESERVED_IDS == RESERVED_IDS == WINDOWS_DEVICE_NAMES | {"all", "props"}
+
+
+@pytest.mark.parametrize("error", [MemoryError, KeyboardInterrupt])
+def test_regression_a_failing_unicode_question_raises_its_own_error(
+    monkeypatch: pytest.MonkeyPatch, error: type[BaseException]
+) -> None:
+    def broken(*_arguments: str) -> str:
+        raise error("unicode table")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(unicodedata, "normalize", broken)
+        raised: list[BaseException] = []
+        for call in (
+            lambda: core.check_id("caf\N{LATIN SMALL LETTER E WITH ACUTE}", kind="spot"),
+            lambda: core.parse_ref("sheet:caf\N{LATIN SMALL LETTER E WITH ACUTE}"),
+        ):
+            try:
+                call()
+            except BaseException as caught:
+                raised.append(caught)
+    assert [type(caught) for caught in raised] == [error, error]
+
+
+def test_round_to_checks_the_value_before_the_step() -> None:
+    with pytest.raises(SchemaError):
+        core.round_to(math.nan, cast("float", "x"))
+    with pytest.raises(TypeError):
+        core.round_to(1.0, cast("float", "x"))
