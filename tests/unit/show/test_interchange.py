@@ -173,8 +173,6 @@ def test_import_positions_inserts_new_sets_where_the_file_puts_them() -> None:
 SIMPLE_TEXT = "set,counts,entity,x,y\n3,4,T1,1,1\n"
 
 
-@pytest.mark.defect("UP-9.5-41")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-41")
 def test_regression_import_positions_reads_a_utf8_bom() -> None:
     """Reads a CSV that starts with a UTF-8 byte order mark, as Excel writes it (audit 9.5)."""
     plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
@@ -182,13 +180,18 @@ def test_regression_import_positions_reads_a_utf8_bom() -> None:
     assert bom == plain
 
 
-@pytest.mark.defect("UP-9.5-42")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-42")
 def test_regression_import_positions_reads_semicolon_delimited_csv() -> None:
     """Reads a semicolon-delimited CSV, as Excel writes in many locales (audit 9.5)."""
     plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
     semicolons = import_positions(two_set_show(), SIMPLE_TEXT.replace(",", ";"), "trumpets")
     assert semicolons == plain
+
+
+def test_import_positions_keeps_a_semicolon_in_a_quoted_cell_of_a_comma_file() -> None:
+    """Keeps `;` in the body of a comma file as data: the header alone picks the delimiter."""
+    text = 'set,counts,entity,x,y,note\n3,4,T1,1,1,"a;b;c;d;e;f"\n'
+    plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
+    assert import_positions(two_set_show(), text, group="trumpets") == plain
 
 
 def test_regression_import_positions_normalizes_facing() -> None:
