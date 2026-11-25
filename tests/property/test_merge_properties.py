@@ -3,11 +3,16 @@
 """
 test_merge_properties.py --- checks the three-way merge over random edits of a seeded show
 
+Edits cover placements (drill, facing, labels), the title, sets and their order, the spot order,
+pins, spot deletion, forms, path rows, routes, the sheet, the timeline, groups, selections and
+facing overrides.
+
 Contains:
     test_merge_with_an_unchanged_side_returns_the_other: returns the edited side itself
     test_merge_is_symmetric_in_ours_and_theirs: gives one show, or the same conflicts with the
         sides swapped, whichever side is which
-    test_clean_merge_keeps_every_change_one_side_made: keeps each item only one side changed
+    test_clean_merge_is_lossless: keeps every item neither side changed, every change one side
+        made, every change both made alike, and exactly the elements of each merged order
 """
 
 from functools import cache
@@ -15,9 +20,15 @@ from functools import cache
 from hypothesis import given
 from hypothesis import strategies as st
 
-from e8s.cast.spots import delete_spots
+from e8s.cast.models import Group
+from e8s.cast.spots import add_group, define_selection, delete_spots
+from e8s.choreo.facing import add_facing_override
 from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import FacingMode, FacingOverride, TransitionSpec
+from e8s.core.ids import SpotId
 from e8s.core.readonly import freeze_json
+from e8s.core.types import JsonAny
+from e8s.show.change_models import ItemChange
 from e8s.show.items import changes, items
 from e8s.show.manage import add_set, remove_set, replace_sets
 from e8s.show.merge import merge
@@ -27,8 +38,16 @@ from tests.fixtures.generators import seeded_show
 
 SEEDED_SPOTS = 6
 SEEDED_SETS = 3
-EDIT_KINDS = 10
+PLACEMENT_KINDS = 4
+STRUCTURE_KINDS = 10
+EDIT_KINDS = 19
 ADDED_SET_IDS = ("9", "9A", "9B")
+ADDED_GROUPS = (("extra_x", "X"), ("extra_y", "Y"), ("extra_z", "Z"))
+VARIANTS = 3
+ROUTE_SHARE_STEP = 0.1
+OVERRIDE_END = 1.0
+ORDER_KINDS = frozenset({"set_order", "spot_order", "pin_order"})
+type _Element = str | tuple[str, ...]
 seeds = st.integers(min_value=0, max_value=3)
 edits = st.lists(
     st.tuples(
@@ -69,6 +88,62 @@ def _structural(show: Show, kind: int, pick: int, spot: str) -> Show:
             return delete_spots(show, spot, force=True) if len(show.cast.spots) > 1 else show
 
 
+def _with_spec(show: Show, spec: TransitionSpec) -> Show:
+    specs = tuple(spec if s.id == spec.id else s for s in show.transitions)
+    return show.replace(transitions=specs)
+
+
+def _paths(show: Show, kind: int, pick: int) -> Show:
+    if not show.transitions:
+        return show
+    spec = show.transitions[pick % len(show.transitions)]
+    rows = sorted(spec.rows)
+    match kind:
+        case 10 if rows:
+            row = spec.rows[rows[pick % len(rows)]].replace(note=f"row {pick % VARIANTS}")
+            return _with_spec(show, spec.replace(rows={**spec.rows, row.entity: row}))
+        case 11 if rows:
+            kept = {e: row for e, row in spec.rows.items() if e != rows[pick % len(rows)]}
+            return _with_spec(show, spec.replace(rows=kept))
+        case 12 if spec.routes:
+            route = spec.routes[min(spec.routes)]
+            share = 1.0 - ROUTE_SHARE_STEP * (pick % VARIANTS + 1)
+            routes = {**spec.routes, route.id: route.replace(travel=route.travel * share)}
+            return _with_spec(show, spec.replace(routes=routes))
+        case _:
+            return show
+
+
+def _content(show: Show, kind: int, pick: int, spot: str) -> Show:
+    variant = pick % VARIANTS
+    match kind:
+        case 13 if show.forms:
+            form = show.forms[sorted(show.forms)[pick % len(show.forms)]]
+            return show.replace(forms={**show.forms, form.id: form.replace(locked=not form.locked)})
+        case 14:
+            return show.replace(sheet=show.sheet.replace(name=f"sheet {variant}"))
+        case 15:
+            timeline = show.timeline.replace(total_counts=64.0 + variant)
+            return show.replace(timeline=timeline)
+        case 16:
+            key, prefix = ADDED_GROUPS[variant]
+            if key in show.cast.groups:
+                return show
+            return add_group(show, Group(key=key, label_prefix=prefix))
+        case 17:
+            return define_selection(show, f"sel_{variant}", spot, replace=True)
+        case 18:
+            end = OVERRIDE_END + variant
+            if end > sum(current.counts for current in show.sets):
+                return show
+            override = FacingOverride(
+                entities=(SpotId(spot),), mode=FacingMode.AUDIENCE, start=0.0, end=end
+            )
+            return add_facing_override(show, override)
+        case _:
+            return _paths(show, kind, pick)
+
+
 def _edited(show: Show, kind: int, pick: int, value: float) -> Show:
     position = pick % len(show.sets)
     placements = show.sets[position].placements
@@ -82,8 +157,10 @@ def _edited(show: Show, kind: int, pick: int, value: float) -> Show:
             return _patched(show, position, spot, PlacementPatch(note=f"note {pick % 3}"))
         case 3:
             return show.replace(title=f"title {pick % 3}")
-        case _:
+        case _ if kind < STRUCTURE_KINDS:
             return _structural(show, kind, pick, spot)
+        case _:
+            return _content(show, kind, pick, spot)
 
 
 def _applied(show: Show, steps: list[tuple[int, int, float]]) -> Show:
@@ -118,8 +195,38 @@ def test_merge_is_symmetric_in_ours_and_theirs(
     assert forward.show == backward.show
 
 
+def _element(part: JsonAny) -> _Element:
+    if isinstance(part, str):
+        return part
+    assert isinstance(part, tuple | list)
+    return tuple(str(name) for name in part)
+
+
+def _elements(value: JsonAny) -> list[_Element]:
+    return [_element(part) for part in value] if isinstance(value, tuple | list) else []
+
+
+def _merged_elements(mine: ItemChange, other: ItemChange) -> set[_Element]:
+    """Returns the elements a merged order holds: every element either side kept or added,
+    less every base element either side removed."""
+    base = set(_elements(mine.before))
+    ours, theirs = set(_elements(mine.after)), set(_elements(other.after))
+    return (ours | theirs) - (base - ours) - (base - theirs)
+
+
+def _settled(
+    mine: ItemChange | None, other: ItemChange | None, before: JsonAny
+) -> tuple[bool, JsonAny]:
+    """Returns whether a clean merge settles an item as one known value, and that value."""
+    if other is None:
+        return True, before if mine is None else mine.after
+    if mine is None:
+        return True, other.after
+    return mine.after == other.after, mine.after
+
+
 @given(seeds, edits, edits)
-def test_clean_merge_keeps_every_change_one_side_made(
+def test_clean_merge_is_lossless(
     seed: int, our_steps: list[tuple[int, int, float]], their_steps: list[tuple[int, int, float]]
 ) -> None:
     base = _base(seed)
@@ -127,10 +234,21 @@ def test_clean_merge_keeps_every_change_one_side_made(
     merged = merge(base, ours, theirs).show
     if merged is None:
         return
-    mine, other = changes(base, ours).changes, changes(base, theirs).changes
-    found = items(merged)
-    for side, rest in ((mine, other), (other, mine)):
-        shared = {c.key.sort_key() for c in rest}
-        for change in side:
-            if change.key.sort_key() not in shared:
-                assert freeze_json(found.get(change.key)) == change.after
+    mine = {c.key.sort_key(): c for c in changes(base, ours).changes}
+    other = {c.key.sort_key(): c for c in changes(base, theirs).changes}
+    before, after = items(base), items(merged)
+    keys = {key.sort_key(): key for key in (*before, *after)}
+    assert {*mine, *other} <= keys.keys()
+    for sort_key, key in keys.items():
+        found = freeze_json(after.get(key))
+        mine_change, other_change = mine.get(sort_key), other.get(sort_key)
+        is_settled, expected = _settled(mine_change, other_change, freeze_json(before.get(key)))
+        if is_settled:
+            assert found == expected, key
+            continue
+        assert mine_change is not None
+        assert other_change is not None
+        assert key.kind in ORDER_KINDS or key.role == "placements", key
+        elements = _elements(found)
+        assert len(set(elements)) == len(elements)
+        assert set(elements) == _merged_elements(mine_change, other_change)
