@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/e8s-core", "crates/e8s-py", "crates/e8s-wasm"]
+# The cargo-fuzz crate builds only on the nightly toolchain, so it keeps its own lock file.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.4.0"
