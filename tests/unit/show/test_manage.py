@@ -462,8 +462,6 @@ def test_regression_stale_save_conflict_message_is_bounded() -> None:
     assert len(str(excinfo.value)) <= MAX_CONFLICT_MESSAGE_CHARS
 
 
-@pytest.mark.defect("UP-9.7-60")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-60")
 def test_regression_set_counts_rescale_shifts_facing_overrides() -> None:
     """Shifts later facing overrides when a set is rescaled (audit 9.7)."""
     show = _three_set_show()
@@ -474,6 +472,27 @@ def test_regression_set_counts_rescale_shifts_facing_overrides() -> None:
     edited = set_counts(show, "2", 16.0, rescale=True)
     shifted = (LATER_WINDOW[0] + SHIFT_COUNTS, LATER_WINDOW[1] + SHIFT_COUNTS)
     assert (edited.facing_overrides[0].start, edited.facing_overrides[0].end) == shifted
+
+
+def test_regression_set_counts_rescale_maps_overrides_before_inside_and_after_the_move() -> None:
+    show = _three_set_show()
+    windows = ((1.0, 2.0), (9.0, 10.0), (13.0, 14.0))
+    overrides = tuple(
+        FacingOverride(entities="all", mode=FacingMode.TO_TARGET, start=a, end=b)
+        for a, b in windows
+    )
+    edited = set_counts(show.replace(facing_overrides=overrides), "3", 8.0, rescale=True)
+    assert [(o.start, o.end) for o in edited.facing_overrides] == [
+        (1.0, 2.0),
+        (10.0, 12.0),
+        (17.0, 18.0),
+    ]
+
+
+def test_set_counts_without_rescale_leaves_overrides_alone() -> None:
+    override = FacingOverride(entities="all", mode=FacingMode.TO_TARGET, start=9.0, end=11.0)
+    show = _three_set_show().replace(facing_overrides=(override,))
+    assert set_counts(show, "2", 16.0).facing_overrides == (override,)
 
 
 def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> None:

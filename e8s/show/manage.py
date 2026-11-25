@@ -17,7 +17,7 @@ from collections.abc import Sequence
 
 from e8s.cast.models import Cast
 from e8s.choreo.models import Placement, Set
-from e8s.choreo.path_models import Route, TransitionSpec, Waypoint
+from e8s.choreo.path_models import FacingOverride, Route, TransitionSpec, Waypoint
 from e8s.core.errors import (
     PathError,
     SchemaError,
@@ -385,6 +385,28 @@ def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> Tran
     return spec.replace(counts=counts)
 
 
+def _remapped_count(count: float, start: float, old: float, new: float) -> float:
+    if count <= start:
+        return count
+    if count <= start + old:
+        return start + (count - start) * new / old
+    return count + new - old
+
+
+def _remapped_overrides(
+    overrides: tuple[FacingOverride, ...], start: float, old: float, new: float
+) -> tuple[FacingOverride, ...]:
+    if old <= 0:
+        return overrides
+    return tuple(
+        o.replace(
+            start=_remapped_count(o.start, start, old, new),
+            end=_remapped_count(o.end, start, old, new),
+        )
+        for o in overrides
+    )
+
+
 def set_counts(
     show: Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False
 ) -> Show:
@@ -396,7 +418,8 @@ def set_counts(
         show: Show to edit.
         set_id: Set to retime.
         counts: New counts; 0 for the first set, positive otherwise.
-        rescale: Scales stored path windows, waypoint times and route windows proportionally.
+        rescale: Scales stored path windows, waypoint times and route windows proportionally, and
+            maps facing override counts: unchanged before the move, scaled inside it, shifted after.
         force: Allows retiming a pinned set or rescaling locked path rows.
 
     Returns:
@@ -408,10 +431,15 @@ def set_counts(
     """
     position = show.set_index(set_id)
     _require_counts(counts, is_first=position == 0)
+    old = show.sets[position].counts
+    start = sum(s.counts for s in show.sets[:position])
     sets = list(show.sets)
     sets[position] = sets[position].replace(counts=counts)
+    update: dict[str, object] = {}
+    if rescale:
+        update["facing_overrides"] = _remapped_overrides(show.facing_overrides, start, old, counts)
     specs = tuple(
         _retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
     )
-    return replace_sets(show, sets, force=force, transitions=specs)
+    return replace_sets(show, sets, force=force, transitions=specs, **update)
