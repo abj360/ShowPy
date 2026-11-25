@@ -37,12 +37,17 @@ Contains:
     test_tampered_records_are_corrupt: maps each tampered revision record to CORRUPT in tree()
     test_tampered_blobs_are_corrupt: maps a swapped or misnamed blob to CORRUPT, on read and when a
         commit would reuse it
+    test_file_repository_writes_layout_2_and_keeps_layout_1_roots: stores a new root in layout 2
+        and opens a layout-1 root with its own backend
+    test_regression_file_repository_writes_beside_housekeeping_entries: stores shows in a root that
+        holds .DS_Store or an unreadable lost+found
 """
 
 import errno
 import json
 import multiprocessing
 import os
+import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,7 +62,9 @@ from e8s.show.backend import digest
 from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
+from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
+from e8s.show.layout import read_layout
 from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder
 from tests.fixtures.slot_race import RACE_SHOW_ID, race_once_per_trial
@@ -461,3 +468,41 @@ def test_regression_folder_collision_is_corrupt(
     with pytest.raises(StorageError) as caught:
         FileBackend(tmp_path).log("collides")
     assert caught.value.code == "CORRUPT"
+
+
+def test_file_repository_writes_layout_2_and_keeps_layout_1_roots(tmp_path: Path) -> None:
+    repo = FileRepository(tmp_path / "new")
+    landed = repo.transaction(SHOW_ID, {RENDER: b"x"}, expected_revision="", at=AT)
+    assert isinstance(repo.backend, FileBackend)
+    assert read_layout(tmp_path / "new") == 2
+    assert _slot(tmp_path / "new", 1).exists()
+    assert FileRepository(tmp_path / "new").revisions(SHOW_ID) == [landed]
+    DocumentRepository(_FileBackend(tmp_path / "old")).transaction(
+        SHOW_ID, {RENDER: b"x"}, expected_revision="", at=AT
+    )
+    legacy = FileRepository(tmp_path / "old")
+    assert isinstance(legacy.backend, _FileBackend)
+    assert legacy.head(SHOW_ID) == landed.id
+
+
+CANNOT_CHMOD = sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0)
+
+
+@pytest.mark.parametrize("entry", [".DS_Store", "lost+found"])
+def test_regression_file_repository_writes_beside_housekeeping_entries(
+    tmp_path: Path, entry: str
+) -> None:
+    """Stores shows in a root holding .DS_Store, or an unreadable lost+found where chmod works."""
+    if entry == ".DS_Store":
+        (tmp_path / entry).write_bytes(b"finder")
+    elif CANNOT_CHMOD:
+        pytest.skip("needs permission checks that bind this user")
+    else:
+        (tmp_path / entry).mkdir(mode=0)
+    try:
+        landed = FileRepository(tmp_path).transaction(
+            SHOW_ID, {RENDER: b"x"}, expected_revision="", at=AT
+        )
+        assert FileRepository(tmp_path).head(SHOW_ID) == landed.id
+    finally:
+        (tmp_path / entry).chmod(0o700)

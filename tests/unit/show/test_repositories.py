@@ -65,6 +65,7 @@ from e8s.show.file_repository import FileRepository
 from e8s.show.files import LIMITS_DOC, WAIVERS_DOC
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
+from e8s.show.layout1 import _FileBackend
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.show_io import load_show, save_show
 from e8s.show.storage import ROOT_REVISION, Repository
@@ -155,8 +156,6 @@ def _created_folders(repo: FileRepository, show_id: str) -> set[str] | None:
     return _folders(repo.root) - before
 
 
-@pytest.mark.defect("UP-9.7-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-14")
 def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path: Path) -> None:
     """Keeps IDs differing only by case from sharing a folder name (audit 9.7 item 8)."""
     repo = FileRepository(tmp_path)
@@ -221,8 +220,8 @@ def test_regression_device_name_is_refused_before_its_path_is_touched(
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot create a device-name folder")
 def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) -> None:
     """Reads and extends a show stored under a device name before the refusal existed."""
+    head = _create(DocumentRepository(_FileBackend(tmp_path)), SHOW_ID)
     repo = FileRepository(tmp_path)
-    head = _create(repo, SHOW_ID)
     stored = repo.get_show(SHOW_ID)
     (tmp_path / SHOW_ID).rename(tmp_path / "CON")
     assert repo.shows() == ["CON"]

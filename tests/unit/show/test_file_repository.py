@@ -108,6 +108,7 @@ import e8s.show.layout1 as layout1
 from e8s.core.canonical import MAX_NESTING
 from e8s.core.errors import ConflictError, StorageError, bounded_repr
 from e8s.show.backend import digest
+from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_MAX_BYTES, TREE_MAX_BYTES
@@ -127,9 +128,10 @@ RENDER_COMMITS = 5
 
 
 def _saved(tmp_path: Path) -> tuple[FileRepository, str, Path]:
-    repo = FileRepository(tmp_path / "repo")
-    rev = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
-    return repo, rev.id, tmp_path / "repo" / SHOW_ID
+    """Saves the two-set show into a layout-1 root, which FileRepository keeps in layout 1."""
+    legacy = DocumentRepository(layout1._FileBackend(tmp_path / "repo"))
+    rev = legacy.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    return FileRepository(tmp_path / "repo"), rev.id, tmp_path / "repo" / SHOW_ID
 
 
 def _second_revision(repo: FileRepository, parent: str) -> str:
