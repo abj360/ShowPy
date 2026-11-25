@@ -1,0 +1,68 @@
+# cargo-fuzz targets for every parser of the core, built with the dated nightly that noxfile.py
+# pins in FUZZ_TOOLCHAIN. The crate stays out of the workspace: the nightly-only build and
+# libfuzzer-sys never reach the stable gates, the wheel or its notices.
+[package]
+name = "e8s-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "PolyForm-Noncommercial-1.0.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+e8s-core = { path = "../crates/e8s-core" }
+libfuzzer-sys = "=0.4.13"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[[bin]]
+name = "refs"
+path = "fuzz_targets/refs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "strict_json"
+path = "fuzz_targets/strict_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "svg_path"
+path = "fuzz_targets/svg_path.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "font"
+path = "fuzz_targets/font.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "selection"
+path = "fuzz_targets/selection.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "timeline"
+path = "fuzz_targets/timeline.rs"
+test = false
+doc = false
+bench = false

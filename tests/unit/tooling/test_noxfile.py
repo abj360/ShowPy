@@ -87,6 +87,8 @@ Contains:
     job_steps(): splits one job's text into its steps
     test_rust_job_runs_the_rust_session: the rust job runs `nox -s rust` on Linux and arm64
         macOS when the changes job reports a Rust change, its legs always starting
+    pinned_version_lines(): returns the noxfile lines that pin the cargo tools some sessions
+        install
     cargo_tools_cache_key_problems(): lists what lets the cached cargo tools outlive their pins
     test_rust_job_caches_the_cargo_tools_by_their_pinned_versions: .cargo-tools is restored by
         a key naming each pinned version and saved only from main
@@ -227,6 +229,17 @@ RUST_SESSION_RUNS = [
         "--locked",
     ],
     ["_cargo_tool(CARGO_DENY)", "--locked", "check"],
+    ["cargo", "fetch", "--locked", "--manifest-path", "fuzz/Cargo.toml"],
+    [
+        "_cargo_tool(CARGO_DENY)",
+        "--manifest-path",
+        "fuzz/Cargo.toml",
+        "--locked",
+        "check",
+        "advisories",
+        "bans",
+        "sources",
+    ],
 ]
 NOTICES_CHECK = ["python", "scripts/gen_third_party_notices.py", "--check"]
 CARGO_TOOLS_RUN = ["pytest", "-m", "cargo_tools", "tests/unit/tooling/test_third_party_notices.py"]
@@ -1152,27 +1165,41 @@ def test_rust_job_runs_the_rust_session() -> None:
     assert RUST_OUTPUT in ci_job(workflow, CHANGES_JOB)
 
 
-def _pinned_version_lines(source: str) -> list[str]:
-    """Returns the noxfile lines that assign the versions the rust session installs."""
-    session = next(
-        node
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.FunctionDef) and node.name == RUST_SESSION
-    )
+def pinned_version_lines(source: str, sessions: tuple[str, ...] = (RUST_SESSION,)) -> list[str]:
+    """Returns the noxfile lines that assign the cargo tool versions some sessions install.
+
+    Args:
+        source: The text of a noxfile.
+        sessions: The sessions whose `_install_cargo_tool` calls are read.
+
+    Returns:
+        lines: The assignments of the version constants those calls pass, in source order.
+    """
     names = {
         ast.unparse(call.args[2])
-        for call in ast.walk(session)
+        for function in ast.walk(ast.parse(source))
+        if isinstance(function, ast.FunctionDef) and function.name in sessions
+        for call in ast.walk(function)
         if isinstance(call, ast.Call) and ast.unparse(call.func) == INSTALL_CARGO_TOOL
     }
     return [line for line in source.splitlines() if line.split(" = ")[0] in names]
 
 
-def cargo_tools_cache_key_problems(job: str, noxfile: str) -> list[str]:
+def cargo_tools_cache_key_problems(
+    job: str,
+    noxfile: str,
+    *,
+    sessions: tuple[str, ...] = (RUST_SESSION,),
+    run_step: str = RUST_SESSION_STEP,
+) -> list[str]:
     """Lists what lets a job's cached cargo tools outlive the versions the noxfile pins.
 
     Args:
-        job: The text of the job that runs the rust session.
+        job: The text of the job that runs the sessions.
         noxfile: The text of the noxfile that pins the cargo tool versions.
+        sessions: The sessions whose cargo tools the job caches.
+        run_step: The step text that runs the first of those sessions; the restore comes before
+            it and the save after it.
 
     Returns:
         problems: One line per missing restore, key part, version line, ordering or main-only
@@ -1182,7 +1209,7 @@ def cargo_tools_cache_key_problems(job: str, noxfile: str) -> list[str]:
     found = [
         _first_index(steps, lambda step: step_value(step, "id") == CARGO_TOOLS_VERSIONS_ID),
         _first_index(steps, lambda step: CACHE_RESTORE_STEP.search(step) is not None),
-        _first_index(steps, lambda step: RUST_SESSION_STEP in step),
+        _first_index(steps, lambda step: run_step in step),
         _first_index(steps, lambda step: CACHE_SAVE_STEP.search(step) is not None),
     ]
     indices = [index for index in found if index is not None]
@@ -1201,7 +1228,7 @@ def cargo_tools_cache_key_problems(job: str, noxfile: str) -> list[str]:
     pins = [*TOOLCHAIN_FILE.read_text(encoding="utf-8").splitlines(), *noxfile.splitlines()]
     matched = [line for line in pins if grep and re.search(grep[1], line)]
     expected = [line for line in pins if TOOLCHAIN_PIN.match(line)]
-    if matched != [*expected[:1], *_pinned_version_lines(noxfile)]:
+    if matched != [*expected[:1], *pinned_version_lines(noxfile, sessions)]:
         problems.append("versions step does not read exactly the pinned versions")
     if SAVE_FROM_MAIN not in step_value(steps[save], "if"):
         problems.append("save is not limited to main")
@@ -1210,7 +1237,7 @@ def cargo_tools_cache_key_problems(job: str, noxfile: str) -> list[str]:
 
 def test_rust_job_caches_the_cargo_tools_by_their_pinned_versions() -> None:
     noxfile = NOXFILE.read_text(encoding="utf-8")
-    assert len(_pinned_version_lines(noxfile)) == 2
+    assert len(pinned_version_lines(noxfile)) == 2
     job = ci_job(CI_WORKFLOW.read_text(encoding="utf-8"), RUST_JOB)
     assert cargo_tools_cache_key_problems(job, noxfile) == []
 

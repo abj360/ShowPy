@@ -70,6 +70,8 @@ pub enum ErrorCode {
     MeasureLength,
     /// A text form has a different number of members than slots.
     MemberCountMismatch,
+    /// A form lists a spot as a member, but that spot's placement does not name the form.
+    MemberMismatch,
     /// A function needs an optional dependency whose e8s extra is not installed.
     MissingExtra,
     /// A font name or URI is not held by the font registry.
@@ -80,7 +82,7 @@ pub enum ErrorCode {
     MissingSpot,
     /// A selector mixes `&` with `+` or `-` at one parenthesis level without parentheses.
     MixedOperators,
-    /// A named selection is defined under a name that already holds a selection.
+    /// A named selection or a proposal is created under a name that is already taken.
     NameTaken,
     /// A file repository path is longer than the file system allows.
     NameTooLong,
@@ -104,8 +106,10 @@ pub enum ErrorCode {
     Path,
     /// An edit changes a pinned placement.
     PinnedChanged,
-    /// A proposal that is already accepted or rejected is changed again.
+    /// A proposal that is already accepted, rejected or withdrawn is changed again.
     ProposalClosed,
+    /// An open proposal touches items that changed since its base revision, so it is not applied.
+    ProposalStale,
     /// A tempo ramp is cut short by the next tempo section.
     RampCut,
     /// A tempo ramp sets only one of `ramp_to` and `ramp_counts`.
@@ -170,6 +174,8 @@ pub enum ErrorCode {
     UnknownFormat,
     /// An ID, name or unit does not resolve.
     UnknownRef,
+    /// A form names a set that is not in the show.
+    UnknownSet,
     /// The show's sheet reference does not resolve in the sheet store.
     UnknownSheet,
     /// A set, transition, route or named selection names a spot that is not in the cast.
@@ -221,6 +227,7 @@ impl ErrorCode {
             Self::Match => "MATCH",
             Self::MeasureLength => "MEASURE_LENGTH",
             Self::MemberCountMismatch => "MEMBER_COUNT_MISMATCH",
+            Self::MemberMismatch => "MEMBER_MISMATCH",
             Self::MissingExtra => "MISSING_EXTRA",
             Self::MissingFont => "MISSING_FONT",
             Self::MissingGlyph => "MISSING_GLYPH",
@@ -239,6 +246,7 @@ impl ErrorCode {
             Self::Path => "PATH",
             Self::PinnedChanged => "PINNED_CHANGED",
             Self::ProposalClosed => "PROPOSAL_CLOSED",
+            Self::ProposalStale => "PROPOSAL_STALE",
             Self::RampCut => "RAMP_CUT",
             Self::RampIncomplete => "RAMP_INCOMPLETE",
             Self::RampLength => "RAMP_LENGTH",
@@ -271,6 +279,7 @@ impl ErrorCode {
             Self::UnknownForm => "UNKNOWN_FORM",
             Self::UnknownFormat => "UNKNOWN_FORMAT",
             Self::UnknownRef => "UNKNOWN_REF",
+            Self::UnknownSet => "UNKNOWN_SET",
             Self::UnknownSheet => "UNKNOWN_SHEET",
             Self::UnknownSpot => "UNKNOWN_SPOT",
             Self::UnpinnedSheet => "UNPINNED_SHEET",
