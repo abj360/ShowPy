@@ -11,6 +11,7 @@ from datetime import datetime
 
 from e8s.core.errors import StorageError
 from e8s.geo.fonts import FontRegistry
+from e8s.show.document_repository import encode_cache_of
 from e8s.show.files import (
     show_changes,
 )
@@ -56,6 +57,8 @@ def save_show(
     caller sees what changed meanwhile; reload, reapply and save again. Stored documents that
     are not canonical are re-encoded in a revision of their own first; if the edit
     then conflicts, that revision stays, it changes no content, and the retry builds on it.
+    Through a DocumentRepository, saves share its encode cache, so a document is encoded again
+    only when one of its source objects is new.
 
     Each font of a text form that is not bundled is stored as `/assets/fonts/<sha256>.json` in
     the same revision as the form, and a stored font no text form uses is deleted; history keeps
@@ -71,5 +74,6 @@ def save_show(
     ''
     """
     tree = ws.tree_at(show.revision)
-    changes = show_changes(show, tree) | font_changes(show, tree, font_registry)
+    changes = show_changes(show, tree, cache=encode_cache_of(ws.repo))
+    changes |= font_changes(show, tree, font_registry)
     return ws._commit_normalizing(changes, at=at, expected_revision=show.revision, is_complete=True)
