@@ -100,6 +100,18 @@ class FileBackend:
 
     Attributes:
         root: Repository root folder.
+
+    >>> import tempfile
+    >>> from datetime import UTC, datetime
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.document_repository import DocumentRepository
+    >>> at = datetime(2026, 11, 24, tzinfo=UTC)
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     repo = DocumentRepository(FileBackend(Path(folder)))
+    ...     landed = repo.put_show("show_1", two_set_show(), expected_revision="", at=at)
+    ...     names = sorted(entry.name for entry in Path(folder).iterdir())
+    ...     names, FileBackend(Path(folder)).head("show_1") == landed.id
+    (['layout.json', 'shows', 'tmp'], True)
     """
 
     def __init__(self, root: Path) -> None:
