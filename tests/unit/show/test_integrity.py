@@ -51,6 +51,8 @@ Contains:
         tables with READ_ONLY through a raw transaction and Workspace.commit on both backends
     test_regression_lazy_blobs_get_fails_closed_on_a_missing_blob: raises StorageError, not None,
         when the backend has no blob for a path in the tree
+    test_regression_cast_path_error_cuts_the_path: cuts an overlong path under `/cast/` in the
+        refusal message
 """
 
 import json
@@ -97,6 +99,8 @@ from tests.helpers import HOSTILE_JSON
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "integrity"
+LONG_PATH_CHARS = 10_000
+MAX_MESSAGE_CHARS = 400
 
 
 def _repo() -> tuple[InMemoryRepository, str]:
@@ -513,3 +517,11 @@ def test_regression_lazy_blobs_digests_are_read_only() -> None:
         digests["/renders/a.txt"] = "e"  # type: ignore[index]
     assert not hasattr(digests, "update")
     assert blobs.digests["/renders/a.txt"] == "d"
+
+
+def test_regression_cast_path_error_cuts_the_path() -> None:
+    path = f"/cast/{'x' * LONG_PATH_CHARS}.json"
+    with pytest.raises(StorageError) as caught:
+        require_known_path(path)
+    assert len(caught.value.message) < MAX_MESSAGE_CHARS
+    assert caught.value.message.startswith("/cast/")

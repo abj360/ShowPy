@@ -23,6 +23,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from types import MappingProxyType
 
 from e8s.core.error_codes import ErrorCode
+from e8s.core.error_context import bounded_repr
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.ids import check_id
 from e8s.show.decode_cache import DecodeCache
@@ -113,7 +114,7 @@ def require_known_path(path: str) -> None:
         raise _bad_path(path)
     if root == CAST_ROOT and path != CAST_DOC:
         raise StorageError(
-            f"{path} is not a cast document: {CAST_ROOT} holds only {CAST_DOC}",
+            f"{bounded_repr(path)} is not a cast document: {CAST_ROOT} holds only {CAST_DOC}",
             hint=f"store the cast in {CAST_DOC}; no format defines another name there",
             context={"path": path, "allowed": [CAST_DOC]},
             code=ErrorCode.BAD_PATH,
