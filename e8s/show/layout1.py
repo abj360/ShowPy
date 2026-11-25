@@ -4,9 +4,6 @@ layout1.py --- the layout-1 file backend: revisions as JSON and blob files under
 Contains:
     REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
-    NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
-    WINDOWS_INVALID_NAME: names the Windows error code for an unusable path component
-    COMPONENT_MAX_CHARS: caps the length of one path component on NTFS
     LINK_MAX_BYTES: caps the size of a next/ link file read
     TREE_MAX_BYTES: caps the size of a tree record read
     BLOB_MAX_BYTES: caps the size of a blob written or read
@@ -19,8 +16,7 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Callable, Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -30,9 +26,9 @@ from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.backend import conflict_error, revisions_after, unknown_revision_error
 from e8s.show.documents import dump_json
+from e8s.show.durable_io import lstat_mode, mapped_io, read_capped
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.safe_read import read_capped
 from e8s.show.storage import ROOT_REVISION
 
 ROOT_LINK = "root"
@@ -42,12 +38,6 @@ OBJECT_DIR = "objects"
 TEMP_PREFIX = ".tmp-"
 REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
-NO_HARDLINK_ERRNOS = frozenset({errno.EPERM, errno.EXDEV, errno.ENOTSUP})
-# Windows has no ENAMETOOLONG for a component over 255 characters: with long paths enabled it
-# raises ERROR_INVALID_NAME (errno EINVAL), which also covers bad characters, so the length
-# decides. NTFS caps one component at 255 UTF-16 units.
-WINDOWS_INVALID_NAME = 123
-COMPONENT_MAX_CHARS = 255
 # A link holds one 64-digit hex ID; v0.1 and v0.2 may have added a newline. Rounded up.
 LINK_MAX_BYTES = 128
 # A 600-spot x 120-set show's tree record is 47 KB for 362 documents (130 bytes each, measured
@@ -77,7 +67,7 @@ def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
     """Creates `path` with `data` only if it does not exist; os.link refuses to overwrite."""
     temp = _temp_copy(path.parent, data)
     try:
-        with _mapped_io(show_id, path, is_link=True):
+        with mapped_io(show_id, path, is_link=True):
             try:
                 os.link(temp, path)
             except FileExistsError:
@@ -87,68 +77,15 @@ def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
     return True
 
 
-def _is_name_too_long(error: OSError, path: str) -> bool:
-    if error.errno == errno.ENAMETOOLONG:
-        return True
-    return getattr(error, "winerror", None) == WINDOWS_INVALID_NAME and any(
-        len(part) > COMPONENT_MAX_CHARS for part in Path(path).parts
-    )
-
-
-def _storage_error(show_id: str, error: OSError, fallback: Path, *, is_link: bool) -> StorageError:
-    path = str(error.filename or fallback)
-    context: dict[str, object] = {"show": show_id, "path": path, "errno": error.errno}
-    if _is_name_too_long(error, path):
-        winerror = getattr(error, "winerror", None)
-        return StorageError(
-            f"name too long for {show_id}: {path}",
-            hint="use a shorter show ID or a repository root with a shorter path",
-            context={**context, "errno": errno.ENAMETOOLONG}
-            | ({"winerror": winerror} if winerror is not None else {}),
-            code=ErrorCode.NAME_TOO_LONG,
-        )
-    if is_link and (isinstance(error, PermissionError) or error.errno in NO_HARDLINK_ERRNOS):
-        return StorageError(
-            f"file system under {path} cannot create hard links",
-            hint="put the repository root on a file system that supports hard links",
-            context=context,
-            code=ErrorCode.NO_HARDLINKS,
-        )
-    return StorageError(
-        f"file-system error in repository of {show_id}: {error.strerror or error}",
-        hint="check that the repository root exists, is writable and is a directory",
-        context=context,
-        code=ErrorCode.IO,
-    )
-
-
-@contextmanager
-def _mapped_io(show_id: str, path: Path, *, is_link: bool = False) -> Iterator[None]:
-    """Turns an OSError raised inside the block into a StorageError with a code and hint."""
-    try:
-        yield
-    except OSError as error:
-        raise _storage_error(show_id, error, path, is_link=is_link) from error
-
-
 def _guarded[F: Callable[..., Any]](method: F) -> F:  # Any: decorator keeps each signature
     """Maps any OSError a backend method leaks to StorageError; `show_id` is its first argument."""
 
     @functools.wraps(method)
     def wrapper(self: "_FileBackend", show_id: str, *args: Any, **kwargs: Any) -> Any:
-        with _mapped_io(show_id, self.root / show_id):
+        with mapped_io(show_id, self.root / show_id):
             return method(self, show_id, *args, **kwargs)
 
     return cast(F, wrapper)
-
-
-def _lstat_mode(show_id: str, path: Path) -> int | None:
-    """Returns the lstat mode of `path`, or None if absent; ENAMETOOLONG is never hidden."""
-    with _mapped_io(show_id, path):
-        try:
-            return os.lstat(path).st_mode
-        except FileNotFoundError:
-            return None
 
 
 def _require_readable_sizes(
@@ -181,7 +118,7 @@ class _FileBackend:
         return self.root / show_id
 
     def shows(self) -> list[str]:
-        with _mapped_io("", self.root):
+        with mapped_io("", self.root):
             if not self.root.exists():
                 return []
             return [p.name for p in self.root.iterdir() if (p / LINK_DIR / ROOT_LINK).exists()]
@@ -218,7 +155,7 @@ class _FileBackend:
         """
         base = self._dir(show_id)
         for directory in (base, base / OBJECT_DIR, base / TREE_DIR, base / LINK_DIR):
-            mode = _lstat_mode(show_id, directory)
+            mode = lstat_mode(show_id, directory)
             if mode is None:
                 continue
             if stat.S_ISLNK(mode):
@@ -270,7 +207,7 @@ class _FileBackend:
         log: list[Revision] = []
         seen: set[str] = set()
         current = ROOT_LINK
-        while _lstat_mode(show_id, links / current) is not None:
+        while lstat_mode(show_id, links / current) is not None:
             link = links / current
             previous = "" if current == ROOT_LINK else current
             current = self._checked_id(show_id, self._read_link(show_id, link), link)
@@ -305,7 +242,7 @@ class _FileBackend:
         self._guard_dirs(show_id)
         folder = self._dir(show_id) / TREE_DIR
         known_shape = REVISION_ID_PATTERN.fullmatch(revision_id)
-        if not known_shape or _lstat_mode(show_id, folder / f"{revision_id}.json") is None:
+        if not known_shape or lstat_mode(show_id, folder / f"{revision_id}.json") is None:
             raise unknown_revision_error(show_id, revision_id, [])
         path = self._tree_path(show_id, revision_id, folder)
         stored = self._record(show_id, revision_id, path)["tree"]
@@ -363,7 +300,7 @@ class _FileBackend:
         _require_readable_sizes(show_id, tree, blobs)
         for digest, data in blobs.items():
             target = base / OBJECT_DIR / self._caller_id(show_id, digest, "blob digest")
-            if _lstat_mode(show_id, target) is None and _link_exclusive(show_id, target, data):
+            if lstat_mode(show_id, target) is None and _link_exclusive(show_id, target, data):
                 continue
             # A blob already stored, or linked first by a racing writer, is kept only when it
             # holds these bytes; a symlink or damaged file blocks the commit before it lands.

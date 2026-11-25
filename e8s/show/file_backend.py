@@ -18,7 +18,15 @@ from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.backend import conflict_error, unknown_revision_error
 from e8s.show.document_dump import dump_json
-from e8s.show.durable_io import link_new, make_folder, remove_file, write_temp
+from e8s.show.durable_io import (
+    link_new,
+    lstat_mode,
+    make_folder,
+    mapped_io,
+    read_capped,
+    remove_file,
+    write_temp,
+)
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout import (
@@ -33,11 +41,8 @@ from e8s.show.layout1 import (
     BLOB_MAX_BYTES,
     REVISION_ID_PATTERN,
     TREE_MAX_BYTES,
-    _lstat_mode,
-    _mapped_io,
     _require_readable_sizes,
 )
-from e8s.show.safe_read import read_capped
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.storage import ROOT_REVISION
 
@@ -161,7 +166,7 @@ class FileBackend:
     def _check_manifest(self, show_id: str) -> None:
         """Checks once per backend that the show's manifest, when present, names this show."""
         folder = self._folder(show_id)
-        if show_id in self._manifests or _lstat_mode(show_id, folder / MANIFEST_FILE) is None:
+        if show_id in self._manifests or lstat_mode(show_id, folder / MANIFEST_FILE) is None:
             return
         if self._manifest_id(show_id, folder) != show_id:
             raise _corrupt(show_id, folder / MANIFEST_FILE, "manifest names another show")
@@ -170,8 +175,8 @@ class FileBackend:
     def shows(self) -> list[str]:
         """Returns the IDs of shows with at least one slot, read from their manifests."""
         folder = self.root / SHOWS_DIR
-        with _mapped_io("", folder):
-            if _lstat_mode("", folder) is None:
+        with mapped_io("", folder):
+            if lstat_mode("", folder) is None:
                 return []
             names = sorted(p.name for p in folder.iterdir() if p.name not in HOUSEKEEPING_NAMES)
             return [show for show in map(self._listed_show, names) if show is not None]
@@ -181,13 +186,13 @@ class FileBackend:
         folder = self.root / SHOWS_DIR / name
         if not SHOW_FOLDER_PATTERN.fullmatch(name):
             raise _corrupt("", folder, "entry under shows/ is not a show folder")
-        if _lstat_mode("", folder / MANIFEST_FILE) is None:
+        if lstat_mode("", folder / MANIFEST_FILE) is None:
             return None
         show_id = self._manifest_id("", folder)
         return show_id if self._has_slot(show_id, 1) else None
 
     def _has_slot(self, show_id: str, seq: int) -> bool:
-        return _lstat_mode(show_id, self._slot_path(show_id, seq)) is not None
+        return lstat_mode(show_id, self._slot_path(show_id, seq)) is not None
 
     def _read_slot(self, show_id: str, seq: int) -> Revision:
         path = self._slot_path(show_id, seq)
@@ -206,7 +211,7 @@ class FileBackend:
         The manifest is checked once per backend, as for every other read, so a warm head still
         looks up one slot.
         """
-        with _mapped_io(show_id, self._folder(show_id)):
+        with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
             return self._head(show_id)[1]
 
@@ -259,7 +264,7 @@ class FileBackend:
         A revision no slot holds, such as the record of a commit that lost its race, raises
         UnknownRefError.
         """
-        with _mapped_io(show_id, self._folder(show_id)):
+        with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
             last, head = self._head(show_id)
             if since == head:
@@ -269,7 +274,7 @@ class FileBackend:
 
     def _landed_seq(self, show_id: str, revision_id: str, last: int) -> int:
         """Returns the slot number of a landed revision, read from its record and its slot."""
-        is_known = REVISION_ID_PATTERN.fullmatch(revision_id) and _lstat_mode(
+        is_known = REVISION_ID_PATTERN.fullmatch(revision_id) and lstat_mode(
             show_id, self._record_path(show_id, revision_id)
         )
         if is_known:
@@ -288,7 +293,7 @@ class FileBackend:
                 raise _corrupt(
                     show_id, path, "slot's parent is not the revision of the slot before"
                 )
-            if _lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
+            if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
                 raise _corrupt(show_id, path, "slot names a revision that has no record")
             landed.append(revision)
             parent = revision.id
@@ -314,10 +319,10 @@ class FileBackend:
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         """Returns path to blob digest at a landed revision, read from its record."""
-        with _mapped_io(show_id, self._folder(show_id)):
+        with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
             path = self._record_path(show_id, revision_id)
-            if REVISION_ID_PATTERN.fullmatch(revision_id) and _lstat_mode(show_id, path):
+            if REVISION_ID_PATTERN.fullmatch(revision_id) and lstat_mode(show_id, path):
                 seq, tree = self._record(show_id, revision_id)
                 if self._has_slot(show_id, seq) and self._read_slot(show_id, seq).id == revision_id:
                     return tree
@@ -325,7 +330,7 @@ class FileBackend:
 
     def blob(self, show_id: str, digest: str) -> bytes:
         """Returns the bytes of a blob after checking they hash to its digest."""
-        with _mapped_io(show_id, self._folder(show_id)):
+        with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
             objects = self._folder(show_id) / OBJECT_DIR
             if not REVISION_ID_PATTERN.fullmatch(digest):
@@ -352,7 +357,7 @@ class FileBackend:
 
         Raises ConflictError, listing what landed, when the parent is no longer the head.
         """
-        with _mapped_io(show_id, self._folder(show_id)):
+        with mapped_io(show_id, self._folder(show_id)):
             _require_caller_ids(show_id, revision, tree, blobs)
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
@@ -406,7 +411,7 @@ class FileBackend:
         """Writes `data` under `target` through a temp file; False when the name was taken."""
         temp = write_temp(self.root / TEMP_DIR, data)
         try:
-            with _mapped_io(show_id, target, is_link=True):
+            with mapped_io(show_id, target, is_link=True):
                 return link_new(temp, target)
         finally:
             remove_file(temp)
@@ -416,7 +421,7 @@ class FileBackend:
         objects = self._folder(show_id) / OBJECT_DIR
         for digest, data in blobs.items():
             target = objects / digest
-            if _lstat_mode(show_id, target) is None and self._place(show_id, target, data):
+            if lstat_mode(show_id, target) is None and self._place(show_id, target, data):
                 continue
             self._verified_blob(show_id, target)
 
