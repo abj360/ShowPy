@@ -200,6 +200,7 @@ def add_set(
     after: str | None = None,
     placements: Sequence[Placement] | None = None,
     *,
+    before: str | None = None,
     force: bool = False,
 ) -> Show:
     """Inserts a set; spots without a given placement copy their place in the previous set.
@@ -212,27 +213,54 @@ def add_set(
     because forms belong to one set. They are pinned when the spot has an entity pin.
     Inserting between two sets drops the stored paths between them.
 
+    `before` inserts in front of a set. For the first set, the new set opens the show at 0 counts,
+    its missing placements copy the old opener, and `counts` becomes the old opener's counts: the
+    move into it. The old opener had no incoming transition, so none is dropped, and its stored
+    paths, pins and forms stay as they were. The show grows by `counts`.
+
     Args:
         show: Show to edit.
         set_id: New set ID.
-        counts: Counts of the move into the new set; 0 when it is the first set.
+        counts: Counts of the move the insertion adds: into the new set, or into the old opener
+            when the new set opens the show. 0 only for the first set of an empty show.
         after: Set to insert after; None appends.
         placements: Placements for some or all spots.
-        force: Allows dropping locked paths between `after` and its successor.
+        before: Set to insert before; cannot be combined with `after`.
+        force: Allows dropping locked paths between the neighbours of the new set.
 
     >>> from e8s.examples import two_set_show
     >>> show = add_set(two_set_show(), "3", 4.0)
     >>> show.set_ids(), show.set("3").get("T1").y
     (['1', '2', '3'], 9.0)
+
+    >>> opened = add_set(two_set_show(), "0", 4.0, before="1")
+    >>> opened.set_ids(), [s.counts for s in opened.sets]
+    (['0', '1', '2'], [0.0, 4.0, 8.0])
     """
     new_id = _checked_set_id(show, set_id)
-    position = len(show.sets) if after is None else show.set_index(after) + 1
-    _require_counts(counts, is_first=position == 0)
+    if after is not None and before is not None:
+        raise SchemaError(
+            "add_set() got both after and before",
+            hint="give one of after= or before=; before=X equals after= the set preceding X",
+            context={"after": after, "before": before},
+        )
+    if before is not None:
+        position = show.set_index(before)
+    else:
+        position = len(show.sets) if after is None else show.set_index(after) + 1
+    opens_before_old_opener = before is not None and position == 0
+    _require_counts(counts, is_first=position == 0 and not opens_before_old_opener)
     given = _given_placements(show, placements or ())
-    previous = show.sets[position - 1] if position > 0 else None
-    rows = tuple(given.get(e) or _carried(show, previous, e) for e in show.cast.ids())
-    new = Set(id=new_id, key=_new_key(show, new_id), counts=counts, placements=rows)
-    return replace_sets(show, [*show.sets[:position], new, *show.sets[position:]], force=force)
+    source_index = 0 if opens_before_old_opener else position - 1
+    source = show.sets[source_index] if source_index >= 0 else None
+    rows = tuple(given.get(e) or _carried(show, source, e) for e in show.cast.ids())
+    following = list(show.sets[position:])
+    new_counts = counts
+    if opens_before_old_opener:
+        following[0] = following[0].replace(counts=counts)
+        new_counts = 0.0
+    new = Set(id=new_id, key=_new_key(show, new_id), counts=new_counts, placements=rows)
+    return replace_sets(show, [*show.sets[:position], new, *following], force=force)
 
 
 def _subset_id(show: Show, after: str) -> SetId:
