@@ -59,6 +59,7 @@ COPY crates ./crates
 COPY tests ./tests
 COPY scripts ./scripts
 COPY fuzz ./fuzz
+COPY .github/workflows/nightly.yml ./.github/workflows/
 COPY .github/workflows/ci.yml .github/workflows/wheels.yml .github/workflows/nightly-core.yml \
     ./.github/workflows/
 RUN chown -R 10001:10001 /app
