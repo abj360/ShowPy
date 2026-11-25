@@ -5,6 +5,7 @@ test_packaging.py --- tests that the installed distribution exposes its name, ve
 bundled fonts and compiled core, and that its wheel holds the package files and nothing else
 """
 
+import ast
 import importlib
 import importlib.metadata
 import importlib.util
@@ -31,8 +32,7 @@ LIBRARY_ROOT = REPO_ROOT / "e8s"
 CARGO_MANIFEST = REPO_ROOT / "Cargo.toml"
 BINDING_BUILD_SCRIPT = REPO_ROOT / "crates" / "e8s-py" / "build.rs"
 CORE_AREAS = ("core", "geo", "time", "sheet", "cast", "engine", "forms")
-# Until the ports add public functions, a submodule holds only these private boundary hooks.
-CORE_HOOKS = {"core": {"_finite_probe", "_cache_probe", "_cache_stats"}}
+CORE_STUB_ROOT = REPO_ROOT / "e8s" / "_core"
 EXTENSIONS = frozenset({"e8s/_core.abi3.so", "e8s/_core.pyd"})
 DIST_INFO_SUFFIX = ".dist-info"
 LICENSES_FOLDER = "licenses"
@@ -88,6 +88,18 @@ def test_binding_build_script_reruns_on_pyo3_python_and_keeps_the_rpath_whole() 
     assert "link-arg-tests=-Wl," not in script
 
 
+def _stub_names(area: str) -> set[str]:
+    """Lists the functions and constants a submodule's stub declares."""
+    tree = ast.parse((CORE_STUB_ROOT / f"{area}.pyi").read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            names.add(node.name)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+    return names
+
+
 def test_core_extension_imports_with_its_seven_submodules() -> None:
     core = importlib.import_module("e8s._core")
     assert core.__version__ == e8s.__version__
@@ -97,7 +109,7 @@ def test_core_extension_imports_with_its_seven_submodules() -> None:
         assert module.__name__ == f"e8s._core.{area}"
         assert module.__doc__
         names = {name for name in vars(module) if not name.startswith("__")}
-        assert names == CORE_HOOKS.get(area, set()), area
+        assert names == _stub_names(area), area
 
 
 def test_schema_is_a_package_resource() -> None:
