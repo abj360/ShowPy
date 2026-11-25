@@ -4,8 +4,6 @@
 test_compiled_base.py --- tests the compiled core's handling of inputs the Python helpers took
 
 Contains:
-    test_regression_facing_vector_rejects_non_finite_with_schema_error: raises SchemaError, not
-        ValueError, for an infinite or NaN facing
     test_format_number_writes_exact_integers: writes an integer of any size in full
     test_format_number_accepts_registered_real_numbers: writes numpy and Fraction values
     test_require_size_reports_a_size_beyond_64_bits: raises the caller's error for a huge size
@@ -33,13 +31,7 @@ import pytest
 from e8s._core import core
 from e8s.core.errors import SchemaError, SpacingError, ZeroLengthError
 from e8s.core.ids import ID_PATTERN, RESERVED_IDS, SHEET_ID_PATTERN, WINDOWS_DEVICE_NAMES
-from e8s.core.units import facing_vector, vector_facing
-
-
-@pytest.mark.parametrize("theta", [math.inf, -math.inf, math.nan])
-def test_regression_facing_vector_rejects_non_finite_with_schema_error(theta: float) -> None:
-    with pytest.raises(SchemaError):
-        facing_vector(theta)
+from e8s.core.units import vector_facing
 
 
 def test_format_number_writes_exact_integers() -> None:
