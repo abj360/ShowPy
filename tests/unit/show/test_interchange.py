@@ -725,3 +725,50 @@ def test_migrate_json_of_a_current_document_reports_nothing() -> None:
     assert show == two_set_show()
     assert report == MigrationReport(from_version=CURRENT_VERSION)
     assert notes is None
+
+
+def _reversed_id_maps(dumped: dict[str, Any]) -> dict[str, Any]:
+    """Returns a copy of a show dump with every ID-keyed mapping in reverse key order."""
+
+    def flip(mapping: dict[str, Any]) -> dict[str, Any]:
+        return dict(reversed(mapping.items()))
+
+    flipped = {**dumped}
+    cast = dumped["cast"]
+    flipped["cast"] = {
+        **cast,
+        "groups": {
+            key: {**group, "limits": flip(group["limits"])}
+            for key, group in flip(cast["groups"]).items()
+        },
+        "selections": flip(cast["selections"]),
+        "label_scheme": {
+            **cast["label_scheme"],
+            "prefixes": flip(cast["label_scheme"]["prefixes"]),
+        },
+    }
+    flipped["forms"] = flip(dumped["forms"])
+    flipped["dependencies"] = flip(dumped["dependencies"])
+    flipped["transitions"] = [
+        {**spec, "rows": flip(spec["rows"]), "routes": flip(spec["routes"])}
+        for spec in dumped["transitions"]
+    ]
+    return flipped
+
+
+def test_regression_equal_shows_export_equal_bytes() -> None:
+    dumped: dict[str, Any] = rich_show().to_json()
+    forms = dumped["forms"]
+    forms["line2"] = {**forms["line1"], "id": "line2"}
+    dumped["cast"]["selections"]["other"] = dumped["cast"]["selections"]["pair"]
+    groups = dumped["cast"]["groups"]
+    groups["brass"] = {**groups["trumpets"], "key": "brass", "name": "Brass", "label_prefix": "B"}
+    dumped["cast"]["label_scheme"]["prefixes"] = {"trumpets": "T", "brass": "B"}
+    dumped["cast"]["groups"]["trumpets"]["limits"] = {"speed": 2.0, "accel": 1.0}
+    dumped["dependencies"] = {"sheet:b": "1.0.0", "sheet:a": "1.0.0"}
+    show_a = Show.from_json(dumped)
+    show_b = Show.from_json(_reversed_id_maps(dumped))
+    assert show_a == show_b
+    assert list(show_a.forms) != list(show_b.forms)
+    assert list(show_a.cast.selections) != list(show_b.cast.selections)
+    assert json.dumps(export_json(show_a)) == json.dumps(export_json(show_b))
