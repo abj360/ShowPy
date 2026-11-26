@@ -9,23 +9,23 @@ Contains:
     changelog(): lists revisions since a revision as terse lines
 """
 
-from collections.abc import Mapping
 from datetime import datetime
-from typing import Any
 
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
-from e8s.core.ids import FormId, SpotId, format_tid
+from e8s.core.ids import FormId, SpotId
+from e8s.core.json_types import JsonValue
 from e8s.core.units import angle_diff
 from e8s.core.util import approx_equal, natural_sort
+from e8s.show.diff_render import render_changes
 from e8s.show.history_models import PathDiff, Revision, SetDiff
+from e8s.show.items import changes
 from e8s.show.models import Show
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.workspace import Workspace
 
 SHORT_ID = 7
 TIME_FORMAT = "%Y-%m-%d %H:%M"
-SHOW_FIELDS = ("sheet", "timeline", "facing_overrides", "dependencies")
 
 
 def _member_key(row: tuple[int | None, SpotId]) -> tuple[bool, int, SpotId]:
@@ -99,61 +99,20 @@ def diff_paths(a: TransitionSpec, b: TransitionSpec) -> PathDiff:
     )
 
 
-# Any: diff summaries hold JSON values of mixed types.
-def _keyed[K: str](left: Mapping[K, object], right: Mapping[K, object]) -> dict[str, Any]:
-    found = {
-        "added": natural_sort(set(right) - set(left)),
-        "removed": natural_sort(set(left) - set(right)),
-        "changed": natural_sort(k for k in set(left) & set(right) if left[k] != right[k]),
-    }
-    return {key: value for key, value in found.items() if value}
-
-
-# Any: diff summaries hold JSON values of mixed types.
-def _sets_diff(a: Show, b: Show) -> dict[str, Any]:
-    old, new = {s.id: s for s in a.sets}, {s.id: s for s in b.sets}
-    common = [s for s in b.set_ids() if s in old]
-    changed = {s: diff_sets(old[s], new[s])._dumped(exclude_defaults=True) for s in common}
-    counts = {s: [old[s].counts, new[s].counts] for s in common if old[s].counts != new[s].counts}
-    found = {
-        **_keyed(old, new),
-        "changed": {s: d for s, d in changed.items() if d},
-        "counts": counts,
-        "order_changed": [s for s in a.set_ids() if s in new] != common,
-    }
-    return {key: value for key, value in found.items() if value}
-
-
-# Any: diff summaries hold JSON values of mixed types.
-def _paths_diff(a: Show, b: Show) -> dict[str, Any]:
-    shared = [t for t in b.transition_ids() if t in a.transition_ids()]
-    diffs = {format_tid(t): diff_paths(a.transition(t), b.transition(t)) for t in shared}
-    return {t: d._dumped(exclude_defaults=True) for t, d in diffs.items() if not d.is_empty}
-
-
-# Any: diff summaries hold JSON values of mixed types.
-def diff_show(a: Show, b: Show) -> dict[str, Any]:
+def diff_show(a: Show, b: Show) -> dict[str, JsonValue]:
     """Summarizes every difference between two shows; keys with no difference are left out.
 
-    Keys: `title`, `sets` (added, removed, changed, counts, order_changed), `forms`, `paths`,
-    `cast`, `pins` and one flag per changed whole field (`sheet`, `timeline`, ...).
+    Built from the item changes between the shows, so every stored edit reaches some key: `title`,
+    `pack`, `id`, `dependencies`, `extensions`, `sets` (added, removed, renamed, changed, counts,
+    order_changed), `labels` (set labels and cues, placement notes), `forms`, `paths`, `cast`,
+    `groups`, `selections`, `pins` and one flag per changed whole field (`sheet`, `timeline`,
+    `facing_overrides`). Sets are named by display ID.
 
     >>> from e8s.examples import two_set_show
     >>> diff_show(two_set_show(), two_set_show().replace(title="B"))
     {'title': ['Test show', 'B']}
     """
-    found: dict[str, Any] = {
-        "title": [a.title, b.title] if a.title != b.title else None,
-        "sets": _sets_diff(a, b),
-        "forms": _keyed(a.forms, b.forms),
-        "paths": _paths_diff(a, b),
-        "cast": _keyed({s.id: s for s in a.cast.spots}, {s.id: s for s in b.cast.spots}),
-        "pins": _keyed(
-            {f"{p.target}:{p.id}": p for p in a.pins}, {f"{p.target}:{p.id}": p for p in b.pins}
-        ),
-    }
-    found.update({name: True for name in SHOW_FIELDS if getattr(a, name) != getattr(b, name)})
-    return {key: value for key, value in found.items() if value}
+    return render_changes(a, b, changes(a, b), diff_sets, diff_paths)
 
 
 def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
