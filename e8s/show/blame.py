@@ -11,9 +11,11 @@ Contains:
 """
 
 import fnmatch
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
-from e8s.show.change_models import ItemKey
+from e8s.core.errors import E8sError, SchemaError, StorageError
+from e8s.core.readonly import ReadOnlyMap
+from e8s.show.change_models import ItemKey, ItemKind
 from e8s.show.document_paths import (
     CAST_DOC,
     DRILL_NAME,
@@ -21,6 +23,7 @@ from e8s.show.document_paths import (
     FORMS_NAME,
     LABELS_NAME,
     PATHS_NAME,
+    SEGMENT_PATTERN,
     SHEET_DOC,
     TIMELINE_DOC,
     is_storable_folder,
@@ -30,9 +33,11 @@ from e8s.show.document_paths import (
 from e8s.show.history_models import Revision
 from e8s.show.items import changes, items
 from e8s.show.migrate import SHOW_DOC
+from e8s.show.models import Show
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.workspace import Workspace
 
+SHORT_ID = 7
 ANY_FORMS_DOC = f"/sets/*/{FORMS_NAME}"
 TRANSITION_ROOT = "/transitions"
 ROLE_DOCUMENT = {"drill": DRILL_NAME, "pin": DRILL_NAME, "facing": FACING_NAME}
@@ -40,8 +45,57 @@ CAST_DOCUMENTS = frozenset({SHOW_DOC, CAST_DOC})
 SHOW_ONLY = frozenset({SHOW_DOC})
 
 
+PATH_LENGTHS: Mapping[ItemKind, int] = ReadOnlyMap(
+    {
+        "placement": 2,
+        "set": 1,
+        "form": 1,
+        "path_row": 2,
+        "route": 2,
+        "transition": 1,
+        "spot": 1,
+        "group": 1,
+        "selection": 1,
+        "pin": 2,
+        "set_order": 0,
+        "spot_order": 0,
+        "pin_order": 0,
+        "facing_override": 0,
+        "sheet": 0,
+        "timeline": 0,
+        "show": 0,
+    }
+)
+PATH_SHAPES: Mapping[ItemKind, str] = ReadOnlyMap(
+    {
+        "placement": "(set key, spot ID)",
+        "set": "(set key,)",
+        "form": "(form ID,)",
+        "path_row": "(transition key, spot ID)",
+        "route": "(transition key, route ID)",
+        "transition": "(transition key,)",
+        "spot": "(spot ID,)",
+        "group": "(group key,)",
+        "selection": "(selection name,)",
+        "pin": "(pin target, pin ID)",
+    }
+)
+
+
+def _require_path_shape(key: ItemKey) -> None:
+    expected = PATH_LENGTHS[key.kind]
+    if len(key.path) == expected:
+        return
+    shape = PATH_SHAPES.get(key.kind, "()")
+    raise SchemaError(
+        f"a {key.kind} item path has {expected} parts, not {len(key.path)}",
+        hint=f"use the path {shape}, as items() keys it",
+        context={"kind": key.kind, "path": list(key.path)},
+    )
+
+
 def _set_documents(key: ItemKey) -> frozenset[str] | None:
-    (folder, *_) = key.path
+    folder = key.path[0]
     if not is_storable_folder(folder):
         return None
     if key.kind == "placement":
@@ -50,8 +104,11 @@ def _set_documents(key: ItemKey) -> frozenset[str] | None:
     return frozenset({set_doc(folder), *role_docs(folder), f"/sets/{folder}/{FORMS_NAME}"})
 
 
-def _transition_documents(key: ItemKey) -> frozenset[str]:
-    return frozenset({f"{TRANSITION_ROOT}/{key.path[0]}/{PATHS_NAME}"})
+def _transition_documents(key: ItemKey) -> frozenset[str] | None:
+    folder = key.path[0]
+    if not SEGMENT_PATTERN.fullmatch(folder):
+        return None
+    return frozenset({f"{TRANSITION_ROOT}/{folder}/{PATHS_NAME}"})
 
 
 def _holder_test(key: ItemKey) -> Callable[[str], bool]:
@@ -76,18 +133,32 @@ def _holder_test(key: ItemKey) -> Callable[[str], bool]:
     return held.__contains__
 
 
-def _changes_item(ws: Workspace, revision: Revision, key: ItemKey) -> tuple[bool, bool]:
-    """Reports whether a revision changed the item and whether the item exists after it."""
-    show = ws.show_at(revision.id)
+def _show_at(ws: Workspace, revision_id: str) -> Show:
+    """Decodes a revision, failing closed: an unreadable revision is never skipped."""
+    try:
+        show = ws.show_at(revision_id)
+    except E8sError as error:
+        raise _unreadable(ws, revision_id, str(error)) from error
     if show is None:
-        return False, False
-    if revision.parent == ROOT_REVISION or (before := ws.show_at(revision.parent)) is None:
-        is_present = key in items(show)
-        return is_present, is_present
-    for change in changes(before, show).changes:
-        if change.key == key:
-            return True, change.after is not None
-    return False, True
+        raise _unreadable(ws, revision_id, "it holds no show document")
+    return show
+
+
+def _unreadable(ws: Workspace, revision_id: str, reason: str) -> StorageError:
+    return StorageError(
+        f"cannot read revision {revision_id[:SHORT_ID]} of show {ws.show_id}: {reason}",
+        hint="repair or revert the revision; blame never guesses past one it cannot read",
+        context={"revision": revision_id, "show": ws.show_id},
+    )
+
+
+def _is_changed(ws: Workspace, revision: Revision, key: ItemKey) -> bool:
+    """Reports whether a revision changed the item's value against its parent."""
+    show = _show_at(ws, revision.id)
+    if revision.parent == ROOT_REVISION:
+        return key in items(show)
+    before = _show_at(ws, revision.parent)
+    return any(change.key == key for change in changes(before, show).changes)
 
 
 def blame(ws: Workspace, key: ItemKey) -> Revision | None:
@@ -95,10 +166,11 @@ def blame(ws: Workspace, key: ItemKey) -> Revision | None:
 
     Walks the log newest first and decodes only revisions that wrote a document able to hold the
     item. A revision that re-encodes documents without changing the item's value, such as the
-    first layout-2 save over layout-1 documents, is skipped. An item that exists at the head
-    was last changed by the returned revision; the first save is blamed for an item no later
-    save touched. Returns None when the item does not exist at the head, when no revision
-    changed it, or when the show has no revisions.
+    first layout-2 save over layout-1 documents, is skipped. The first save is blamed for an
+    item no later save touched. Returns None when the item does not exist at the head, which
+    is checked first and decodes only the head, or when the show has no revisions. A key whose
+    path has the wrong length for its kind raises SchemaError; a candidate revision that cannot
+    be decoded raises StorageError naming it, never a guessed answer.
 
     Args:
         ws: The workspace whose repository and show are read; its own revision is ignored.
@@ -118,11 +190,12 @@ def blame(ws: Workspace, key: ItemKey) -> Revision | None:
     >>> blame(ws, ItemKey(kind="spot", path=("T1",))) == first
     True
     """
+    _require_path_shape(key)
+    log = ws.repo.revisions(ws.show_id)
+    if not log or key not in items(_show_at(ws, log[-1].id)):
+        return None
     holds = _holder_test(key)
-    for revision in reversed(ws.repo.revisions(ws.show_id)):
-        if not any(holds(path) for path in revision.changed):
-            continue
-        is_changed, is_present = _changes_item(ws, revision, key)
-        if is_changed:
-            return revision if is_present else None
+    for revision in reversed(log):
+        if any(holds(path) for path in revision.changed) and _is_changed(ws, revision, key):
+            return revision
     return None
