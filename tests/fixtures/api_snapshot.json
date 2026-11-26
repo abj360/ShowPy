@@ -1736,6 +1736,7 @@
   "match": "(from_: Source, to_slots: SlotSource, entities: collections.abc.Sequence[str] | None = None, options: e8s.choreo.match_models.MatchOptions | None = None, groups: collections.abc.Mapping[str, str] | None = None, slot_groups: collections.abc.Sequence[str | None] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.match_models.MatchResult",
   "match_by_order": "(ordered_sel: collections.abc.Sequence[str], form: e8s.choreo.form_models.Form | Points, from_: e8s.choreo.models.Set | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.match_models.MatchResult",
   "measure_to_count": "(tl: e8s.time.models.Timeline, measure: int, count_in_measure: float = 1.0) -> Count",
+  "merge": "(base: e8s.show.models.Show, ours: e8s.show.models.Show, theirs: e8s.show.models.Show) -> e8s.show.change_models.MergeResult",
   "merge_forms": "(a: e8s.choreo.form_models.Form, b: e8s.choreo.form_models.Form, form_id: str, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "migrate_documents": "(docs: collections.abc.Mapping[str, bytes]) -> tuple[dict[str, bytes], e8s.show.migrate.MigrationReport]",
   "migrate_json": "(d: collections.abc.Mapping[str, Any]) -> tuple[e8s.show.models.Show, e8s.show.migrate.MigrationReport, dict[str, JsonValue] | None]",
