@@ -6,6 +6,7 @@
 //!     CoreResult: the result of every fallible core function
 //!     require_finite(): rejects a NaN or infinite input number with a SchemaError
 
+use std::borrow::Cow;
 use std::fmt;
 
 use super::error_codes::{ErrorCode, ErrorKind};
@@ -62,8 +63,8 @@ pub struct CoreError {
     kind: ErrorKind,
     code: ErrorCode,
     message: String,
-    context: Vec<(String, ContextValue)>,
-    hint: String,
+    context: Vec<(Cow<'static, str>, ContextValue)>,
+    hint: Cow<'static, str>,
 }
 
 /// The result of every fallible core function.
@@ -79,7 +80,7 @@ impl CoreError {
         kind: ErrorKind,
         code: ErrorCode,
         message: impl Into<String>,
-        hint: impl Into<String>,
+        hint: impl Into<Cow<'static, str>>,
     ) -> Self {
         Self {
             kind,
@@ -92,7 +93,11 @@ impl CoreError {
 
     /// Returns the error with one more context entry, kept in insertion order.
     #[must_use]
-    pub fn with_context(mut self, key: impl Into<String>, value: impl Into<ContextValue>) -> Self {
+    pub fn with_context(
+        mut self,
+        key: impl Into<Cow<'static, str>>,
+        value: impl Into<ContextValue>,
+    ) -> Self {
         self.context.push((key.into(), value.into()));
         self
     }
@@ -117,7 +122,7 @@ impl CoreError {
 
     /// Returns the debugging context, in insertion order.
     #[must_use]
-    pub fn context(&self) -> &[(String, ContextValue)] {
+    pub fn context(&self) -> &[(Cow<'static, str>, ContextValue)] {
         &self.context
     }
 
@@ -158,7 +163,7 @@ pub fn require_finite(field: &str, value: f64) -> CoreResult<f64> {
         format!("{field} must be a finite number, got {value}"),
         "pass a finite number",
     )
-    .with_context("field", field)
+    .with_context("field", field.to_owned())
     .with_context("value", value))
 }
 
@@ -182,7 +187,7 @@ mod tests {
         let err = CoreError::new(ErrorKind::E8s, ErrorCode::Stage, "m", "h")
             .with_context("b", 1_i64)
             .with_context("a", "x");
-        let keys: Vec<&str> = err.context().iter().map(|(key, _)| key.as_str()).collect();
+        let keys: Vec<&str> = err.context().iter().map(|(key, _)| key.as_ref()).collect();
         assert_eq!(keys, ["b", "a"]);
     }
 
@@ -202,7 +207,7 @@ mod tests {
             assert_eq!(err.code(), ErrorCode::Schema);
             assert_eq!(
                 err.context()[0],
-                ("field".to_owned(), ContextValue::from("x"))
+                (Cow::Borrowed("field"), ContextValue::from("x"))
             );
         }
     }
