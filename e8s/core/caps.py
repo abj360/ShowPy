@@ -21,57 +21,17 @@ Contains:
     require_size(): rejects a requested size that is negative or over its cap
 """
 
-from e8s.core.errors import E8sError, SchemaError
-
-MAX_POINTS = 1_000_000
-MAX_TABLE = 1_000_000
-MAX_GRID_CELLS = 4_000_000
-MAX_RANGE = 10_000
-MAX_DEPTH = 64
-MAX_TEXT_CHARS = 1_000_000
-MIN_LAYOUT_HEIGHT_M = 0.001
-MAX_COORD_M = 1e6
-MAX_COUNTS = 1_000_000
-MIN_TEMPO = 1e-3
-# Provisional bounds on input size, well past any real show; they promise no speed at the cap.
-MAX_SPOTS = 5_000
-MAX_SETS = 1_000
-# One mebibyte: host metadata is a few settings or ids; a larger value is a payload that belongs
-# in an asset, and a cap keeps one document from carrying a hostile blob through every save.
-MAX_EXTENSION_BYTES = 1_048_576
-
-
-def require_size(
-    requested: int, cap: int, *, what: str, error: type[E8sError] = SchemaError
-) -> None:
-    """Rejects a requested size that is negative or over its cap, before the caller allocates it.
-
-    Args:
-        requested: Size the caller is about to allocate, such as width times height; a negative
-            size is rejected too.
-        cap: Largest size allowed.
-        what: Name of the thing being sized, used in the message.
-        error: Error class to raise.
-
-    Examples:
-        >>> from e8s.core.caps import MAX_POINTS, require_size
-        >>> require_size(1_000, MAX_POINTS, what="points")
-        >>> require_size(1_000_001, MAX_POINTS, what="points")
-        Traceback (most recent call last):
-            ...
-        e8s.core.errors.SchemaError: SCHEMA: points would need 1000001, over the cap of \
-1000000 (hint: ask for fewer points or use a coarser setting)
-    """
-    if 0 <= requested <= cap:
-        return
-    if requested < 0:
-        raise error(
-            f"{what} would need {requested}, which is negative",
-            hint=f"ask for zero or more {what}",
-            context={"what": what, "requested": requested, "cap": cap},
-        )
-    raise error(
-        f"{what} would need {requested}, over the cap of {cap}",
-        hint=f"ask for fewer {what} or use a coarser setting",
-        context={"what": what, "requested": requested, "cap": cap},
-    )
+from e8s._core.core import MAX_COORD_M as MAX_COORD_M
+from e8s._core.core import MAX_COUNTS as MAX_COUNTS
+from e8s._core.core import MAX_DEPTH as MAX_DEPTH
+from e8s._core.core import MAX_EXTENSION_BYTES as MAX_EXTENSION_BYTES
+from e8s._core.core import MAX_GRID_CELLS as MAX_GRID_CELLS
+from e8s._core.core import MAX_POINTS as MAX_POINTS
+from e8s._core.core import MAX_RANGE as MAX_RANGE
+from e8s._core.core import MAX_SETS as MAX_SETS
+from e8s._core.core import MAX_SPOTS as MAX_SPOTS
+from e8s._core.core import MAX_TABLE as MAX_TABLE
+from e8s._core.core import MAX_TEXT_CHARS as MAX_TEXT_CHARS
+from e8s._core.core import MIN_LAYOUT_HEIGHT_M as MIN_LAYOUT_HEIGHT_M
+from e8s._core.core import MIN_TEMPO as MIN_TEMPO
+from e8s._core.core import require_size as require_size

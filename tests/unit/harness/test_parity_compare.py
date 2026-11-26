@@ -19,6 +19,13 @@ Contains:
     test_load_flipped_rejects_an_unknown_case: an entry must name a loaded case
     test_load_flipped_rejects_a_malformed_ledger_id: an entry must carry a UP- ledger ID
     test_repository_flipped_file_names_only_loaded_cases: the committed flipped.toml loads
+    test_intended_case_is_compared_against_its_expectation: the oracle is ignored
+    test_load_intended_rejects_an_unknown_case: an entry must name a loaded case
+    test_load_intended_rejects_a_repeated_case: a case is listed once
+    test_load_intended_rejects_a_flipped_case: a case is flipped or intended, never both
+    test_load_intended_rejects_a_missing_reason: an entry needs a one-line reason
+    test_intended_cases_are_printed_in_the_table: a passing intended case shows its reason
+    test_repository_intended_file_names_only_loaded_cases: the committed intended.toml loads
     test_outputs_round_trip_through_their_encoding: arrays and JSON decode to equal values
     test_encoding_rejects_an_unsupported_dtype: a float32 array fails closed
     test_regression_decode_refuses_a_malformed_or_truncated_record: bounds every header field
@@ -44,14 +51,19 @@ from tests.parity.cases import (
 from tests.parity.compare import (
     SPEED_NOISE_RATIO,
     Flip,
+    Intended,
     compare,
     compare_case,
     compare_speed,
+    format_table,
     load_flipped,
+    load_intended,
     ulps,
 )
 
 FLIPPED_FILE = Path(__file__).resolve().parents[2] / "parity" / "flipped.toml"
+INTENDED_FILE = Path(__file__).resolve().parents[2] / "parity" / "intended.toml"
+INTENDED_ENTRY = '[[case]]\nname = "geo.scale_check"\nreason = "x"\nexpect = {}\n'
 TINY = 5e-324
 CASE = "geo.scale_check"
 
@@ -208,6 +220,62 @@ def test_repository_flipped_file_names_only_loaded_cases() -> None:
     assert "UP-9.1-17" in text
     assert "UP-9.1-18" in text
     assert load_flipped(FLIPPED_FILE, load_all_cases()) == {}
+
+
+def test_intended_case_is_compared_against_its_expectation() -> None:
+    intended = {CASE: Intended(name=CASE, reason="decided", expect={"flag": True})}
+    oracle: dict[str, Output] = {"flag": False}
+    chosen: dict[str, Output] = {"flag": True}
+    assert compare_case(CASE, oracle, chosen, {}, intended).passed
+    assert not compare_case(CASE, oracle, oracle, {}, intended).passed
+    assert compare_case(CASE, oracle, oracle, {}).passed
+
+
+def _intended_file(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "intended.toml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_load_intended_rejects_an_unknown_case(tmp_path: Path) -> None:
+    path = _intended_file(tmp_path, INTENDED_ENTRY.replace("scale_check", "missing"))
+    with pytest.raises(SystemExit, match=r"geo\.missing"):
+        load_intended(path, (_case("geo", "scale_check"),), {})
+    assert load_intended(path, (_case("geo", "missing"),), {})["geo.missing"].reason == "x"
+
+
+def test_load_intended_rejects_a_repeated_case(tmp_path: Path) -> None:
+    path = _intended_file(tmp_path, INTENDED_ENTRY * 2)
+    with pytest.raises(SystemExit, match="more than once"):
+        load_intended(path, (_case("geo", "scale_check"),), {})
+
+
+def test_load_intended_rejects_a_flipped_case(tmp_path: Path) -> None:
+    path = _intended_file(tmp_path, INTENDED_ENTRY)
+    flips = {CASE: Flip(name=CASE, ledger="UP-9.1-17", expect={})}
+    with pytest.raises(SystemExit, match="both"):
+        load_intended(path, (_case("geo", "scale_check"),), flips)
+
+
+def test_load_intended_rejects_a_missing_reason(tmp_path: Path) -> None:
+    path = _intended_file(tmp_path, INTENDED_ENTRY.replace('reason = "x"', 'reason = " "'))
+    with pytest.raises(SystemExit, match="reason"):
+        load_intended(path, (_case("geo", "scale_check"),), {})
+
+
+def test_intended_cases_are_printed_in_the_table() -> None:
+    intended = {CASE: Intended(name=CASE, reason="decided", expect={"flag": True})}
+    report = compare({"flag": True}, {"flag": True})
+    shown = format_table({CASE: report, "geo.other": report}, intended)
+    assert "intended" in shown
+    assert "intended: decided" in shown
+    assert "intended" not in format_table({CASE: report})
+
+
+def test_repository_intended_file_names_only_loaded_cases() -> None:
+    cases = load_all_cases()
+    loaded = load_intended(INTENDED_FILE, cases, load_flipped(FLIPPED_FILE, cases))
+    assert "core.non_finite_inputs_raise_e8s_errors" in loaded
 
 
 def test_outputs_round_trip_through_their_encoding() -> None:
