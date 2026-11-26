@@ -40,6 +40,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import E8sError, SchemaError, UnknownRefError, ZeroLengthError
 from e8s.core.units import (
     DEFAULT_UNITS,
@@ -262,3 +263,10 @@ def test_round_to_rejects_non_numbers() -> None:
 def test_regression_round_to_returns_positive_zero_for_every_zero() -> None:
     for value in (-0.0, -0.001, 0.001, -1e-300):
         assert math.copysign(1.0, round_to(value)) == 1.0
+
+
+@pytest.mark.parametrize("theta", [math.inf, -math.inf, math.nan])
+def test_regression_facing_vector_rejects_non_finite_with_schema_error(theta: float) -> None:
+    with pytest.raises(SchemaError) as caught:
+        facing_vector(theta)
+    assert caught.value.code is ErrorCode.SCHEMA

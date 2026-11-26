@@ -6,7 +6,8 @@ test_nightly_core.py --- checks the fuzz crate, the rustfuzz and mutants session
 Contains:
     test_fuzz_crate_declares_one_target_per_parser: fuzz/ is a cargo-fuzz crate outside the
         workspace, with a lock file and exactly the six parser targets the session runs
-    test_fuzz_targets_are_empty_until_their_lanes_fill_them: each target ignores its input
+    test_fuzz_targets_are_empty_until_their_lanes_fill_them: each target ignores its input until
+        its lane fills it, and a filled target reads its input
     function_source(): returns the unparsed source of one noxfile function
     session_calls(): lists the source of every `session.run` call one noxfile function makes
     test_rustfuzz_session_runs_each_target_on_the_pinned_nightly: a dated nightly, a locked
@@ -74,6 +75,7 @@ FUZZ_ROOT = ROOT / "fuzz"
 FUZZ_MANIFEST = FUZZ_ROOT / "Cargo.toml"
 WORKSPACE_MANIFEST = ROOT / "Cargo.toml"
 EMPTY_TARGET = "fuzz_target!(|_data: &[u8]| {});"
+FILLED_TARGETS = frozenset({"refs"})
 DATED_NIGHTLY = re.compile(r"^nightly-\d{4}-\d{2}-\d{2}$")
 RUSTFUZZ_SESSION = "rustfuzz"
 MUTANTS_SESSION = "mutants"
@@ -154,7 +156,11 @@ def test_fuzz_targets_are_empty_until_their_lanes_fill_them() -> None:
         target = (FUZZ_ROOT / "fuzz_targets" / f"{name}.rs").read_text(encoding="utf-8")
         assert target.startswith(f"//! {name}.rs --- "), name
         assert "#![no_main]" in target, name
-        assert target.rstrip().endswith(EMPTY_TARGET), name
+        if name in FILLED_TARGETS:
+            assert "fuzz_target!(|data: &[u8]| {" in target, name
+            assert "_data" not in target, name
+        else:
+            assert target.rstrip().endswith(EMPTY_TARGET), name
 
 
 def function_source(source: str, function_name: str) -> str:
