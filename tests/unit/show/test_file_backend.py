@@ -510,3 +510,9 @@ def test_regression_file_repository_writes_beside_housekeeping_entries(
         assert FileRepository(tmp_path).head(SHOW_ID) == landed.id
     finally:
         (tmp_path / entry).chmod(0o700)
+
+
+def test_regression_repository_backend_is_read_only(tmp_path: Path) -> None:
+    repo = DocumentRepository(FileBackend(tmp_path))
+    with pytest.raises(AttributeError):
+        object.__setattr__(repo, "backend", FileBackend(tmp_path / "other"))
