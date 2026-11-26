@@ -18,7 +18,7 @@ import stat
 import tempfile
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
@@ -77,11 +77,11 @@ def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
     return True
 
 
-def _guarded[F: Callable[..., Any]](method: F) -> F:  # Any: decorator keeps each signature
+def _guarded[F: Callable[..., object]](method: F) -> F:
     """Maps any OSError a backend method leaks to StorageError; `show_id` is its first argument."""
 
     @functools.wraps(method)
-    def wrapper(self: "_FileBackend", show_id: str, *args: Any, **kwargs: Any) -> Any:
+    def wrapper(self: "_FileBackend", show_id: str, *args: object, **kwargs: object) -> object:
         with mapped_io(show_id, self.root / show_id):
             return method(self, show_id, *args, **kwargs)
 
