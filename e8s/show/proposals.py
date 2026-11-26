@@ -4,11 +4,11 @@ proposals.py --- stored suggestions an agent makes and the designer accepts, rej
 Contains:
     PROPOSALS_ROOT: names the folder that holds one JSON document per proposal
     propose(): stores a change as an open proposal against the workspace's revision
-    preview_proposal(): computes the ghost placements and paths a proposal would produce
+    preview_proposal(): computes the ghost placements and paths a proposal would produce on the head
     proposals(): lists the stored proposals by ID
     get_proposal(): returns one stored proposal
-    is_stale(): tells whether items an open proposal touches changed since its base
-    accept(): applies an open proposal and marks it accepted in one revision
+    is_stale(): tells whether an open proposal no longer merges with the head
+    accept(): merges an open proposal into the head and marks it accepted in one revision
     reject(): closes an open proposal with a reason
     withdraw(): closes an open proposal its author takes back
 """
@@ -19,24 +19,17 @@ from typing import Final
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
-from e8s.core.ids import format_tid
 from e8s.core.strict_json import parse_strict_json
 from e8s.core.util import close_matches
+from e8s.show.change_models import MergeConflict, MergeResult
 from e8s.show.changes import apply_change
-from e8s.show.collab_models import (
-    ChangeOp,
-    FormOp,
-    PathsOp,
-    PlacementOp,
-    Proposal,
-    ProposalPreview,
-)
+from e8s.show.collab_models import ChangeOp, Proposal, ProposalPreview
 from e8s.show.document_paths import SEGMENT_PATTERN
 from e8s.show.documents import dump_json
-from e8s.show.events import edit_ops
 from e8s.show.files import show_changes
 from e8s.show.history_models import Revision
-from e8s.show.locks import locked_changes
+from e8s.show.locks import locked_changes, require_unlocked
+from e8s.show.merge import merge
 from e8s.show.models import Show
 from e8s.show.show_io import load_show
 from e8s.show.storage import ROOT_REVISION
@@ -114,36 +107,6 @@ def propose(
     return proposal
 
 
-def preview_proposal(show: Show, proposal: Proposal) -> ProposalPreview:
-    """Computes what a proposal would produce, for ghosts on the canvas.
-
-    >>> from e8s.choreo.models import Placement
-    >>> from e8s.examples import two_set_show
-    >>> from e8s.show.collab_models import PlacementOp, Proposal
-    >>> op = PlacementOp(set_id="2", placement=Placement(entity="T1", x=-2.0, y=9.0))
-    >>> proposal = Proposal(id="p", base_revision="", change=(op,))
-    >>> preview = preview_proposal(two_set_show(), proposal)
-    >>> [p.entity for p in preview.placements["2"]], preview.blocked
-    (['T1'], ())
-    """
-    after = apply_change(show, proposal.change, force=True)
-    old = {s.id: s for s in show.sets}
-    placements = {
-        s.id: tuple(p for p in s.placements if p not in old[s.id].placements)
-        for s in after.sets
-        if s.id in old and s != old[s.id]
-    }
-    tids = [t for t in after.transition_ids() if after.transition(t) != show.transition(t)]
-    return ProposalPreview(
-        proposal_id=proposal.id,
-        placements={k: v for k, v in placements.items() if v},
-        paths=tuple(after.transition(t) for t in tids),
-        counts={s.id: s.counts for s in after.sets if s.counts != old[s.id].counts},
-        forms=tuple(f for k, f in sorted(after.forms.items()) if show.forms.get(k) != f),
-        blocked=tuple(locked_changes(show, after)),
-    )
-
-
 def proposals(ws: Workspace) -> list[Proposal]:
     """Lists the stored proposals at the workspace's revision, sorted by ID.
 
@@ -180,20 +143,6 @@ def get_proposal(ws: Workspace, proposal_id: str) -> Proposal:
     return _decode(bytes(tree[path]), path)
 
 
-def _touched(ops: Sequence[ChangeOp]) -> set[str]:
-    keys: set[str] = set()
-    for op in ops:
-        if isinstance(op, PlacementOp):
-            keys.add(f"placement {op.placement.entity} in set {op.set_id}")
-        elif isinstance(op, FormOp):
-            keys.add(f"form {op.form.id}")
-        elif isinstance(op, PathsOp):
-            keys.add(f"paths {format_tid(op.spec.id)}")
-        else:
-            keys.add(f"counts of set {op.set_id}")
-    return keys
-
-
 def _require_open(proposal: Proposal) -> None:
     if proposal.state != "open":
         raise SchemaError(
@@ -204,22 +153,32 @@ def _require_open(proposal: Proposal) -> None:
         )
 
 
-def _overlap(ws: Workspace, proposal: Proposal, head: Show) -> list[str]:
-    """Lists the items the proposal touches that changed between its base and the head."""
+def _base_show(ws: Workspace, proposal: Proposal, head: Show) -> Show:
+    """Returns the show the proposal was made on; a root or proposal-only base is the head."""
     if proposal.base_revision in (ROOT_REVISION, head.revision):
-        return []
+        return head
     ws.repo.get_revision(ws.show_id, proposal.base_revision)
     base = ws.show_at(proposal.base_revision)
-    if base is None:
-        return []
-    return sorted(_touched(edit_ops(base, head)) & _touched(proposal.change))
+    return head if base is None else base
+
+
+def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResult:
+    base = _base_show(ws, proposal, head)
+    return merge(base, head, apply_change(base, proposal.change, force=True))
+
+
+def _describe(conflict: MergeConflict) -> str:
+    key = conflict.key
+    name = " ".join(part for part in (key.kind, "/".join(key.path)) if part)
+    role = f" ({key.role})" if key.role else ""
+    return f"{name}{role}: {conflict.reason}"
 
 
 def is_stale(ws: Workspace, proposal_id: str) -> bool:
-    """Tells whether an open proposal touches items that changed since its base revision.
+    """Tells whether an open proposal no longer merges with the head show.
 
-    Derived from the head each time and never stored. A closed proposal, one made before any
-    show was saved and a repository with no saved show are never stale.
+    Derived from the same merge accept runs, each time, and never stored. A closed proposal, one
+    made before any show was saved and a repository with no saved show are never stale.
 
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.show.workspace import open_workspace
@@ -235,16 +194,72 @@ def is_stale(ws: Workspace, proposal_id: str) -> bool:
     head = ws.show_at(ws.repo.head(ws.show_id))
     if proposal.state != "open" or head is None:
         return False
-    return bool(_overlap(ws, proposal, head))
+    return bool(_merge_onto_head(ws, proposal, head).conflicts)
+
+
+def preview_proposal(ws: Workspace, proposal_id: str) -> ProposalPreview:
+    """Computes what accepting a proposal would change on the head, for ghosts on the canvas.
+
+    The preview compares the head with the merge of the proposal into it, so edits made since
+    the proposal's base are not ghosts. A proposal that no longer merges previews its conflicts
+    and nothing else.
+
+    Args:
+        ws: Workspace; it moves to the head.
+        proposal_id: ID of the proposal to preview.
+
+    Returns:
+        preview: Placements, paths, counts and forms the merge changes, the pinned or locked
+            items it touches, or the conflicts that stop it.
+
+    >>> from datetime import UTC, datetime
+    >>> from e8s.choreo.models import Placement
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.collab_models import PlacementOp
+    >>> from e8s.show.memory_backend import InMemoryRepository
+    >>> from e8s.show.show_io import save_show
+    >>> from e8s.show.workspace import open_workspace
+    >>> now = datetime(2026, 11, 11, tzinfo=UTC)
+    >>> ws = open_workspace(InMemoryRepository(), "show_1")
+    >>> _ = save_show(ws, two_set_show(), now)
+    >>> op = PlacementOp(set_id="2", placement=Placement(entity="T1", x=-2.0, y=9.0))
+    >>> _ = propose(ws, [op], "", "p1", now)
+    >>> preview = preview_proposal(ws, "p1")
+    >>> [p.entity for p in preview.placements["2"]], preview.blocked, preview.conflicts
+    (['T1'], (), ())
+    """
+    ws.refresh()
+    proposal = get_proposal(ws, proposal_id)
+    head = load_show(ws)
+    result = _merge_onto_head(ws, proposal, head)
+    if result.show is None:
+        return ProposalPreview(proposal_id=proposal.id, conflicts=result.conflicts)
+    after = result.show
+    old = {s.id: s for s in head.sets}
+    placements = {
+        s.id: tuple(p for p in s.placements if p not in old[s.id].placements)
+        for s in after.sets
+        if s.id in old and s != old[s.id]
+    }
+    tids = [t for t in after.transition_ids() if after.transition(t) != head.transition(t)]
+    return ProposalPreview(
+        proposal_id=proposal.id,
+        placements={k: v for k, v in placements.items() if v},
+        paths=tuple(after.transition(t) for t in tids),
+        counts={s.id: s.counts for s in after.sets if s.counts != old[s.id].counts},
+        forms=tuple(f for k, f in sorted(after.forms.items()) if head.forms.get(k) != f),
+        blocked=tuple(locked_changes(head, after)),
+    )
 
 
 def accept(ws: Workspace, proposal_id: str, at: datetime) -> Revision:
-    """Applies an open proposal to the head show and marks it accepted in one revision.
+    """Merges an open proposal into the head show and marks it accepted in one revision.
 
-    When the base moved, the proposal still lands if nothing it touches changed since;
-    otherwise ConflictError with code PROPOSAL_STALE names the overlap. A proposal made before
-    any show was saved lands on the head without that check. Pins still hold: unpin first to
-    accept edits to pinned items. The stored proposal records the head it was applied onto.
+    The change is applied to the show at the proposal's base and merged with the head, so edits
+    made since land beside it. If an item changed differently on both sides, ConflictError with
+    code PROPOSAL_STALE lists the items. A proposal made before any show was saved merges with
+    the head as its base. Pins and locks on the head still hold: unpin first to accept edits to
+    pinned items. The stored proposal records the head it was merged onto.
 
     Args:
         ws: Workspace; it moves to the head, then to the new revision.
@@ -252,24 +267,25 @@ def accept(ws: Workspace, proposal_id: str, at: datetime) -> Revision:
         at: Time stamp of the revision.
 
     Returns:
-        revision: The revision holding the accepted change and the accepted proposal.
+        revision: The revision holding the merged change and the accepted proposal.
     """
     ws.refresh()
     proposal = get_proposal(ws, proposal_id)
     _require_open(proposal)
     head = load_show(ws)
-    overlap = _overlap(ws, proposal, head)
-    if overlap:
+    result = _merge_onto_head(ws, proposal, head)
+    if result.show is None:
+        listed = [_describe(c) for c in result.conflicts]
         raise ConflictError(
-            f"proposal {proposal.id} touches items changed since "
-            f"{proposal.base_revision[:SHORT_ID]}: {', '.join(overlap)}",
+            f"proposal {proposal.id} conflicts with changes since "
+            f"{proposal.base_revision[:SHORT_ID]}: {'; '.join(listed)}",
             hint="propose again against the current show",
-            context={"proposal": proposal.id, "overlap": overlap, "head": head.revision},
+            context={"proposal": proposal.id, "conflicts": listed, "head": head.revision},
             code=ErrorCode.PROPOSAL_STALE,
         )
-    edited = apply_change(head, proposal.change)
+    require_unlocked(head, result.show)
     accepted = proposal.replace(state="accepted", accepted_revision=head.revision)
-    changes = show_changes(edited, ws.tree_at(head.revision))
+    changes = show_changes(result.show, ws.tree_at(head.revision))
     changes[_proposal_path(proposal.id)] = _encode(accepted)
     return ws._commit_normalizing(changes, at=at, expected_revision=head.revision, is_complete=True)
 
