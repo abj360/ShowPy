@@ -30,11 +30,12 @@ from e8s.core.ids import FormId
 from e8s.core.util import asset_uri
 from e8s.examples import two_set_show
 from e8s.geo.fonts import bundled_fonts, register_font
+from e8s.show.document_paths import role_docs, set_doc
 from e8s.show.document_repository import encode_cache_of
-from e8s.show.documents import encode_show as encode_show_documents
 from e8s.show.font_documents import FONTS_ROOT, load_fonts
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
+from e8s.show.set_keys import set_key
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.fonts import tiny_bytes
@@ -182,6 +183,7 @@ def test_regression_one_spot_save_keeps_the_font_and_encodes_only_the_edit() -> 
     edited_set = show.sets[2].with_placements({entity: PlacementPatch(x=-1.0)}, force=True)
     sets = (*show.sets[:2], edited_set, *show.sets[3:])
     revision = save_show(ws, show.replace(sets=sets, revision=saved.id), AT + timedelta(seconds=1))
-    assert cache.misses - before < len(encode_show_documents(show))
+    folder = set_key(show.sets[2])
+    assert cache.misses - before == len({set_doc(folder), *role_docs(folder)})
     assert _font_path(data) not in revision.changed
     assert ws.tree_at(revision.id)[_font_path(data)] == data
