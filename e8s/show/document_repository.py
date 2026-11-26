@@ -4,6 +4,7 @@ document_repository.py --- implements the Repository protocol over a storage bac
 Contains:
     SHOW_ID_PATTERN: matches the show IDs a repository can store
     REVISION_HASH_DOMAIN: names the hash domain every stored revision ID is computed under
+    revision_id(): computes a revision's ID from its parent, time and changed digests
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
     encode_cache_of(): returns the encode cache a repository shares across its saves
 """
@@ -46,6 +47,25 @@ from e8s.show.storage import ROOT_REVISION
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
 # Frozen at the old library name: every stored revision ID is hashed under it.
 REVISION_HASH_DOMAIN = "showpy.revision"
+
+
+def revision_id(parent: str, at: datetime, changes: Mapping[str, str | None]) -> str:
+    """Computes a revision's ID from its parent, time and the blob digest of each changed path.
+
+    Args:
+        parent: ID of the previous revision; empty for the first.
+        at: When the revision was saved.
+        changes: Each changed path with its new blob digest, or None when the path was deleted.
+
+    Returns:
+        revision_id: The 64-digit hex ID every stored revision is named by.
+
+    >>> from datetime import UTC
+    >>> len(revision_id("", datetime(2026, 11, 24, tzinfo=UTC), {"/a.txt": "0" * 64}))
+    64
+    """
+    body = {"parent": parent, "at": at.isoformat(), "changes": dict(changes)}
+    return content_hash(body, domain=REVISION_HASH_DOMAIN)
 
 
 def _require_show_id(show_id: str) -> None:
@@ -272,13 +292,8 @@ class DocumentRepository:
                     context={"show": show_id},
                 )
             return self._head_revision(show_id, head)
-        body = {
-            "parent": expected_revision,
-            "at": at.isoformat(),
-            "changes": {p: new.get(p) for p in changed},
-        }
         revision = Revision(
-            id=content_hash(body, domain=REVISION_HASH_DOMAIN),
+            id=revision_id(expected_revision, at, {p: new.get(p) for p in changed}),
             parent=expected_revision,
             at=at,
             changed=changed,
