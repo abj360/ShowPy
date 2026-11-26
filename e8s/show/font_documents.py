@@ -72,7 +72,7 @@ def load_fonts(ws: Workspace) -> FontRegistry:
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.show.show_io import save_show
     >>> from e8s.show.workspace import open_workspace
-    >>> ws = open_workspace(InMemoryRepository(), "show-1")
+    >>> ws = open_workspace(InMemoryRepository(), "show_1")
     >>> _ = save_show(ws, two_set_show(), datetime(2026, 11, 24, tzinfo=UTC))
     >>> load_fonts(ws) is bundled_fonts()
     True

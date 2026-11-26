@@ -33,7 +33,7 @@ def load_show(ws: Workspace) -> Show:
     >>> from e8s.examples import two_set_show
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.show.workspace import open_workspace
-    >>> ws = open_workspace(InMemoryRepository(), "show-1")
+    >>> ws = open_workspace(InMemoryRepository(), "show_1")
     >>> _ = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
     >>> load_show(ws).id
     'show-1'
@@ -69,7 +69,7 @@ def save_show(
     >>> from e8s.examples import two_set_show
     >>> from datetime import datetime, UTC
     >>> from e8s.show.workspace import open_workspace
-    >>> ws = open_workspace(InMemoryRepository(), "show-1")
+    >>> ws = open_workspace(InMemoryRepository(), "show_1")
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent
     ''
     """
