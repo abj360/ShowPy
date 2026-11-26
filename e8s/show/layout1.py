@@ -24,7 +24,13 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show.backend import conflict_error, revisions_after, unknown_revision_error
+from e8s.show.backend import (
+    MAX_REVISIONS,
+    conflict_error,
+    history_too_long_error,
+    revisions_after,
+    unknown_revision_error,
+)
 from e8s.show.documents import dump_json
 from e8s.show.durable_io import lstat_mode, mapped_io, read_capped
 from e8s.show.history_models import Revision
@@ -217,6 +223,8 @@ class _FileBackend:
             revision = self._stored_revision(show_id, current, link)
             self._check_revision(show_id, revision, current, previous, link)
             log.append(revision)
+            if len(log) > MAX_REVISIONS:
+                raise history_too_long_error(show_id, MAX_REVISIONS)
         return log
 
     def _stored_revision(self, show_id: str, revision_id: str, source: Path) -> Revision:

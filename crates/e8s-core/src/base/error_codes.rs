@@ -162,7 +162,7 @@ pub enum ErrorCode {
     TooFewPoints,
     /// A form or text asks for fewer spots than its curves or strokes need.
     TooFewSpots,
-    /// A file written to a repository is over the per-file byte cap.
+    /// A repository file, or the history of a show, is over its size cap.
     TooLarge,
     /// A show holds more sets than MAX_SETS.
     TooManySets,
