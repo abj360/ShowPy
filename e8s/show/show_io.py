@@ -9,6 +9,7 @@ Contains:
 from datetime import datetime
 
 from e8s.core.errors import StorageError
+from e8s.show.document_repository import encode_cache_of
 from e8s.show.files import (
     show_changes,
 )
@@ -51,6 +52,8 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     caller sees what changed meanwhile; reload, reapply and save again. Stored documents that
     are not canonical are re-encoded in a revision of their own first; if the edit
     then conflicts, that revision stays, it changes no content, and the retry builds on it.
+    Through a DocumentRepository, saves share its encode cache, so a document is encoded again
+    only when one of its source objects is new.
 
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.examples import two_set_show
@@ -60,5 +63,5 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent
     ''
     """
-    changes = show_changes(show, ws.tree_at(show.revision))
+    changes = show_changes(show, ws.tree_at(show.revision), cache=encode_cache_of(ws.repo))
     return ws._commit_normalizing(changes, at=at, expected_revision=show.revision, is_complete=True)

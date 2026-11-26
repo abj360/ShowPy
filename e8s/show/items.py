@@ -39,9 +39,9 @@ one item, with SchemaError.
 Stated limit: facing overrides carry no ID, so all of them are one item, and edits to two
 different overrides conflict. Finer keys need an override ID, which is a format change.
 
+The item table, its roles and the way paths name sets and transitions live in `item_table`.
+
 Contains:
-    ITEM_TABLE: maps each stored (model, field) to the item kind and role that holds its value;
-        Show.cast has no row, since it holds only the Cast, whose fields have rows of their own
     items(): splits a show into its items, in key order
     changes(): lists the items two shows differ in, skipping objects the shows share
 """
@@ -56,126 +56,37 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import FacingOverride, TransitionSpec
 from e8s.core.errors import SchemaError
-from e8s.core.ids import parse_tid
 from e8s.core.json_types import FrozenJsonValue, JsonValue
 from e8s.core.readonly import ReadOnlyMap, thaw_json
 from e8s.sheet.models import Sheet
 from e8s.show.change_models import ChangeSet, ItemChange, ItemKey, ItemKind
-from e8s.show.document_paths import transition_folder
+from e8s.show.item_table import (
+    ENTITY_FIELD,
+    ID_FIELD,
+    KEY_FIELD,
+    LABEL_SCHEME_FIELD,
+    PLACEMENT_ROLES,
+    PLACEMENTS,
+    SET_FIELD,
+    SET_IDENTITY_FIELDS,
+    SET_ROLES,
+    SHOW_FIELDS,
+    TARGET_FIELD,
+    TRANSITION_FIELDS,
+    ItemPath,
+    pin_path,
+    set_keys_by_id,
+    transition_key,
+)
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import set_key
 from e8s.show.storable import require_storable
 from e8s.time.models import Timeline
 
-type _Path = tuple[str, ...]
+type _Path = ItemPath
 type _RawKey = tuple[ItemKind, _Path, str | None]
 type _Entry = tuple[_RawKey, JsonValue]
 type _Diff = tuple[_RawKey, JsonValue, JsonValue]
-type _Row = tuple[ItemKind, str | None]
-
-DRILL = "drill"
-FACING = "facing"
-LABELS = "labels"
-PIN = "pin"
-TIMING = "timing"
-BUILD = "build"
-FORMS = "forms"
-PLACEMENTS = "placements"
-ENTITY_FIELD = "entity"
-ID_FIELD = "id"
-KEY_FIELD = "key"
-SET_FIELD = "set"
-TARGET_FIELD = "target"
-LABEL_SCHEME_FIELD = "label_scheme"
-
-
-def _rows(model: str, kind: ItemKind, role: str | None, fields: str) -> dict[tuple[str, str], _Row]:
-    return {(model, field): (kind, role) for field in fields.split()}
-
-
-ITEM_TABLE: Mapping[tuple[str, str], tuple[ItemKind, str | None]] = ReadOnlyMap(
-    {
-        **_rows("Show", "show", None, "id title pack dependencies extensions"),
-        **_rows("Show", "set_order", None, "sets"),
-        **_rows("Show", "pin_order", None, "pins"),
-        **_rows("Show", "facing_override", None, "facing_overrides"),
-        **_rows("Cast", "spot_order", None, "spots"),
-        **_rows("Cast", "group", None, "groups"),
-        **_rows("Cast", "selection", None, "selections"),
-        **_rows("Cast", "show", None, LABEL_SCHEME_FIELD),
-        **_rows("Set", "set", None, "id key"),
-        **_rows("Set", "set", PLACEMENTS, "placements"),
-        **_rows("Set", "set", TIMING, "counts"),
-        **_rows("Set", "set", LABELS, "label cue"),
-        **_rows("Set", "set", BUILD, "source_hash state"),
-        **_rows("Set", "set", FORMS, "forms"),
-        **_rows("Placement", "placement", None, ENTITY_FIELD),
-        **_rows("Placement", "placement", DRILL, "x y on_field form order"),
-        **_rows("Placement", "placement", FACING, "facing"),
-        **_rows("Placement", "placement", LABELS, "note"),
-        **_rows("Placement", "placement", PIN, "pinned"),
-        **_rows("TransitionSpec", "transition", None, "id counts notes source_hash"),
-        **_rows("TransitionSpec", "path_row", None, "rows"),
-        **_rows("TransitionSpec", "route", None, "routes"),
-        **_rows("Form", "form", None, "id set recipe members spacing facing locked meta"),
-        **_rows(
-            "PathRow",
-            "path_row",
-            None,
-            "entity style start end pace easing motion_fn motion_params waypoints route pivot"
-            " sweep_deg facing_mode facing_value turn_counts turn_direction locked note",
-        ),
-        **_rows("Route", "route", None, "id curve members offsets travel start end"),
-        **_rows("Spot", "spot", None, "id group shape color symbol tags active"),
-        **_rows(
-            "Group",
-            "group",
-            None,
-            "key name label_prefix color symbol default_radius moves limits",
-        ),
-        **_rows("Pin", "pin", None, "target id by reason"),
-        **_rows("FacingOverride", "facing_override", None, "entities mode value start end"),
-        **_rows("FacingOverride", "facing_override", None, "turn_counts"),
-        **_rows(
-            "Sheet",
-            "sheet",
-            None,
-            "name owner ref based_on surface_type size_m outline walkable grid guides thumbnail",
-        ),
-        **_rows(
-            "Timeline",
-            "timeline",
-            None,
-            "mode tempos holds markers cues measures audio total_counts",
-        ),
-    }
-)
-
-
-def _roles(model: str, kind: ItemKind) -> tuple[tuple[str, tuple[str, ...]], ...]:
-    roles: dict[str, list[str]] = {}
-    for (owner, field), (item_kind, role) in ITEM_TABLE.items():
-        if owner == model and item_kind == kind and role is not None:
-            roles.setdefault(role, []).append(field)
-    return tuple((role, tuple(fields)) for role, fields in roles.items())
-
-
-PLACEMENT_ROLES = _roles("Placement", "placement")
-SET_ROLES = tuple(role for role in _roles("Set", "set") if role[0] != PLACEMENTS)
-
-
-def _role_less(owners: tuple[str, ...], kind: ItemKind, path: str | None) -> tuple[str, ...]:
-    """Lists the fields that land in an item with no role, leaving out the one its path holds."""
-    return tuple(
-        field
-        for (owner, field), (item_kind, role) in ITEM_TABLE.items()
-        if owner in owners and item_kind == kind and role is None and field != path
-    )
-
-
-SHOW_FIELDS = _role_less(("Show", "Cast"), "show", None)
-SET_IDENTITY_FIELDS = _role_less(("Set",), "set", KEY_FIELD)
-TRANSITION_FIELDS = _role_less(("TransitionSpec",), "transition", ID_FIELD)
 
 
 def _without(dumped: dict[str, JsonValue], *names: str) -> dict[str, JsonValue]:
@@ -257,7 +168,7 @@ def _form_entries(path: _Path, source: tuple[Form, str]) -> Iterator[_Entry]:
 
 
 def _forms(show: Show) -> dict[_Path, tuple[Form, str]]:
-    keys = _keys(show)
+    keys = set_keys_by_id(show)
     return {(i,): (form, keys.get(form.set, form.set)) for i, form in show.forms.items()}
 
 
@@ -322,38 +233,20 @@ def _show_entries(path: _Path, show: Show) -> Iterator[_Entry]:
     yield ("show", path, None), _picked(_show_values(show), SHOW_FIELDS)
 
 
-def _keys(show: Show) -> dict[str, str]:
-    return {current.id: set_key(current) for current in show.sets}
-
-
-def _transition_key(keys: Mapping[str, str], tid: tuple[str, str]) -> str:
-    """Returns a transition's item key: the stored folder of its set keys; an unknown ID stays."""
-    return transition_folder((keys.get(tid[0], tid[0]), keys.get(tid[1], tid[1])))
-
-
-def _pin_path(keys: Mapping[str, str], record: Pin) -> _Path:
-    """Returns a pin's item path, naming a set or transition by set keys, as stored folders do."""
-    if record.target == "set":
-        return record.target, keys.get(record.id, record.id)
-    if record.target == "transition":
-        return record.target, _transition_key(keys, parse_tid(record.id))
-    return record.target, record.id
-
-
 def _transitions(show: Show) -> dict[_Path, TransitionSpec]:
-    keys = _keys(show)
-    found = (((_transition_key(keys, spec.id),), spec) for spec in show.transitions)
+    keys = set_keys_by_id(show)
+    found = (((transition_key(keys, spec.id),), spec) for spec in show.transitions)
     return _unique("transition", found)
 
 
 def _pins(show: Show) -> dict[_Path, Pin]:
-    keys = _keys(show)
-    return _unique("pin", ((_pin_path(keys, record), record) for record in show.pins))
+    keys = set_keys_by_id(show)
+    return _unique("pin", ((pin_path(keys, record), record) for record in show.pins))
 
 
 def _pin_paths(show: Show) -> dict[_Path, tuple[_Path, ...]]:
-    keys = _keys(show)
-    return {(): tuple(_pin_path(keys, record) for record in show.pins)}
+    keys = set_keys_by_id(show)
+    return {(): tuple(pin_path(keys, record) for record in show.pins)}
 
 
 class _Area(Protocol):
