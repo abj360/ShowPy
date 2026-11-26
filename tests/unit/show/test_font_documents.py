@@ -157,7 +157,7 @@ def test_bad_font_document_names_are_refused_on_load() -> None:
 
 
 def test_load_fonts_without_documents_is_bundled() -> None:
-    ws = open_workspace(InMemoryRepository(), "show-1")
+    ws = open_workspace(InMemoryRepository(), "show_1")
     save_show(ws, two_set_show(), AT)
     assert load_fonts(ws) is bundled_fonts()
 
