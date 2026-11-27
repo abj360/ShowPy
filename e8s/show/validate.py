@@ -23,13 +23,14 @@ from e8s.core.caps import MAX_COUNTS
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ContinuityError, E8sError, SchemaError
 from e8s.core.ids import check_id, check_sheet_id, format_tid, parse_ref
+from e8s.core.json_types import JsonValue
 from e8s.core.types import FrozenModel
 from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import SheetStore, get_sheet
 from e8s.show.change_models import ItemKey
 from e8s.show.collab_models import Comment
 from e8s.show.document_paths import is_storable_folder
-from e8s.show.item_table import TIMING
+from e8s.show.item_table import DRILL, FORMS, PIN, PLACEMENTS, TIMING, transition_key
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
 from e8s.show.validate_comments import comment_issues
@@ -46,6 +47,17 @@ from e8s.time.validate import validate_timeline
 MAX_NON_FINITE_ISSUES = 100
 
 
+def _set_item(candidate: Set, role: str, **extra: JsonValue) -> dict[str, JsonValue]:
+    return {"item": ItemKey(kind="set", path=(set_key(candidate),), role=role).to_json(), **extra}
+
+
+def _placement_item(
+    candidate: Set, entity: str, role: str, **extra: JsonValue
+) -> dict[str, JsonValue]:
+    item = ItemKey(kind="placement", path=(set_key(candidate), entity), role=role)
+    return {"item": item.to_json(), **extra}
+
+
 def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
     where = f"set {candidate.id}"
     cast_ids = set(show.cast.ids())
@@ -57,6 +69,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
             where,
             f"{e} has no placement",
             "every spot is placed in every set",
+            _set_item(candidate, PLACEMENTS, spot=e),
         )
         for e in show.cast.ids()
         if e not in placed
@@ -68,6 +81,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
             where,
             f"{e} is not in the cast",
             "add the spot or remove the row",
+            _set_item(candidate, PLACEMENTS, spot=e),
         )
         for e in candidate.entity_ids()
         if e not in cast_ids
@@ -86,6 +100,7 @@ def _pins(show: Show, candidate: Set) -> list[ValidationIssue]:
             f"set {candidate.id} {p.entity}",
             "a pinned placement changed",
             "unpin it before editing",
+            _placement_item(candidate, p.entity, PIN),
         )
         for p in stored.placements
         if p.pinned and p.entity in candidate.entity_ids() and candidate.get(p.entity) != p
@@ -107,6 +122,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
                     where,
                     f"form {p.form} does not exist",
                     "rebuild the form or clear the placement's form",
+                    _placement_item(candidate, p.entity, DRILL, form=p.form),
                 )
             )
         elif p.entity not in form.members or form.set != candidate.id:
@@ -117,6 +133,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
                     where,
                     f"not a member of {p.form} in this set",
                     "add it to the form's members",
+                    _placement_item(candidate, p.entity, DRILL, form=p.form),
                 )
             )
     return issues
@@ -131,6 +148,7 @@ def _stale_forms(show: Show, candidate: Set) -> list[ValidationIssue]:
             f"set {candidate.id} form {form_id}",
             f"set {candidate.id} no longer lists form {form_id}",
             "re-place the set's forms, or remove the form",
+            _set_item(candidate, FORMS, form=form_id),
         )
         for form_id, form in show.forms.items()
         if form.set == candidate.id and form_id not in listed
@@ -158,9 +176,13 @@ def _with_spec(show: Show, spec: TransitionSpec) -> Show:
     return show.replace(transitions=(*others, spec))
 
 
-def _compile_issue(error: E8sError, where: str) -> ValidationIssue:
+def _folder(show: Show, tid: tuple[str, str]) -> str:
+    return transition_key({set_id: set_key(show.set(set_id)) for set_id in tid}, tid)
+
+
+def _compile_issue(error: E8sError, where: str, item: ItemKey) -> ValidationIssue:
     code = ErrorCode.CONTINUITY if isinstance(error, ContinuityError) else error.code
-    return make_issue(ERROR, code, where, error.message, error.hint)
+    return make_issue(ERROR, code, where, error.message, error.hint, {"item": item.to_json()})
 
 
 def _compile_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
@@ -168,13 +190,15 @@ def _compile_rows(show: Show, spec: TransitionSpec, where: str) -> list[Validati
     issues = []
     a, b = trial.set(spec.id[0]), trial.set(spec.id[1])
     engine = PathEngine(trial, cache=False)
+    folder = _folder(show, spec.id)
     for entity in show.cast.ids():
         if entity not in a.entity_ids() or entity not in b.entity_ids():
             continue
         try:
             engine.compile_entity(entity, spec.id)
         except E8sError as error:
-            issues.append(_compile_issue(error, f"{where} {entity}"))
+            item = ItemKey(kind="path_row", path=(folder, entity))
+            issues.append(_compile_issue(error, f"{where} {entity}", item))
     return issues
 
 
@@ -197,6 +221,11 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
                 where,
                 f"paths span {spec.counts} counts, set {spec.id[1]} has {expected}",
                 "retime with set_counts",
+                {
+                    "item": ItemKey(kind="transition", path=(_folder(show, spec.id),)).to_json(),
+                    "counts": spec.counts,
+                    "expected": expected,
+                },
             )
         )
     return ValidationReport(issues=tuple(issues + _compile_rows(show, spec, where)))
