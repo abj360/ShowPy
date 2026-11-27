@@ -86,6 +86,8 @@ Contains:
         blob is already stored with other bytes, before its tree record or link is written
     test_regression_commit_refuses_a_symlink_at_a_blob_target: refuses a commit whose blob name
         holds a symbolic link, even to the right bytes, before its tree record or link is written
+    test_regression_layout_1_log_longer_than_max_revisions_is_refused: refuses to walk a next/
+        chain longer than MAX_REVISIONS
 """
 
 import contextlib
@@ -104,6 +106,7 @@ from typing import Any, NoReturn
 
 import pytest
 
+import e8s.show.durable_io as durable_io
 import e8s.show.layout1 as layout1
 from e8s.core.canonical import MAX_NESTING
 from e8s.core.errors import ConflictError, StorageError, bounded_repr
@@ -905,7 +908,7 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
     repo, rev, base = _saved(tmp_path)
     content = b"x"
     target = base / "objects" / digest(content)
-    real_lstat_mode = layout1._lstat_mode
+    real_lstat_mode = durable_io.lstat_mode
 
     def racing_lstat_mode(show_id: str, path: Path) -> int | None:
         mode = real_lstat_mode(show_id, path)
@@ -913,7 +916,7 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
             target.write_bytes(content)
         return mode
 
-    monkeypatch.setattr(layout1, "_lstat_mode", racing_lstat_mode)
+    monkeypatch.setattr(layout1, "lstat_mode", racing_lstat_mode)
     _refuse_replacing_existing(monkeypatch)
     landed = repo.transaction(SHOW_ID, {"/renders/a.txt": content}, expected_revision=rev, at=AT)
     assert repo.head(SHOW_ID) == landed.id
@@ -1039,3 +1042,18 @@ def test_regression_commit_refuses_a_symlink_at_a_blob_target(tmp_path: Path) ->
     assert repo.head(SHOW_ID) == head
     assert sorted((base / "trees").iterdir()) == records
     assert outside.read_bytes() == b"x"
+
+
+def test_regression_layout_1_log_longer_than_max_revisions_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refuses to walk a next/ chain longer than the cap instead of reading it all."""
+    monkeypatch.setattr(layout1, "MAX_REVISIONS", 2)
+    repo, rev, _ = _saved(tmp_path)
+    second = _second_revision(repo, rev)
+    assert [r.id for r in repo.revisions(SHOW_ID)] == [rev, second]
+    repo.transaction(SHOW_ID, {"/renders/b.txt": b"x"}, expected_revision=second, at=AT)
+    with pytest.raises(StorageError) as caught:
+        repo.revisions(SHOW_ID)
+    assert caught.value.code == "TOO_LARGE"
+    assert caught.value.context["show"] == SHOW_ID

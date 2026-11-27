@@ -4,6 +4,7 @@ document_repository.py --- implements the Repository protocol over a storage bac
 Contains:
     SHOW_ID_PATTERN: matches the show IDs a repository can store
     REVISION_HASH_DOMAIN: names the hash domain every stored revision ID is computed under
+    revision_id(): computes a revision's ID from its parent, time and changed digests
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
     encode_cache_of(): returns the encode cache a repository shares across its saves
 """
@@ -46,6 +47,25 @@ from e8s.show.storage import ROOT_REVISION
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
 # Frozen at the old library name: every stored revision ID is hashed under it.
 REVISION_HASH_DOMAIN = "showpy.revision"
+
+
+def revision_id(parent: str, at: datetime, changes: Mapping[str, str | None]) -> str:
+    """Computes a revision's ID from its parent, time and the blob digest of each changed path.
+
+    Args:
+        parent: ID of the previous revision; empty for the first.
+        at: When the revision was saved.
+        changes: Each changed path with its new blob digest, or None when the path was deleted.
+
+    Returns:
+        revision_id: The 64-digit hex ID every stored revision is named by.
+
+    >>> from datetime import UTC
+    >>> len(revision_id("", datetime(2026, 11, 24, tzinfo=UTC), {"/a.txt": "0" * 64}))
+    64
+    """
+    body = {"parent": parent, "at": at.isoformat(), "changes": dict(changes)}
+    return content_hash(body, domain=REVISION_HASH_DOMAIN)
 
 
 def _require_show_id(show_id: str) -> None:
@@ -105,28 +125,33 @@ class DocumentRepository:
     designer included; a host that writes raw documents owns them.
 
     Attributes:
-        backend: Where revisions, trees and blobs live.
+        backend: Where revisions, trees and blobs live; read-only.
     """
 
     def __init__(self, backend: RepositoryBackend):
-        self.backend = backend
+        self._backend = backend
         self._decode_cache = DecodeCache()
         self._encode_cache = EncodeCache()
         self._heads: dict[str, Revision] = {}
 
+    @property
+    def backend(self) -> RepositoryBackend:
+        """Returns the backend that stores revisions, trees and blobs; it is fixed at creation."""
+        return self._backend
+
     def shows(self) -> list[str]:
         """Returns the IDs of stored shows, sorted."""
-        return sorted(self.backend.shows())
+        return sorted(self._backend.shows())
 
     def revisions(self, show_id: str) -> list[Revision]:
         """Returns every revision of a show, oldest first; the cost grows with the history."""
         _require_show_id(show_id)
-        return self.backend.log(show_id)
+        return self._backend.log(show_id)
 
     def head(self, show_id: str) -> str:
         """Returns the head revision ID, or ROOT_REVISION before the first save."""
         _require_show_id(show_id)
-        return self.backend.head(show_id)
+        return self._backend.head(show_id)
 
     def get_revision(self, show_id: str, revision_id: str) -> Revision:
         """Returns one revision, raising UnknownRefError with close matches.
@@ -143,7 +168,7 @@ class DocumentRepository:
         rev = self.head(show_id) if revision is None else revision
         if rev == ROOT_REVISION:
             return {}
-        return self.backend.tree(show_id, rev)
+        return self._backend.tree(show_id, rev)
 
     def paths(self, show_id: str, revision: str | None = None) -> list[str]:
         """Returns the stored document paths at a revision (default head), sorted."""
@@ -152,7 +177,7 @@ class DocumentRepository:
     def read(self, show_id: str, path: str, revision: str | None = None) -> bytes | None:
         """Returns a document at a revision (default head), or None when absent."""
         digest = self._tree(show_id, revision).get(path)
-        return None if digest is None else self.backend.blob(show_id, digest)
+        return None if digest is None else self._backend.blob(show_id, digest)
 
     def documents(self, show_id: str, revision: str | None = None) -> Mapping[str, bytes]:
         """Returns the stored documents at a revision (default head), reading blobs on lookup.
@@ -168,7 +193,7 @@ class DocumentRepository:
         >>> repo.documents("s")["/renders/a.txt"]
         b'hi'
         """
-        blob = functools.cache(functools.partial(self.backend.blob, show_id))
+        blob = functools.cache(functools.partial(self._backend.blob, show_id))
         return LazyBlobs(self._tree(show_id, revision), blob)
 
     def _require_new_show_id(self, show_id: str) -> None:
@@ -193,7 +218,7 @@ class DocumentRepository:
     def _require_head(self, show_id: str, expected: str) -> str:
         head = self.head(show_id)
         if head != expected:
-            raise conflict_error(show_id, expected, self.backend.log(show_id, since=expected))
+            raise conflict_error(show_id, expected, self._backend.log(show_id, since=expected))
         return head
 
     def _head_revision(self, show_id: str, head: str) -> Revision:
@@ -215,7 +240,7 @@ class DocumentRepository:
             return (
                 added[blob_digest]
                 if blob_digest in added
-                else self.backend.blob(show_id, blob_digest)
+                else self._backend.blob(show_id, blob_digest)
             )
 
         require_valid_digests(old, new, blob, self._decode_cache)
@@ -267,19 +292,14 @@ class DocumentRepository:
                     context={"show": show_id},
                 )
             return self._head_revision(show_id, head)
-        body = {
-            "parent": expected_revision,
-            "at": at.isoformat(),
-            "changes": {p: new.get(p) for p in changed},
-        }
         revision = Revision(
-            id=content_hash(body, domain=REVISION_HASH_DOMAIN),
+            id=revision_id(expected_revision, at, {p: new.get(p) for p in changed}),
             parent=expected_revision,
             at=at,
             changed=changed,
         )
         self._require_valid_tree(show_id, old, new, blobs)
-        self.backend.commit(show_id, revision, new, blobs)
+        self._backend.commit(show_id, revision, new, blobs)
         self._heads[show_id] = revision
         return revision
 

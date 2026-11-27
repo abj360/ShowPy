@@ -18,8 +18,8 @@ from pathlib import Path
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError, VersionError
 from e8s.core.strict_json import parse_strict_json
+from e8s.show.durable_io import read_capped
 from e8s.show.layout1 import LINK_DIR, ROOT_LINK
-from e8s.show.safe_read import read_capped
 
 LAYOUT_FILE = "layout.json"
 LAYOUT_FORMAT = "e8.repository"
