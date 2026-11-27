@@ -23,20 +23,23 @@ class FsckFinding(FrozenModel):
 
     Attributes:
         code: Short name of the problem kind.
-        path: Repository path the problem is at.
+        path: Repository path the problem is at, relative to the root, with `/` separators.
         message: What is wrong.
+        show: ID of the show the problem is in; empty outside a show, or where no readable
+            manifest names the show.
     """
 
     code: str
     path: str
     message: str
+    show: str = ""
 
 
 class FsckReport(FrozenModel):
     """Holds every finding of a repository check and whether the repository passed.
 
     Attributes:
-        findings: Problems found, in the order the check met them.
+        findings: Problems found, sorted by show, code and path.
         ok: Whether the repository passes; the check decides, as some findings do not fail it.
     """
 

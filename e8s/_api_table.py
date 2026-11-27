@@ -379,6 +379,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("format_tid", "e8s.core.ids", "format_tid"),
     ("frames", "e8s.choreo.read", "frames"),
     ("from_json", "e8s.time.timeline", "from_json"),
+    ("fsck", "e8s.show.fsck", "fsck"),
     ("gate", "e8s.choreo.form_ops", "gate"),
     ("generated_form", "e8s.choreo.forms", "generated_form"),
     ("get_proposal", "e8s.show.proposals", "get_proposal"),

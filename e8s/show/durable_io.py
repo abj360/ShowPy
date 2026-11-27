@@ -13,7 +13,9 @@ Contains:
     READ_FLAGS: opens stored files without following symlinks or blocking on FIFOs
     SYMLINK_OPEN_ERRNOS: lists the errno values an O_NOFOLLOW open of a symlink raises
     mapped_io(): turns an OSError raised inside a block into a StorageError with a code and hint
+    lstat_info(): returns the lstat result of a path, or None when it is absent
     lstat_mode(): returns the lstat mode of a path, or None when it is absent
+    listed_entries(): lists a folder's entries with their lstat results, sorted by name
     is_redirect(): tells whether a path is a symlink or a Windows junction
     read_capped(): reads a regular file of at most a given size, reporting problems through a hook
     NOFOLLOW_FLAG: refuses to open a symlink where the system has the flag
@@ -34,6 +36,7 @@ Contains:
     write_new(): writes a new file's bytes in one call, raising when it writes fewer
     create_new(): creates a file under a new name, writes it in one call and flushes it
     remove_file(): removes a file when it exists
+    is_stale_temp(): tells whether a folder entry is a temp file last modified before a cut-off
     remove_stale_temps(): removes the temp files in a folder last modified before a cut-off
 """
 
@@ -210,13 +213,65 @@ def mapped_io(show_id: str, path: Path, *, is_link: bool = False) -> Iterator[No
         raise _storage_error(show_id, error, path, is_link=is_link) from error
 
 
-def lstat_mode(show_id: str, path: Path) -> int | None:
-    """Returns the lstat mode of `path`, or None if absent; ENAMETOOLONG is never hidden."""
+def lstat_info(show_id: str, path: Path) -> os.stat_result | None:
+    """Returns the lstat result of `path`, or None if absent; ENAMETOOLONG is never hidden."""
     with mapped_io(show_id, path):
         try:
-            return os.lstat(path).st_mode
+            return os.lstat(path)
         except FileNotFoundError:
             return None
+
+
+def lstat_mode(show_id: str, path: Path) -> int | None:
+    """Returns the lstat mode of `path`, or None if absent; ENAMETOOLONG is never hidden."""
+    info = lstat_info(show_id, path)
+    return None if info is None else info.st_mode
+
+
+def listed_entries(
+    folder: Path, *, follows_links: bool = False
+) -> list[tuple[str, os.stat_result]]:
+    """Lists a folder's entries with their lstat results, sorted by name.
+
+    The folder is opened without following a symlink where the system allows it, so a folder
+    swapped for a link after its caller checked it is refused rather than listed. An entry that
+    vanishes between the listing and its lstat was removed by a writer, so it is left out.
+
+    Args:
+        folder: Existing folder.
+        follows_links: Whether `folder` may be a symlink; true only for the repository root,
+            which a host may link, while every folder under it is checked to be a real folder.
+
+    Returns:
+        entries: Each entry's name and lstat result, sorted by name.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     _ = (Path(folder) / "b").write_bytes(b"x")
+    ...     [(name, info.st_size) for name, info in listed_entries(Path(folder))]
+    [('b', 1)]
+    """
+    if IS_WINDOWS or os.scandir not in os.supports_fd:
+        with os.scandir(folder) as entries:
+            return _entry_stats(entries)
+    descriptor = os.open(
+        folder, DIRECTORY_FLAGS & ~NOFOLLOW_FLAG if follows_links else DIRECTORY_FLAGS
+    )
+    try:
+        with os.scandir(descriptor) as entries:
+            return _entry_stats(entries)
+    finally:
+        os.close(descriptor)
+
+
+def _entry_stats(entries: Iterator[os.DirEntry[str]]) -> list[tuple[str, os.stat_result]]:
+    listed: list[tuple[str, os.stat_result]] = []
+    for entry in entries:
+        try:
+            listed.append((entry.name, entry.stat(follow_symlinks=False)))
+        except FileNotFoundError:
+            continue
+    return sorted(listed, key=lambda item: item[0])
 
 
 def is_redirect(path: Path, mode: int) -> bool:
@@ -408,6 +463,21 @@ def remove_file(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
+def is_stale_temp(name: str, info: os.stat_result, cutoff: datetime) -> bool:
+    """Tells whether a folder entry is a temp file whose modification time is before `cutoff`.
+
+    Args:
+        name: The entry's name; a temp file's starts with TEMP_PREFIX.
+        info: The entry's lstat result; only a regular file counts.
+        cutoff: Moment before which a temp file counts as left behind by a crashed writer.
+    """
+    return (
+        name.startswith(TEMP_PREFIX)
+        and stat.S_ISREG(info.st_mode)
+        and info.st_mtime < cutoff.timestamp()
+    )
+
+
 def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
     """Removes the temp files in `folder` whose modification time is before `cutoff`.
 
@@ -418,7 +488,6 @@ def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
         folder: Folder that holds the temp files; it must exist.
         cutoff: Moment before which a temp file counts as left behind by a crashed writer.
     """
-    cutoff_s = cutoff.timestamp()
     with os.scandir(folder) as entries:
         for entry in entries:
             if not entry.name.startswith(TEMP_PREFIX):
@@ -427,5 +496,5 @@ def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
                 info = entry.stat(follow_symlinks=False)
             except FileNotFoundError:
                 continue
-            if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff_s:
+            if is_stale_temp(entry.name, info, cutoff):
                 remove_file(Path(entry.path))
