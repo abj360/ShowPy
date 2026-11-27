@@ -5,6 +5,7 @@
 //!     PANIC_DETAIL_CHARS: caps the panic payload a CORE_PANIC message repeats
 //!     guard(): runs one core call, raising its error, or a panic it caught, as an e8s exception
 //!     to_py_err(): builds the e8s exception a core error names
+//!     loaded(): finds a loaded module by its current entry in `sys.modules`
 //!     add_probes(): adds the private boundary hook `_finite_probe` to a module
 
 use std::any::Any;
@@ -13,12 +14,16 @@ use std::panic::{self, PanicHookInfo, UnwindSafe};
 use std::sync::Once;
 
 use e8s_core::base::{ContextValue, CoreError, CoreResult, ErrorCode, ErrorKind, require_finite};
+use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{PyDict, PyString};
 
 /// The hint of every CORE_PANIC error.
 pub const PANIC_HINT: &str = "This is a bug in e8s; report it with the function name.";
 const ERRORS_MODULE: &str = "e8s.core.errors";
+/// The interpreter's table of loaded modules, kept so no raised error imports anything.
+static MODULES: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 const CODES_MODULE: &str = "e8s.core.error_codes";
 const CODE_ENUM: &str = "ErrorCode";
 /// Caps the characters of the panic payload a CORE_PANIC message repeats.
@@ -63,12 +68,23 @@ pub fn to_py_err(py: Python<'_>, err: &CoreError) -> PyErr {
     build_exception(py, err).unwrap_or_else(|failure| failure)
 }
 
+/// Finds a loaded module by its current entry in `sys.modules`, importing it when absent.
+///
+/// A reload or a re-import changes the entry, so the classes and the enum are always the
+/// current ones.
+pub fn loaded<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    match MODULES
+        .import(py, "sys", "modules")?
+        .get_item(PyString::intern(py, name))
+    {
+        Ok(module) => Ok(module),
+        Err(_) => Ok(py.import(name)?.into_any()),
+    }
+}
+
 fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
-    let class = py.import(ERRORS_MODULE)?.getattr(err.kind().class_name())?;
-    let code = py
-        .import(CODES_MODULE)?
-        .getattr(CODE_ENUM)?
-        .getattr(err.code().as_str())?;
+    let class =
+        loaded(py, ERRORS_MODULE)?.getattr(PyString::intern(py, err.kind().class_name()))?;
     let context = PyDict::new(py);
     for (key, value) in err.context() {
         match value {
@@ -79,12 +95,24 @@ fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
         }?;
     }
     let kwargs = PyDict::new(py);
-    kwargs.set_item("hint", err.hint())?;
-    kwargs.set_item("context", context)?;
-    kwargs.set_item("code", code)?;
+    kwargs.set_item(intern!(py, "hint"), err.hint())?;
+    kwargs.set_item(intern!(py, "context"), context)?;
+    if !has_default_code(&class, err)? {
+        let code = loaded(py, CODES_MODULE)?
+            .getattr(CODE_ENUM)?
+            .getattr(PyString::intern(py, err.code().as_str()))?;
+        kwargs.set_item(intern!(py, "code"), code)?;
+    }
     Ok(PyErr::from_value(
         class.call((err.message(),), Some(&kwargs))?,
     ))
+}
+
+/// Tells whether the error's code is the class's own `default_code`, which the class applies
+/// when no code is passed; the default is read from the Python class, never copied here.
+fn has_default_code(class: &Bound<'_, PyAny>, err: &CoreError) -> PyResult<bool> {
+    let default = class.getattr(intern!(class.py(), "default_code"))?;
+    Ok(default.extract::<&str>()? == err.code().as_str())
 }
 
 /// Turns a caught panic into the CORE_PANIC error of the guarded function.

@@ -34,6 +34,12 @@ Contains:
         racing revision when it lands between the head check and the commit
     test_regression_file_conflict_lists_every_revision_since_the_parent: raises ConflictError naming
         every racing revision when several land before a file-backend commit
+    test_regression_new_show_id_follows_the_id_rule: refuses a new show whose ID fails check_id or
+        differs from its NFC form, in memory or on disk, writing nothing
+    test_stored_show_id_outside_the_id_rule_keeps_committing: extends a show stored under a
+        hyphenated ID before the rule existed
+    test_regression_root_write_on_a_stored_hyphenated_show_is_a_conflict: raises ConflictError,
+        not the new-show refusal, for a write expecting the root on a stored show
 """
 
 import contextlib
@@ -61,6 +67,7 @@ from e8s.show.file_repository import FileRepository
 from e8s.show.files import LIMITS_DOC, WAIVERS_DOC
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
+from e8s.show.layout1 import _FileBackend
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.show_io import load_show, save_show
 from e8s.show.storage import ROOT_REVISION, Repository
@@ -69,7 +76,7 @@ from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries, fails_after, replaced_form_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 BARRIER_TIMEOUT_S = 1.0
 THREAD_COUNT = 8
 MAX_SHOW_ID_LENGTH = 300
@@ -151,8 +158,6 @@ def _created_folders(repo: FileRepository, show_id: str) -> set[str] | None:
     return _folders(repo.root) - before
 
 
-@pytest.mark.defect("UP-9.7-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-14")
 def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path: Path) -> None:
     """Keeps IDs differing only by case from sharing a folder name (audit 9.7 item 8)."""
     repo = FileRepository(tmp_path)
@@ -217,8 +222,8 @@ def test_regression_device_name_is_refused_before_its_path_is_touched(
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot create a device-name folder")
 def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) -> None:
     """Reads and extends a show stored under a device name before the refusal existed."""
+    head = _create(DocumentRepository(_FileBackend(tmp_path)), SHOW_ID)
     repo = FileRepository(tmp_path)
-    head = _create(repo, SHOW_ID)
     stored = repo.get_show(SHOW_ID)
     (tmp_path / SHOW_ID).rename(tmp_path / "CON")
     assert repo.shows() == ["CON"]
@@ -231,8 +236,6 @@ def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) 
     assert restarted.value.code == DEVICE_NAME_CODE
 
 
-@pytest.mark.defect("UP-9.7-16")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-16")
 def test_regression_trailing_dot_show_id_is_rejected_or_stored_safely(tmp_path: Path) -> None:
     """Rejects a show ID ending in a dot or stores it under another name (audit 9.7 item 8)."""
     created = _created_folders(FileRepository(tmp_path), "abc.")
@@ -396,3 +399,68 @@ def test_regression_file_conflict_lists_every_revision_since_the_parent(tmp_path
     assert caught.value.context["head"] == landed[-1].id == repo.head(SHOW_ID)
     assert [c["id"] for c in context_entries(caught.value, "changes")] == [r.id for r in landed]
     assert "/renders/a.txt" not in repo.paths(SHOW_ID)
+
+
+NEW_SHOW_IDS_REFUSED = ["show-1", "abc.", "a" * 65, "\u212a"]
+
+
+@pytest.mark.parametrize("show_id", NEW_SHOW_IDS_REFUSED)
+@pytest.mark.parametrize("backend", ["memory", "file"])
+def test_regression_new_show_id_follows_the_id_rule(
+    tmp_path: Path, show_id: str, backend: str
+) -> None:
+    """Refuses a new show ID that fails check_id or is not NFC (Kelvin sign), writing nothing."""
+    repo: InMemoryRepository | FileRepository = (
+        InMemoryRepository() if backend == "memory" else FileRepository(tmp_path)
+    )
+    with pytest.raises(StorageError) as caught:
+        _create(repo, show_id)
+    assert caught.value.code == DEVICE_NAME_CODE
+    assert caught.value.context == {"show": show_id}
+    assert repo.shows() == []
+    assert _folders(tmp_path) == set()
+
+
+STORED_HYPHENATED_ID = "show-1"
+LAYOUT_1_HYPHENATED_ID = "my-show"
+
+
+def _stored_hyphenated_show() -> tuple[InMemoryRepository, Revision]:
+    """Stores a show under a hyphenated ID through the backend, as releases before the rule did."""
+    repo = InMemoryRepository()
+    seed = _create(repo, "seed")
+    tree = dict(repo.backend.tree("seed", seed))
+    revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(tree)))
+    repo.backend.commit(STORED_HYPHENATED_ID, revision, tree, {})
+    return repo, revision
+
+
+def test_stored_show_id_outside_the_id_rule_keeps_committing(tmp_path: Path) -> None:
+    """Extends shows stored under hyphenated IDs, in memory and in a layout-1 root."""
+    repo, revision = _stored_hyphenated_show()
+    landed = repo.transaction(
+        STORED_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
+    )
+    assert repo.head(STORED_HYPHENATED_ID) == landed.id
+    assert "/renders/a.txt" in repo.paths(STORED_HYPHENATED_ID)
+    documents = repo.documents("seed")
+    blobs = {blob_digest(documents[path]): documents[path] for path in documents}
+    _FileBackend(tmp_path).commit(
+        LAYOUT_1_HYPHENATED_ID, revision, dict(repo.backend.tree("seed", repo.head("seed"))), blobs
+    )
+    legacy = FileRepository(tmp_path)
+    extended = legacy.transaction(
+        LAYOUT_1_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
+    )
+    assert legacy.head(LAYOUT_1_HYPHENATED_ID) == extended.id
+    assert legacy.shows() == [LAYOUT_1_HYPHENATED_ID]
+
+
+def test_regression_root_write_on_a_stored_hyphenated_show_is_a_conflict() -> None:
+    """Raises ConflictError naming the head when a stored hyphenated show is written from root."""
+    repo, revision = _stored_hyphenated_show()
+    with pytest.raises(ConflictError) as caught:
+        repo.transaction(
+            STORED_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision="", at=AT
+        )
+    assert caught.value.context["head"] == revision.id
