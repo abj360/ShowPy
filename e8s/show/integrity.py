@@ -10,6 +10,7 @@ Contains:
         cast.json
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
+    LazyBlobs.cached(): returns the tree reading each blob through a bounded cache
     LazyBlobs.digests: returns the content digest of each path's blob
     require_new_set_keys(): checks every set key and transition folder a commit stores in a
         folder the base lacks
@@ -24,6 +25,7 @@ import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from functools import partial
 from types import MappingProxyType
+from typing import Self
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.error_context import bounded_repr
@@ -46,6 +48,7 @@ from e8s.show.models import Show
 from e8s.show.role_documents import CAST_ROOT, require_cast_beside_roles
 from e8s.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 from e8s.show.structured import TEXT_SUFFIXES, require_structured
+from e8s.show.workspace_caches import BlobCache
 
 KNOWN_ROOTS = (
     "/show/",
@@ -173,9 +176,16 @@ class LazyBlobs(Mapping[str, bytes]):
     (True, b'hi')
     """
 
-    def __init__(self, digests: Mapping[str, str], blob: Callable[[str], bytes]) -> None:
+    def __init__(
+        self,
+        digests: Mapping[str, str],
+        blob: Callable[[str], bytes],
+        *,
+        uncached: Callable[[str], bytes] | None = None,
+    ) -> None:
         self._digests = digests
         self._blob = blob
+        self._uncached = blob if uncached is None else uncached
 
     def __getitem__(self, path: str) -> bytes:
         digest = self._digests[path]
@@ -197,6 +207,15 @@ class LazyBlobs(Mapping[str, bytes]):
 
     def __len__(self) -> int:
         return len(self._digests)
+
+    def cached(self, cache: BlobCache) -> Self:
+        """Returns the same tree reading each blob through `cache`, so repeat lookups read none.
+
+        The blobs bypass any memo the tree's own reader keeps, so `cache` alone bounds the bytes
+        held.
+        """
+        load = self._uncached
+        return type(self)(self._digests, lambda digest: cache.read(digest, load))
 
     @property
     def digests(self) -> Mapping[str, str]:
