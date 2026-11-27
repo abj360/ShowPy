@@ -225,10 +225,9 @@ def _unflagged_forms(show: Show, record: Pin) -> list[str]:
 
 
 def _unflagged_rows(show: Show, record: Pin) -> list[str]:
-    tid = parse_tid(record.id)
-    spec = show.transition(tid)
-    entities = dict.fromkeys([*show.set(tid[1]).entity_ids(), *spec.rows])
-    return [e for e in entities if not spec.row(e).locked]
+    # a spot added after the pin has no row yet, and adding it is a legal edit
+    rows = show.transition(parse_tid(record.id)).rows
+    return [entity for entity, row in rows.items() if not row.locked]
 
 
 def _unflagged(show: Show, record: Pin) -> list[str]:

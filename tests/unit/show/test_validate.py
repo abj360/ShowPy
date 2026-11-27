@@ -66,6 +66,10 @@ Contains:
         lists
     test_validate_show_accepts_a_set_whose_forms_are_all_listed: raises no stale-form warning when
         every form is listed
+    test_regression_transition_pin_allows_a_spot_added_after_it: reports nothing when a spot joins
+        a transition-pinned pair
+    test_regression_transition_pin_reports_an_existing_unlocked_row: reports a transition pin whose
+        stored row is not locked
 """
 
 import math
@@ -74,6 +78,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from e8s.cast.spots import add_spot
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Placement, PlacementPatch, Set
 from e8s.choreo.path_models import (
@@ -585,7 +590,7 @@ def _issues(show: Show, code: str) -> list[ValidationIssue]:
 def test_regression_pin_issues_carry_the_pin_item_key() -> None:
     """Names the pin item in each pin issue, a transition by its stored folder."""
     pins = (Pin(target="form", id="ghost"), Pin(target="transition", id="1->2"))
-    show = two_set_show().replace(pins=pins)
+    show = with_rows({"T1": PathRow(entity=SpotId("T1"), start=2.0)}).replace(pins=pins)
     assert _item_of(show, "UNKNOWN_PIN") == ItemKey(kind="pin", path=("form", "ghost"))
     assert _item_of(show, "PIN_MISMATCH") == ItemKey(kind="pin", path=("transition", "1-2"))
 
@@ -620,3 +625,16 @@ def test_regression_facing_override_issues_carry_the_overrides_item_key() -> Non
     show = _edited(facing_overrides=(_override("ZZ", start=PAST_SHOW_COUNT, end=800.0),))
     for code in ("UNKNOWN_SPOT", "PAST_THE_SHOW"):
         assert _item_of(show, code) == ItemKey(kind="facing_override", path=())
+
+
+def test_regression_transition_pin_allows_a_spot_added_after_it() -> None:
+    """Reports nothing when a spot joins a transition-pinned pair, since it has no row yet."""
+    show = add_spot(pin(two_set_show(), "transition", "1->2"), (1.0, 2.0), "trumpets", "2")
+    assert validate_show(show).ok
+
+
+def test_regression_transition_pin_reports_an_existing_unlocked_row() -> None:
+    """Reports a transition pin whose stored row is not locked."""
+    show = with_rows({"T2": PathRow(entity=SpotId("T2"), start=2.0)})
+    (issue,) = _issues(show.replace(pins=(Pin(target="transition", id="1->2"),)), "PIN_MISMATCH")
+    assert "T2" in issue.message
