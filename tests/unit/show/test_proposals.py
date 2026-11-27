@@ -30,6 +30,13 @@ Contains:
     test_preview_of_a_conflicting_proposal_lists_only_its_conflicts: previews conflicts and
         nothing else
     test_is_stale_agrees_with_the_merge_conflicts: names the same items as accept refuses
+    test_regression_preview_does_not_move_the_workspace: keeps the caller's base revision, so a
+        stale write after a preview still conflicts
+    test_rescale_merges_when_the_head_left_its_transition_alone: lands a rescale beside an edit
+        elsewhere
+    test_rescale_conflicts_with_a_row_the_head_added: refuses a rescale beside a head-added row
+    test_rescale_conflicts_with_a_row_the_head_edited_to_the_rescaled_value: refuses an equal
+        value the head wrote against the base's counts
     test_regression_accept_by_merge_respects_a_pin_added_after_the_base: refuses a merge that
         changes an item pinned on the head
 """

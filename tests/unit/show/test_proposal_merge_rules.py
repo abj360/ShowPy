@@ -20,6 +20,10 @@ Contains:
         accepted state stored at the head
     test_regression_conflict_message_lists_five_and_counts_the_rest: bounds the message and the
         context list of a proposal with many conflicts
+    test_rescale_to_the_same_counts_merges_beside_a_head_row_edit: leaves a transition alone when
+        the rescale keeps its counts
+    test_rescale_and_merge_report_a_row_both_flag_once: lists a row the merge and the rescale rule
+        both flag one time
 """
 
 from collections.abc import Callable, Mapping
@@ -186,3 +190,25 @@ def test_regression_conflict_message_lists_five_and_counts_the_rest() -> None:
     assert isinstance(listed, list)
     assert len(listed) == 5
     assert info.value.context["conflict_count"] == 6
+
+
+def _edit_row(head: Show, start: float) -> Show:
+    row = PathRow(entity=SpotId("T1"), start=start)
+    return head.replace(transitions=(_spec(head, rows={SpotId("T1"): row}),))
+
+
+def test_rescale_to_the_same_counts_merges_beside_a_head_row_edit() -> None:
+    """Does not treat a rescale to the current counts as a retime of the transition."""
+    base = _edit_row(two_set_show(), 2.0)
+    same = CountsOp(set_id=SetId("2"), counts=base.set("2").counts, rescale=True)
+    designer = _head_edits(base, same, lambda head: _edit_row(head, 3.0))
+    assert not is_stale(designer, "p1")
+
+
+def test_rescale_and_merge_report_a_row_both_flag_once() -> None:
+    """Lists a row the merge and the rescale rule both flag a single time."""
+    base = _edit_row(two_set_show(), 2.0)
+    rescale = CountsOp(set_id=SetId("2"), counts=2 * base.set("2").counts, rescale=True)
+    designer = _head_edits(base, rescale, lambda head: _edit_row(head, 3.0))
+    conflicts = preview_proposal(designer, "p1").conflicts
+    assert [(c.key.kind, c.key.path) for c in conflicts] == [("path_row", ("1-2", "T1"))]
