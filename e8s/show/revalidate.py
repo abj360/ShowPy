@@ -30,7 +30,6 @@ from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from e8s.choreo.models import Set
-from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import E8sError
 from e8s.core.ids import FormId, TransitionId
 from e8s.core.validation import ValidationIssue, ValidationReport
@@ -38,6 +37,20 @@ from e8s.show.change_models import ItemKey
 from e8s.show.item_table import FORMS, PLACEMENTS, TIMING, set_keys_by_id, transition_key
 from e8s.show.items import changes
 from e8s.show.models import Pin, Show
+from e8s.show.revalidate_kept import (
+    FAR_OFF,
+    FORM_FIELD,
+    FORM_ISSUES,
+    INACTIVE,
+    OVERRIDES,
+    PINS,
+    SETS,
+    TRANSITIONS,
+    Kept,
+    UnboundedError,
+    item_key,
+    kept_issues,
+)
 from e8s.show.set_keys import set_key
 from e8s.show.validate import (
     ShowChecks,
@@ -54,91 +67,8 @@ from e8s.show.validate_placements import far_off_issues, inactive_issues
 from e8s.show.validate_refs import form_issues, override_issues, set_form_issues
 from e8s.show.validate_values import non_finite_issues, too_long_issues
 
-type _Kept = Mapping[Hashable, Sequence[ValidationIssue]]
-
 WHOLE_SHOW_KINDS = frozenset({"set_order", "spot_order", "sheet", "timeline"})
 OVERRIDE_KINDS = frozenset({"facing_override", "spot", "group", "selection", "show"})
-TRANSITION_KINDS = frozenset({"path_row", "route", "transition"})
-SET_CHECK_CODES = frozenset({ErrorCode.MISSING_SPOT, ErrorCode.UNKNOWN_SPOT, ErrorCode.STALE_FORM})
-RERUN_SET_CODES = frozenset({ErrorCode.UNKNOWN_FORM, ErrorCode.TIME_RANGE})
-SETS = "sets"
-TRANSITIONS = "transitions"
-FORM_ISSUES = "forms"
-PINS = "pins"
-OVERRIDES = "overrides"
-INACTIVE = "inactive"
-FAR_OFF = "far_off"
-PLACEMENT_BUCKETS: Mapping[str, str] = {
-    ErrorCode.MEMBER_MISMATCH: FORM_ISSUES,
-    ErrorCode.INACTIVE_ON_FIELD: INACTIVE,
-    ErrorCode.FAR_OFF_SHEET: FAR_OFF,
-    ErrorCode.UNKNOWN_FORM: SETS,
-    ErrorCode.NOT_IN_FORM: SETS,
-}
-FORM_FIELD = "form"
-
-
-class _UnboundedError(Exception):
-    """Signals that the edit or the previous report cannot be bounded by item."""
-
-
-def _item(issue: ValidationIssue) -> ItemKey | None:
-    raw = issue.context.get("item")
-    if raw is None:
-        return None
-    try:
-        return ItemKey.from_json(raw)
-    except E8sError as error:
-        raise _UnboundedError from error
-
-
-def _placement_slot(issue: ValidationIssue, key: ItemKey) -> tuple[str, Hashable]:
-    bucket = PLACEMENT_BUCKETS.get(issue.code)
-    if bucket is None:
-        raise _UnboundedError
-    if bucket != FORM_ISSUES:
-        return bucket, key.path[0]
-    form = issue.context.get(FORM_FIELD)
-    if not isinstance(form, str):
-        raise _UnboundedError
-    return bucket, form
-
-
-def _set_slot(issue: ValidationIssue, key: ItemKey) -> tuple[str, Hashable] | None:
-    if issue.code in SET_CHECK_CODES:
-        return SETS, key.path[0]
-    if issue.code in RERUN_SET_CODES:
-        return None
-    raise _UnboundedError
-
-
-def _slot(issue: ValidationIssue) -> tuple[str, Hashable] | None:
-    if issue.code == ErrorCode.NOT_FINITE:
-        raise _UnboundedError
-    key = _item(issue)
-    if key is None:
-        return None
-    if key.kind in TRANSITION_KINDS:
-        return TRANSITIONS, key.path[0]
-    slots: Mapping[str, Callable[[], tuple[str, Hashable] | None]] = {
-        "placement": lambda: _placement_slot(issue, key),
-        "set": lambda: _set_slot(issue, key),
-        "form": lambda: (FORM_ISSUES, key.path[0]),
-        "pin": lambda: (PINS, key.path),
-        "facing_override": lambda: (OVERRIDES, ()),
-    }
-    if key.kind not in slots:
-        raise _UnboundedError
-    return slots[key.kind]()
-
-
-def _kept(previous: ValidationReport) -> dict[str, _Kept]:
-    kept: dict[str, dict[Hashable, list[ValidationIssue]]] = {}
-    for issue in previous.issues:
-        slot = _slot(issue)
-        if slot is not None:
-            kept.setdefault(slot[0], {}).setdefault(slot[1], []).append(issue)
-    return dict(kept)
 
 
 def _grouped(pairs: Iterable[tuple[str, str]]) -> dict[str, frozenset[str]]:
@@ -182,7 +112,7 @@ class _Touched:
 
 def _touched(keys: Sequence[ItemKey]) -> _Touched:
     if any(k.kind in WHOLE_SHOW_KINDS or (k.kind == "set" and k.role is None) for k in keys):
-        raise _UnboundedError
+        raise UnboundedError
     return _Touched(
         placements=_grouped((k.path[0], k.path[1]) for k in keys if k.kind == "placement"),
         set_roles=_grouped((k.role, k.path[0]) for k in keys if k.kind == "set" and k.role),
@@ -213,7 +143,7 @@ class _Run:
 
     before: Show
     after: Show
-    kept: Mapping[str, _Kept]
+    kept: Mapping[str, Kept]
     touched: _Touched
     keys: Mapping[str, str]
     sets: frozenset[str]
@@ -234,7 +164,7 @@ def _form_owners(
     return {keys[owner] for owner in owners if owner in keys}
 
 
-def _referring_sets(kept: Mapping[str, _Kept], forms: frozenset[str]) -> set[str]:
+def _referring_sets(kept: Mapping[str, Kept], forms: frozenset[str]) -> set[str]:
     return {
         str(unit)
         for unit, issues in kept.get(SETS, {}).items()
@@ -247,9 +177,9 @@ def _run(previous: ValidationReport, before: Show, after: Show) -> _Run:
     try:
         change_set = changes(before, after)
     except E8sError as error:
-        raise _UnboundedError from error
+        raise UnboundedError from error
     touched = _touched([change.key for change in change_set.changes])
-    kept = _kept(previous)
+    kept = kept_issues(previous)
     keys = set_keys_by_id(after)
     owners = _form_owners(before, after, touched.forms, keys)
     edited = touched.sets_with(PLACEMENTS, FORMS)
@@ -277,9 +207,9 @@ def _set_issues(run: _Run, candidate: Set) -> Sequence[ValidationIssue]:
 def _by_spot(issues: Iterable[ValidationIssue]) -> dict[str, list[ValidationIssue]]:
     grouped: dict[str, list[ValidationIssue]] = defaultdict(list)
     for issue in issues:
-        key = _item(issue)
+        key = item_key(issue)
         if key is None or key.kind != "path_row":
-            raise _UnboundedError
+            raise UnboundedError
         grouped[key.path[1]].append(issue)
     return grouped
 
@@ -288,7 +218,7 @@ def _recompiled(run: _Run, tid: TransitionId, spots: frozenset[str]) -> list[Val
     kept = list(run.previous(TRANSITIONS, transition_key(run.keys, tid)))
     head = path_checks(run.before, run.before.transition(tid))
     if kept[: len(head)] != head:
-        raise _UnboundedError
+        raise UnboundedError
     old = _by_spot(kept[len(head) :])
     spec = run.after.transition(tid)
     cast = run.after.cast.ids()
@@ -352,9 +282,9 @@ def _pin_issues(run: _Run) -> list[ValidationIssue]:
     fresh: dict[Hashable, list[ValidationIssue]] = defaultdict(list)
     checked = [record for record, path in zip(pins, paths, strict=True) if path in redo]
     for issue in pin_issues(run.after, checked, scoped=True):
-        key = _item(issue)
+        key = item_key(issue)
         if key is None:
-            raise _UnboundedError
+            raise UnboundedError
         fresh[key.path].append(issue)
     return [
         i for path in paths for i in (fresh[path] if path in redo else run.previous(PINS, path))
@@ -409,11 +339,11 @@ def _placements(run: _Run) -> list[ValidationIssue]:
 
 def _checks(previous: ValidationReport, before: Show, after: Show) -> ShowChecks:
     if too_long_issues(before) and not too_long_issues(after):
-        raise _UnboundedError
+        raise UnboundedError
     run = _run(previous, before, after)
     folders = [transition_key(run.keys, tid) for tid in after.transition_ids()]
     if len(set(folders)) < len(folders):
-        raise _UnboundedError
+        raise UnboundedError
     return ShowChecks(
         set_issues=lambda candidate: _set_issues(run, candidate),
         transition_issues=lambda tid: _transition_issues(run, tid),
@@ -448,5 +378,5 @@ def revalidate(previous: ValidationReport, before: Show, after: Show) -> Validat
     """
     try:
         return run_checks(after, _checks(previous, before, after))
-    except _UnboundedError:
+    except UnboundedError:
         return validate_show(after)
