@@ -337,6 +337,7 @@ def _show() -> dict[str, tuple[Changes, ...]]:
                 "paths": (Example("TransitionSpec"),),
                 "forms": (Example("Form"),),
                 "blocked": ("set 1 is pinned",),
+                "conflicts": (Example("MergeConflict"),),
             },
         ),
     }
