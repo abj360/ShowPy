@@ -174,6 +174,20 @@ def _referring_sets(kept: Mapping[str, Kept], forms: frozenset[str]) -> set[str]
 
 
 def _run(previous: ValidationReport, before: Show, after: Show) -> _Run:
+    """Reads the edit and the previous report into the units each check reruns.
+
+    Sets rerun when their placements or form list changed, when they own a changed form, or
+    when a kept set issue names a changed form; forms rerun when changed or when their set's
+    placements or form list changed.
+
+    Args:
+        previous: validate_show's report of `before`.
+        before: The show before the edit.
+        after: The edited show.
+
+    Returns:
+        run: Both shows, the kept issues by bucket and unit, and the units to recheck.
+    """
     try:
         change_set = changes(before, after)
     except E8sError as error:
@@ -215,6 +229,20 @@ def _by_spot(issues: Iterable[ValidationIssue]) -> dict[str, list[ValidationIssu
 
 
 def _recompiled(run: _Run, tid: TransitionId, spots: frozenset[str]) -> list[ValidationIssue]:
+    """Rechecks one transition by recompiling only the given spots' paths.
+
+    The transition's own checks rerun whole; each other spot keeps its previous path issues.
+    Raises UnboundedError when the kept issues do not start with the transition's previous
+    own checks, since the per-spot issues after them could then be stale.
+
+    Args:
+        run: The revalidation in progress.
+        tid: The transition to recheck.
+        spots: Spots whose placements or rows changed.
+
+    Returns:
+        issues: The transition's issues, in the order validate_paths gives them.
+    """
     kept = list(run.previous(TRANSITIONS, transition_key(run.keys, tid)))
     head = path_checks(run.before, run.before.transition(tid))
     if kept[: len(head)] != head:
@@ -228,6 +256,19 @@ def _recompiled(run: _Run, tid: TransitionId, spots: frozenset[str]) -> list[Val
 
 
 def _transition_issues(run: _Run, tid: TransitionId) -> Sequence[ValidationIssue]:
+    """Returns one transition's path issues, rechecking only what the edit reached.
+
+    An untouched transition keeps its previous issues; one whose counts, routes or destination
+    counts changed is checked whole; otherwise only the spots that moved or got new rows are
+    recompiled.
+
+    Args:
+        run: The revalidation in progress.
+        tid: The transition to report.
+
+    Returns:
+        issues: The transition's issues, as validate_show reports them.
+    """
     folder = transition_key(run.keys, tid)
     from_key, to_key = run.keys[tid.from_set], run.keys[tid.to_set]
     touched = run.touched
@@ -259,6 +300,17 @@ def _form_issues(run: _Run) -> list[ValidationIssue]:
 
 
 def _pin_touched(run: _Run, record: Pin, path: tuple[str, ...]) -> bool:
+    """Returns whether the edit changed a pin or anything it covers.
+
+    Args:
+        run: The revalidation in progress.
+        record: The pin as the edited show holds it.
+        path: The pin's item path.
+
+    Returns:
+        touched: True when the pin changed, or what it covers did: its spot's placements,
+            its set's placements, form list or owned forms, its form, or its transition.
+    """
     if path in run.touched.pins:
         return True
     covered: Mapping[str, Callable[[], bool]] = {

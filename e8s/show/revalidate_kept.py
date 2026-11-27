@@ -80,6 +80,17 @@ def _set_slot(issue: ValidationIssue, key: ItemKey) -> tuple[str, Hashable] | No
 
 
 def _slot(issue: ValidationIssue) -> tuple[str, Hashable] | None:
+    """Finds the bucket and unit a previous issue is kept under, or None for one always rerun.
+
+    Raises UnboundedError for a non-finite issue, an unreadable item, or an item kind or code
+    the buckets do not hold.
+
+    Args:
+        issue: One issue of the previous report.
+
+    Returns:
+        slot: The bucket name and the unit within it, such as a set key or a pin's item path.
+    """
     if issue.code == ErrorCode.NOT_FINITE:
         raise UnboundedError
     key = item_key(issue)
