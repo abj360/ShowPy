@@ -26,6 +26,8 @@ pub enum ErrorCode {
     BadPath,
     /// A similarity fit gets point arrays that are not matched (N, 2) arrays of numbers.
     BadShape,
+    /// A transition pin names a transition ID that does not parse as `a→b`.
+    BadTransition,
     /// Every spread of a text stroke's spots would put two of them within 1 µm.
     CoincidentSlots,
     /// A write was based on a revision that another write has since replaced.
@@ -102,10 +104,14 @@ pub enum ErrorCode {
     NOrSpacing,
     /// A write would store a show.json of an older format version than this release writes.
     OldFormat,
+    /// A facing override starts after the last count of the show.
+    PastTheShow,
     /// A path instruction is invalid.
     Path,
     /// An edit changes a pinned placement.
     PinnedChanged,
+    /// A pin record covers a placement, form or path row that is not flagged locked.
+    PinMismatch,
     /// A proposal that is already accepted, rejected or withdrawn is changed again.
     ProposalClosed,
     /// An open proposal touches items that changed since its base revision, so it is not applied.
@@ -174,6 +180,8 @@ pub enum ErrorCode {
     UnknownForm,
     /// A show.json or interchange document names no known format, or half a format header.
     UnknownFormat,
+    /// A pin names a spot, form, set or transition that is not in the show.
+    UnknownPin,
     /// An ID, name or unit does not resolve.
     UnknownRef,
     /// A form names a set that is not in the show.
@@ -207,6 +215,7 @@ impl ErrorCode {
             Self::BadId => "BAD_ID",
             Self::BadPath => "BAD_PATH",
             Self::BadShape => "BAD_SHAPE",
+            Self::BadTransition => "BAD_TRANSITION",
             Self::CoincidentSlots => "COINCIDENT_SLOTS",
             Self::Conflict => "CONFLICT",
             Self::Continuity => "CONTINUITY",
@@ -245,8 +254,10 @@ impl ErrorCode {
             Self::NoHardlinks => "NO_HARDLINKS",
             Self::NOrSpacing => "N_OR_SPACING",
             Self::OldFormat => "OLD_FORMAT",
+            Self::PastTheShow => "PAST_THE_SHOW",
             Self::Path => "PATH",
             Self::PinnedChanged => "PINNED_CHANGED",
+            Self::PinMismatch => "PIN_MISMATCH",
             Self::ProposalClosed => "PROPOSAL_CLOSED",
             Self::ProposalStale => "PROPOSAL_STALE",
             Self::RampCut => "RAMP_CUT",
@@ -281,6 +292,7 @@ impl ErrorCode {
             Self::TornSlot => "TORN_SLOT",
             Self::UnknownForm => "UNKNOWN_FORM",
             Self::UnknownFormat => "UNKNOWN_FORMAT",
+            Self::UnknownPin => "UNKNOWN_PIN",
             Self::UnknownRef => "UNKNOWN_REF",
             Self::UnknownSet => "UNKNOWN_SET",
             Self::UnknownSheet => "UNKNOWN_SHEET",
