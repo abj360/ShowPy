@@ -10,6 +10,7 @@ Contains:
 """
 
 from collections.abc import Mapping
+from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
@@ -24,16 +25,14 @@ from e8s.show.backend import (
     unknown_revision_error,
 )
 from e8s.show.backend_checks import ReadBudget, Record, corrupt, require_caller_ids
+from e8s.show.commit_writes import place_file, store_blobs, store_record
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
     is_redirect,
-    link_new,
     lstat_mode,
     make_folder,
     mapped_io,
     read_capped,
-    remove_file,
-    write_temp,
 )
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
@@ -461,35 +460,20 @@ class FileBackend:
 
     def _place(self, show_id: str, target: Path, data: bytes) -> bool:
         """Writes `data` under `target` through a temp file; False when the name was taken."""
-        temp = write_temp(self.root / TEMP_DIR, data)
-        try:
-            with mapped_io(show_id, target, is_link=True):
-                return link_new(temp, target)
-        finally:
-            remove_file(temp)
+        return place_file(self.root / TEMP_DIR, show_id, target, data)
 
     def _store_blobs(self, show_id: str, blobs: Mapping[str, bytes]) -> None:
         """Stores each blob, keeping one already there only when it holds the same bytes."""
         objects = self._folder(show_id) / OBJECT_DIR
-        for digest, data in blobs.items():
-            target = objects / digest
-            if lstat_mode(show_id, target) is None and self._place(show_id, target, data):
-                continue
-            self._verified_blob(show_id, target)
+        verify = partial(self._verified_blob, show_id)
+        store_blobs(self.root / TEMP_DIR, show_id, objects, blobs, verify)
 
     def _store_record(
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
     ) -> None:
         """Places the revision record, or checks the one an identical commit placed first."""
-        path = self._record_path(show_id, revision.id)
         record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
-        if self._place(show_id, path, record):
-            return
-        stored = read_capped(
-            path, "revision record", TREE_MAX_BYTES, lambda p, why: corrupt(show_id, p, why)
-        )
-        if stored != record:
-            raise corrupt(show_id, path, "revision record differs from this commit")
+        store_record(self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record)
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
