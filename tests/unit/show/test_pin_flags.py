@@ -12,6 +12,8 @@ Contains:
 
 import time
 
+import pytest
+
 from e8s.core.ids import SetId, SpotId
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import PlacementOp
@@ -70,6 +72,8 @@ def _best_time(show: Show, op: PlacementOp) -> float:
     return min(times)
 
 
+@pytest.mark.slow
+@pytest.mark.timing
 def test_regression_pin_flags_cost_does_not_grow_with_placements_times_pins() -> None:
     """Applies a forced op with 400 entity pins on 80,000 placements about as fast as with none."""
     show = _wide_show()
