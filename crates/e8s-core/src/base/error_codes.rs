@@ -46,6 +46,8 @@ pub enum ErrorCode {
     CueNegative,
     /// The landmarks of a similarity fit sit on top of each other.
     Degenerate,
+    /// A placement lies more than FAR_OFF_SHEET_M meters past the sheet's bounding box.
+    FarOffSheet,
     /// Font bytes do not hash to the URI or pinned hash that names them.
     FontHashMismatch,
     /// A font registers under a name that is already bound to different font bytes.
@@ -227,6 +229,7 @@ impl ErrorCode {
             Self::CueDuplicate => "CUE_DUPLICATE",
             Self::CueNegative => "CUE_NEGATIVE",
             Self::Degenerate => "DEGENERATE",
+            Self::FarOffSheet => "FAR_OFF_SHEET",
             Self::FontHashMismatch => "FONT_HASH_MISMATCH",
             Self::FontNameTaken => "FONT_NAME_TAKEN",
             Self::Geometry => "GEOMETRY",

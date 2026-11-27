@@ -414,8 +414,6 @@ def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     assert _mentions(_edited(transitions=(spec,)), "inf")
 
 
-@pytest.mark.defect("UP-9.7-79")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-79")
 def test_regression_validate_show_warns_about_placements_far_off_the_sheet() -> None:
     """Warns about a placement a million meters off the sheet (audit 9.7 validation gaps)."""
     moved = (

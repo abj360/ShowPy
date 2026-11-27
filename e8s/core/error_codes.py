@@ -55,6 +55,8 @@ class ErrorCode(StrEnum):
     """A cue's estimated duration is negative."""
     DEGENERATE = "DEGENERATE"
     """The landmarks of a similarity fit sit on top of each other."""
+    FAR_OFF_SHEET = "FAR_OFF_SHEET"
+    """A placement lies more than FAR_OFF_SHEET_M meters past the sheet's bounding box."""
     FONT_HASH_MISMATCH = "FONT_HASH_MISMATCH"
     """Font bytes do not hash to the URI or pinned hash that names them."""
     FONT_NAME_TAKEN = "FONT_NAME_TAKEN"
