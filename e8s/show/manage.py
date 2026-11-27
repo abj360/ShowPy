@@ -9,8 +9,6 @@ Contains:
     remove_set(): deletes a set with its forms and paths, optionally keeping the total time
     replace_sets(): replaces a show's sets, syncing transitions and refusing locked edits
     set_counts(): retimes a set and the transition into it
-    late_rows(): lists the spots whose path window does not fit a transition's counts
-    late_routes(): lists the routes that end after a transition's counts
 """
 
 import re
@@ -19,9 +17,7 @@ from collections.abc import Sequence
 
 from e8s.cast.models import Cast
 from e8s.choreo.models import Placement, Set
-from e8s.choreo.path_models import FacingOverride, Route, TransitionSpec, Waypoint
 from e8s.core.errors import (
-    PathError,
     SchemaError,
     TimeRangeError,
     VersionError,
@@ -31,13 +27,13 @@ from e8s.core.ids import (
     SpotId,
     TransitionId,
     format_ref,
-    format_tid,
     parse_ref,
     parse_tid,
 )
 from e8s.sheet.models import Sheet
 from e8s.show.locks import require_unlocked
 from e8s.show.models import Pin, Show
+from e8s.show.retiming import remapped_overrides, retimed_spec
 from e8s.show.set_keys import free_set_key, set_key
 from e8s.time.models import Timeline
 
@@ -380,88 +376,6 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     return replace_sets(show, sets, force=force, forms=forms, pins=pins)
 
 
-def _scale_route(route: Route, factor: float) -> Route:
-    end = None if route.end is None else route.end * factor
-    return route.replace(start=route.start * factor, end=end)
-
-
-def _scale_spec(spec: TransitionSpec, factor: float) -> TransitionSpec:
-    rows = {}
-    for entity, row in spec.rows.items():
-        waypoints = tuple(
-            w if w.at is None else Waypoint(x=w.x, y=w.y, at=w.at * factor) for w in row.waypoints
-        )
-        end = None if row.end is None else row.end * factor
-        rows[entity] = row.replace(start=row.start * factor, end=end, waypoints=waypoints)
-    routes = {key: _scale_route(route, factor) for key, route in spec.routes.items()}
-    return spec.replace(rows=rows, routes=routes)
-
-
-def late_rows(spec: TransitionSpec, counts: float) -> list[SpotId]:
-    """Lists the spots whose stored path window does not fit a transition of `counts`.
-
-    >>> from e8s.examples import two_set_show
-    >>> late_rows(two_set_show().transition(("1", "2")), 8.0)
-    []
-    """
-    return [
-        entity
-        for entity, row in spec.rows.items()
-        if row.window(counts)[1] > counts
-        or row.start >= counts
-        or any(w.at is not None and w.at > counts for w in row.waypoints)
-    ]
-
-
-def late_routes(spec: TransitionSpec, counts: float) -> list[str]:
-    """Lists the routes of a transition that end after `counts`.
-
-    >>> from e8s.examples import two_set_show
-    >>> late_routes(two_set_show().transition(("1", "2")), 8.0)
-    []
-    """
-    return [key for key, r in spec.routes.items() if (r.end or counts) > counts]
-
-
-def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
-    return [*late_rows(spec, counts), *late_routes(spec, counts)]
-
-
-def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> TransitionSpec:
-    if rescale and spec.counts > 0:
-        spec = _scale_spec(spec, counts / spec.counts)
-    late = _overruns(spec, counts)
-    if late:
-        raise PathError(
-            f"paths in {format_tid(spec.id)} run past {counts} counts: {', '.join(late)}",
-            hint="pass rescale=True to scale the paths, or shorten them first",
-            context={"tid": spec.id, "late": late},
-        )
-    return spec.replace(counts=counts)
-
-
-def _remapped_count(count: float, start: float, old: float, new: float) -> float:
-    if count <= start:
-        return count
-    if count <= start + old:
-        return start + (count - start) * new / old
-    return count + new - old
-
-
-def _remapped_overrides(
-    overrides: tuple[FacingOverride, ...], start: float, old: float, new: float
-) -> tuple[FacingOverride, ...]:
-    if old <= 0:
-        return overrides
-    return tuple(
-        o.replace(
-            start=_remapped_count(o.start, start, old, new),
-            end=_remapped_count(o.end, start, old, new),
-        )
-        for o in overrides
-    )
-
-
 def set_counts(
     show: Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False
 ) -> Show:
@@ -492,9 +406,9 @@ def set_counts(
     sets[position] = sets[position].replace(counts=counts)
     update: dict[str, object] = {}
     if rescale:
-        update["facing_overrides"] = _remapped_overrides(show.facing_overrides, start, old, counts)
+        update["facing_overrides"] = remapped_overrides(show.facing_overrides, start, old, counts)
     specs = tuple(
-        _retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
+        retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
     )
     return replace_sets(show, sets, force=force, transitions=specs, **update)
