@@ -235,7 +235,11 @@ class _FileBackend:
         stored = self._record(show_id, revision_id, source)["revision"]
         if isinstance(stored, dict):
             stored = {k: v for k, v in stored.items() if k not in LEGACY_REVISION_KEYS}
-        return Revision._validated(stored)
+        try:
+            return Revision._validated(stored)
+        except SchemaError as error:
+            path = self._tree_path(show_id, revision_id, source)
+            raise self._corrupt(show_id, path, "stored revision is malformed") from error
 
     def _check_revision(
         self, show_id: str, revision: Revision, expected_id: str, parent: str, source: Path
