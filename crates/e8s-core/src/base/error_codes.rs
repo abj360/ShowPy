@@ -146,7 +146,7 @@ pub enum ErrorCode {
     Stage,
     /// A form's set no longer places that form.
     StaleForm,
-    /// A transition holds paths for two sets that are not consecutive.
+    /// A transition holds paths for, or a comment anchors to, two sets that are not consecutive.
     StaleTransition,
     /// A show cannot be persisted or read back.
     Storage,
@@ -188,11 +188,11 @@ pub enum ErrorCode {
     UnknownPin,
     /// An ID, name or unit does not resolve.
     UnknownRef,
-    /// A form names a set that is not in the show.
+    /// A form or a comment anchor names a set that is not in the show.
     UnknownSet,
     /// The show's sheet reference does not resolve in the sheet store.
     UnknownSheet,
-    /// A set, transition, route or named selection names a spot that is not in the cast.
+    /// A set, transition, route, named selection or comment anchor names a spot not in the cast.
     UnknownSpot,
     /// The show's dependencies do not pin its sheet reference.
     UnpinnedSheet,

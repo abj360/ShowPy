@@ -1918,7 +1918,7 @@
   "validate_dependencies": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.core.validation.ValidationReport",
   "validate_paths": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec) -> e8s.core.validation.ValidationReport",
   "validate_set": "(show: e8s.show.models.Show, candidate: e8s.choreo.models.Set) -> e8s.core.validation.ValidationReport",
-  "validate_show": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.core.validation.ValidationReport",
+  "validate_show": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None, *, comments: collections.abc.Sequence[e8s.show.collab_models.Comment] = ()) -> e8s.core.validation.ValidationReport",
   "validate_timeline": "(tl: e8s.time.models.Timeline) -> e8s.core.validation.ValidationReport",
   "vector_facing": "(v: Point) -> Degrees",
   "walkable": "(sheet: e8s.sheet.models.Sheet, p: Point) -> bool",

@@ -520,8 +520,6 @@ def test_regression_validate_show_reports_nan_waypoints() -> None:
     assert _mentions(_edited(transitions=(spec,)), "nan")
 
 
-@pytest.mark.defect("UP-9.7-90")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-90")
 def test_regression_validate_show_reports_comments_anchored_to_missing_items() -> None:
     """Reports a comment anchored to a set that does not exist (audit 9.7 validation gaps)."""
     validate: Callable[..., ValidationReport] = validate_show  # comments= is the audit's new API

@@ -12,7 +12,7 @@ Contains:
 """
 
 import math
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from itertools import islice
 
 from e8s.choreo.engine import PathEngine
@@ -27,10 +27,12 @@ from e8s.core.types import FrozenModel
 from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import SheetStore, get_sheet
 from e8s.show.change_models import ItemKey
+from e8s.show.collab_models import Comment
 from e8s.show.document_paths import is_storable_folder
 from e8s.show.item_table import TIMING
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
+from e8s.show.validate_comments import comment_issues
 from e8s.show.validate_placements import placement_issues
 from e8s.show.validate_refs import ERROR, WARNING, make_issue, reference_issues
 from e8s.time.validate import validate_timeline
@@ -430,12 +432,24 @@ def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
     return ValidationReport.merge(*reports)
 
 
-def validate_show(show: Show, store: SheetStore | None = None) -> ValidationReport:
+def validate_show(
+    show: Show, store: SheetStore | None = None, *, comments: Sequence[Comment] = ()
+) -> ValidationReport:
     """Checks sets, paths, dependencies (when a store is given), sequence and timeline.
+
+    Comments live outside the show, so their anchors are checked only for the comments given.
 
     >>> from e8s.examples import two_set_show
     >>> validate_show(two_set_show()).ok
     True
+
+    Args:
+        show: The show to check.
+        store: Sheet store that resolves the sheet reference; None skips that check.
+        comments: Review comments whose anchors must resolve in the show.
+
+    Returns:
+        report: Every issue found; validation never raises on bad data.
     """
     reports = [validate_set(show, s) for s in show.sets]
     too_long = _too_long(show)
@@ -444,6 +458,7 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     extra = too_long + _sequence(show) + _first_set_counts(show) + _form_keys(show)
     extra += _selections(show) + _ids(show)
     extra += _non_finite(show) + reference_issues(show) + placement_issues(show)
+    extra += comment_issues(show, comments)
     reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
     if store is not None:
