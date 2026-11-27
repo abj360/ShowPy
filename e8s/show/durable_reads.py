@@ -21,6 +21,8 @@ Contains:
     has_same_bytes(): tells whether two regular files hold the same bytes, reading in pieces
     file_pieces(): yields the bytes of an open file a piece at a time, up to a size
     stat_info(): returns the stat result of a path, following links, or None when it is absent
+    existing_ancestor(): splits a path into its deepest existing ancestor, resolved, and the
+        names below it
     lies_within(): tells whether a path is a folder or lies under it, by file identity
     is_own_file(): tells whether the current user owns a file, which it may then retime
 """
@@ -406,6 +408,32 @@ def _identity(info: os.stat_result, path: Path) -> tuple[int, int] | str:
     if info.st_ino == 0:
         return os.path.normcase(str(path.resolve()))
     return (info.st_dev, info.st_ino)
+
+
+def existing_ancestor(path: Path) -> tuple[Path, tuple[str, ...]]:
+    """Splits a path into its deepest existing ancestor, resolved, and the names below it.
+
+    The file system walks the existing part, so its symlinks and `..` land where they lead;
+    the names below it are returned as spelled, since nothing on disk gives them meaning yet.
+
+    Args:
+        path: Path that may not exist yet.
+
+    Returns:
+        ancestor: Deepest ancestor of `path`, `path` itself included, that exists, resolved.
+        tail: Names under `ancestor` that do not exist yet, as spelled in `path`.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as root:
+    ...     ancestor, tail = existing_ancestor(Path(root) / "a" / "b")
+    ...     ancestor == Path(root).resolve(), tail
+    (True, ('a', 'b'))
+    """
+    absolute = path.absolute()
+    for depth, candidate in enumerate((absolute, *absolute.parents)):
+        if stat_info(candidate) is not None:
+            return candidate.resolve(strict=True), absolute.parts[len(absolute.parts) - depth :]
+    return Path(absolute.anchor), absolute.parts[1:]
 
 
 def lies_within(path: Path, folder: Path) -> bool:

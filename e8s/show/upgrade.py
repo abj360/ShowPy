@@ -20,6 +20,7 @@ from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer, record_bytes, slot_
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import (
+    existing_ancestor,
     file_pieces,
     is_own_file,
     lies_within,
@@ -58,9 +59,21 @@ TARGET_HINT = (
     f"interrupted upgrade left has no {LAYOUT_FILE}: delete it and run upgrade_repository again"
 )
 
+DOTS_HINT = (
+    "spell the target without `..` or `.` below folders that do not exist yet, or create those "
+    "folders first"
+)
+
 
 def _bad_folder(message: str, hint: str, folder: Path) -> StorageError:
     return StorageError(message, hint=hint, context={"path": str(folder)}, code=ErrorCode.BAD_PATH)
+
+
+def _not_a_folder(target: Path, blocker: Path) -> StorageError:
+    if blocker == target:
+        return _bad_folder(f"upgrade target {target} is not a folder", TARGET_HINT, target)
+    message = f"upgrade target {target} runs through {blocker}, which is not a folder"
+    return _bad_folder(message, TARGET_HINT, target)
 
 
 def _require_layout_1(source: Path) -> None:
@@ -69,21 +82,21 @@ def _require_layout_1(source: Path) -> None:
         raise _bad_folder(f"no layout-1 repository at {source} to upgrade", SOURCE_HINT, source)
 
 
-def _require_free_target(source: Path, target: Path) -> None:
-    """Refuses a target inside the source, one that is no folder, and one that holds anything.
+def _require_plain_tail(target: Path, ancestor: Path, tail: tuple[str, ...]) -> None:
+    """Refuses `..` or `.` below the deepest existing folder, and a dangling symlink there.
 
-    The source and the target are compared as files, not as names, so a target that reaches the
-    source through another case, another Unicode normalization, a symlink or `..` is refused.
+    Creating the missing folders would let the file system follow such a name anywhere, the
+    source included, so the target is refused before anything is written.
     """
-    with mapped_io("", target):
-        if lies_within(target, source):
-            raise _bad_folder(f"upgrade target {target} is inside the source", TARGET_HINT, target)
-        info = stat_info(target)
-        if info is None:
-            return
-        if not stat.S_ISDIR(info.st_mode):
-            raise _bad_folder(f"upgrade target {target} is not a folder", TARGET_HINT, target)
-        names = [name for name, _ in listed_entries(target, follows_links=True)]
+    if any(name in {".", ".."} for name in tail):
+        message = f"upgrade target {target} names `..` or `.` below a folder that does not exist"
+        raise _bad_folder(message, DOTS_HINT, target)
+    if tail and lstat_info("", ancestor / tail[0]) is not None:
+        raise _not_a_folder(target, ancestor / tail[0])
+
+
+def _require_empty(target: Path, names: list[str]) -> None:
+    """Refuses a target folder that holds a repository or any other entry."""
     stored = [name for name in names if name not in HOUSEKEEPING_NAMES]
     if LAYOUT_FILE in stored:
         message = f"upgrade target {target} already holds a repository"
@@ -91,6 +104,37 @@ def _require_free_target(source: Path, target: Path) -> None:
     if stored:
         message = f"upgrade target {target} is not empty: it holds {', '.join(stored[:3])}"
         raise _bad_folder(message, TARGET_HINT, target)
+
+
+def _free_target(source: Path, target: Path) -> Path:
+    """Returns the folder to write an upgrade to, refusing one that could reach the source.
+
+    The deepest existing ancestor of the target is resolved by the file system, and only plain
+    names may follow it. That folder and the source are compared as files, not as names, so a
+    target that reaches the source through another case, another Unicode normalization, a
+    symlink or `..` through existing folders is refused; so is a target that is no folder or
+    holds anything.
+
+    Args:
+        source: Root of the layout-1 repository.
+        target: Folder the caller named for the layout-2 root.
+
+    Returns:
+        folder: The resolved existing ancestor of `target` joined with the names below it.
+    """
+    with mapped_io("", target):
+        ancestor, tail = existing_ancestor(target)
+        _require_plain_tail(target, ancestor, tail)
+        if lies_within(ancestor, source):
+            raise _bad_folder(f"upgrade target {target} is inside the source", TARGET_HINT, target)
+        info = stat_info(ancestor)
+        if info is None or not stat.S_ISDIR(info.st_mode):
+            raise _not_a_folder(target, ancestor if tail else target)
+        if tail:
+            return ancestor.joinpath(*tail)
+        names = [name for name, _ in listed_entries(ancestor, follows_links=True)]
+    _require_empty(target, names)
+    return ancestor
 
 
 class _Target:
@@ -331,7 +375,8 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     Args:
         source: Root of a repository written before v0.5.0.
         target: New folder for the layout-2 root; it must not exist yet, or be empty, and must
-            not be inside the source.
+            not be inside the source under any spelling. `..` and `.` may follow only folders
+            that exist, since the folders the upgrade creates must not lead anywhere else.
 
     Returns:
         report: For each show, the revisions copied, the blobs linked and copied, the files
@@ -356,10 +401,10 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     (1, True)
     """
     _require_layout_1(source)
-    _require_free_target(source, target)
+    folder = _free_target(source, target)
     listing = list_source(source)
     reader = Layout1Reader(source)
-    writer = _Target(target)
+    writer = _Target(folder)
     upgraded = tuple(_upgrade_show(reader, writer, show) for show in listing.shows)
     linked = writer.carry_assets(source / ASSET_DIR, listing.assets)
     _require_unchanged(source, listing, writer.heads)
