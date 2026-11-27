@@ -15,6 +15,8 @@ Contains:
         folder, a symlink and files of different sizes
     test_same_bytes_refuses_a_file_swapped_after_its_lookup: answers False for a link, a FIFO or
         a vanished file found in place of a regular file once it is opened
+    test_same_bytes_refuses_two_fifos_found_in_place_of_both_files: answers False when both
+        names hold FIFOs once opened, never blocking on them
 """
 
 import os
@@ -153,3 +155,19 @@ def test_same_bytes_refuses_a_file_swapped_after_its_lookup(
         lambda show_id, path: regular if path == other else lookup(show_id, path),
     )
     assert has_same_bytes(file, other) is False
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="FIFOs need POSIX")
+def test_same_bytes_refuses_two_fifos_found_in_place_of_both_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two FIFOs read as empty, so only the check of each opened descriptor refuses them."""
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.write_bytes(b"abc")
+    second.write_bytes(b"abc")
+    looked_up = {path: os.lstat(path) for path in (first, second)}
+    for path in (first, second):
+        path.unlink()
+        os.mkfifo(path)
+    monkeypatch.setattr(durable_reads, "lstat_info", lambda _show_id, path: looked_up[path])
+    assert has_same_bytes(first, second) is False
