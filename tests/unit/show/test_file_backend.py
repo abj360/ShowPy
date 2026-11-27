@@ -52,6 +52,7 @@ Contains:
         before the manifest's legacy_before
     test_current_ids_are_required_when_the_manifest_has_no_legacy_before: refuses an old-scheme ID
         when the manifest names no legacy slots
+    test_regression_cold_commit_on_a_legacy_head_lands: commits on a legacy head from a cold backend
     test_manifest_legacy_before_must_be_a_positive_integer: refuses a manifest whose legacy_before
         is not a positive integer
     test_regression_symlinked_show_folder_is_refused: refuses a symlinked shows, show, log or tmp
@@ -655,6 +656,15 @@ def test_current_ids_are_required_when_the_manifest_has_no_legacy_before(tmp_pat
     with pytest.raises(StorageError) as caught:
         FileBackend(tmp_path).log(SHOW_ID)
     assert caught.value.code == "CORRUPT"
+
+
+def test_regression_cold_commit_on_a_legacy_head_lands(tmp_path: Path) -> None:
+    """Commits on a head with an old-scheme ID from a backend that has read nothing yet."""
+    landed = _mixed_history(tmp_path, legacy=2, total=2)
+    _set_manifest(tmp_path, legacy_before=3)
+    revision, tree, blobs = _change(landed[-1].id, 7)
+    FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert FileBackend(tmp_path).log(SHOW_ID) == [*landed, revision]
 
 
 @pytest.mark.parametrize("legacy_before", [0, -1, True, "2", 1.5, None])

@@ -398,6 +398,7 @@ class FileBackend:
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._require_plain_folders(show_id)
+            self._check_manifest(show_id)
             require_caller_ids(show_id, revision, tree, blobs)
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
