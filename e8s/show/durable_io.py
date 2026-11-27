@@ -323,12 +323,13 @@ def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
         cutoff: Moment before which a temp file counts as left behind by a crashed writer.
     """
     cutoff_s = cutoff.timestamp()
-    for entry in os.scandir(folder):
-        if not entry.name.startswith(TEMP_PREFIX):
-            continue
-        try:
-            info = entry.stat(follow_symlinks=False)
-        except FileNotFoundError:
-            continue
-        if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff_s:
-            remove_file(Path(entry.path))
+    with os.scandir(folder) as entries:
+        for entry in entries:
+            if not entry.name.startswith(TEMP_PREFIX):
+                continue
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff_s:
+                remove_file(Path(entry.path))

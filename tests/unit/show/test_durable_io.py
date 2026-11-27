@@ -34,11 +34,15 @@ Contains:
     test_stale_temp_removal_only_takes_prefixed_regular_files: keeps an old file without the temp
         prefix and an old temp-named folder
     test_stale_temp_removal_does_not_follow_a_link: keeps a temp-named symlink whose target is old
+    test_regression_failed_stale_removal_closes_the_folder_listing: raises the unlink error without
+        leaving a folder listing open
 """
 
 import errno
+import gc
 import os
 import sys
+import warnings
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -394,3 +398,20 @@ def test_stale_temp_removal_does_not_follow_a_link(tmp_path: Path) -> None:
     _aged(link, CUT_OFF)
     durable_io.remove_stale_temps(tmp_path, CUT_OFF)
     assert link.is_symlink()
+
+
+def test_regression_failed_stale_removal_closes_the_folder_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _file(tmp_path / ".tmp-old", OLD)
+
+    def refuse(_path: Path) -> None:
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(durable_io, "remove_file", refuse)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(PermissionError):
+            durable_io.remove_stale_temps(tmp_path, CUT_OFF)
+        gc.collect()
+    assert [w for w in caught if issubclass(w.category, ResourceWarning)] == []
