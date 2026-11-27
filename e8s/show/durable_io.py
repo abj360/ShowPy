@@ -28,7 +28,13 @@ Contains:
     make_folder(): creates a folder and its missing parents
     write_temp(): writes bytes to a new temp file in a folder and returns its path
     link_new(): links a file under a new name, reporting whether the name was free
+    CREATE_FLAGS: creates a file only where no file or link has its name
+    CREATED_FILE_MODE: gives a file created in place the mode of a linked temp file
+    open_new(): creates an empty file only where no file or link has its name
+    write_new(): writes a new file's bytes in one call, raising when it writes fewer
+    create_new(): creates a file under a new name, writes it in one call and flushes it
     remove_file(): removes a file when it exists
+    remove_stale_temps(): removes the temp files in a folder last modified before a cut-off
 """
 
 import errno
@@ -38,6 +44,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
 
@@ -67,6 +74,9 @@ SYMLINK_OPEN_ERRNOS = frozenset({errno.ELOOP, errno.EMLINK})
 # A folder swapped for a symlink after the lstat checks must not be followed and flushed instead.
 NOFOLLOW_FLAG = getattr(os, "O_NOFOLLOW", 0)
 DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | NOFOLLOW_FLAG
+CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW_FLAG | getattr(os, "O_BINARY", 0)
+# tempfile creates its files with this mode, so a file placed by a link has it too.
+CREATED_FILE_MODE = 0o600
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
 # fcntl commands of macOS (sys/fcntl.h); Python's fcntl module has only F_FULLFSYNC.
@@ -84,7 +94,13 @@ def _open_no_follow(path: Path, fail: Callable[[Path, str], Exception]) -> int:
 
 
 def _read_sized(
-    path: Path, handle: BinaryIO, kind: str, cap: int, fail: Callable[[Path, str], Exception]
+    path: Path,
+    handle: BinaryIO,
+    kind: str,
+    cap: int,
+    fail: Callable[[Path, str], Exception],
+    *,
+    allows_growth: bool,
 ) -> bytes:
     """Reads an open file by its fstat size, which `read(n)` allocates up front."""
     size = os.fstat(handle.fileno()).st_size
@@ -92,11 +108,20 @@ def _read_sized(
         raise fail(path, f"{kind} is larger than {cap} bytes")
     data = handle.read(size + 1)
     if len(data) > size:
+        if allows_growth:
+            return data[:size]
         raise fail(path, f"{kind} grew while it was read")
     return data
 
 
-def read_capped(path: Path, kind: str, cap: int, fail: Callable[[Path, str], Exception]) -> bytes:
+def read_capped(
+    path: Path,
+    kind: str,
+    cap: int,
+    fail: Callable[[Path, str], Exception],
+    *,
+    allows_growth: bool = False,
+) -> bytes:
     """Reads a regular file of at most `cap` bytes, checking its size before reading.
 
     Args:
@@ -104,6 +129,9 @@ def read_capped(path: Path, kind: str, cap: int, fail: Callable[[Path, str], Exc
         kind: What the file holds, named in the size messages.
         cap: Largest size accepted, in bytes.
         fail: Builds the exception raised for a refused file from its path and the reason.
+        allows_growth: Whether a file that grows while it is read, as one another writer is
+            still filling in place does, returns the bytes it held when the read began instead
+            of being refused.
 
     Returns:
         data: The file's bytes.
@@ -124,7 +152,7 @@ def read_capped(path: Path, kind: str, cap: int, fail: Callable[[Path, str], Exc
         with os.fdopen(_open_no_follow(path, fail), "rb") as handle:
             if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
                 raise fail(path, "file is missing or not a regular file")
-            return _read_sized(path, handle, kind, cap, fail)
+            return _read_sized(path, handle, kind, cap, fail, allows_growth=allows_growth)
     except (FileNotFoundError, IsADirectoryError) as error:
         raise fail(path, "file is missing or not a file") from error
 
@@ -305,6 +333,99 @@ def link_new(source: Path, target: Path) -> bool:
     return True
 
 
+def open_new(target: Path) -> int | None:
+    """Creates an empty file only where no file or link has the name `target`.
+
+    Args:
+        target: New name for the file.
+
+    Returns:
+        descriptor: Open descriptor of the new file for writing, or None when the name was taken.
+    """
+    try:
+        return os.open(target, CREATE_FLAGS, CREATED_FILE_MODE)
+    except FileExistsError:
+        return None
+
+
+def write_new(descriptor: int, target: Path, data: bytes) -> None:
+    """Writes the bytes of a new file in one call, raising OSError when it writes fewer.
+
+    Args:
+        descriptor: Open descriptor of the new file.
+        target: Name of the file, named in the error.
+        data: Bytes to write.
+    """
+    written = os.write(descriptor, data)
+    if written != len(data):
+        raise OSError(errno.EIO, f"wrote {written} of {len(data)} bytes", str(target))
+
+
+def create_new(target: Path, data: bytes) -> bool:
+    """Creates `target`, which must not exist, writes `data` in one call and flushes it.
+
+    A file system without hard links places files this way. Until the write returns, a reader
+    can find the file empty, so readers of such files reread them. A write that fails, or writes
+    less than `data`, removes the file it created and raises: only a shorter start was ever in
+    place, which no reader accepts. Once every byte is written a reader may already rely on the
+    file, so a failing flush keeps it and raises; so does an interruption of the write, which may
+    have written every byte.
+
+    Args:
+        target: New name for the file; a file or link already there is never replaced.
+        data: Bytes to write.
+
+    Returns:
+        is_created: True when the name was free and now holds the bytes, False when it existed.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     target = Path(folder) / "a"
+    ...     create_new(target, b"x"), create_new(target, b"y"), target.read_bytes()
+    (True, False, b'x')
+    """
+    descriptor = open_new(target)
+    if descriptor is None:
+        return False
+    try:
+        write_new(descriptor, target, data)
+    except OSError:
+        os.close(descriptor)
+        remove_file(target)
+        raise
+    except BaseException:
+        os.close(descriptor)
+        raise
+    try:
+        flush_file(descriptor)
+    finally:
+        os.close(descriptor)
+    return True
+
+
 def remove_file(path: Path) -> None:
     """Removes a file; a missing one is no error."""
     path.unlink(missing_ok=True)
+
+
+def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
+    """Removes the temp files in `folder` whose modification time is before `cutoff`.
+
+    A file that vanishes between the listing and the removal belongs to a writer that finished,
+    so it is skipped.
+
+    Args:
+        folder: Folder that holds the temp files; it must exist.
+        cutoff: Moment before which a temp file counts as left behind by a crashed writer.
+    """
+    cutoff_s = cutoff.timestamp()
+    with os.scandir(folder) as entries:
+        for entry in entries:
+            if not entry.name.startswith(TEMP_PREFIX):
+                continue
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff_s:
+                remove_file(Path(entry.path))

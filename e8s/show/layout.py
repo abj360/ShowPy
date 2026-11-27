@@ -9,10 +9,12 @@ Contains:
     HOUSEKEEPING_NAMES: lists the entries operating systems add to a folder, which a root skips
     TEMP_DIR: names the folder under a layout-2 root that holds every writer's temp files
     read_layout(): reports the layout version of a repository root
+    read_layout_file(): reads and checks the layout file itself, refusing a missing one
 """
 
 import os
 import stat
+from functools import partial
 from pathlib import Path
 
 from e8s.core.error_codes import ErrorCode
@@ -20,6 +22,7 @@ from e8s.core.errors import SchemaError, StorageError, VersionError
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.durable_io import read_capped
 from e8s.show.layout1 import LINK_DIR, ROOT_LINK
+from e8s.show.torn_reads import is_unfinished_json, read_settled
 
 LAYOUT_FILE = "layout.json"
 LAYOUT_FORMAT = "e8.repository"
@@ -106,9 +109,15 @@ def _unversioned_layout(root: Path) -> int:
 
 
 def _declared_layout(root: Path, path: Path) -> int:
-    raw = read_capped(
-        path, "layout file", LAYOUT_MAX_BYTES, lambda _, reason: _corrupt(root, reason)
+    read = partial(
+        read_capped,
+        path,
+        "layout file",
+        LAYOUT_MAX_BYTES,
+        lambda _, reason: _corrupt(root, reason),
+        allows_growth=True,
     )
+    raw = read_settled(read, is_unfinished_json)
     try:
         document = parse_strict_json(raw, document="layout file")
     except SchemaError as error:
@@ -155,6 +164,27 @@ def read_layout(root: Path) -> int:
     """
     try:
         return _stored_layout(root)
+    except OSError as error:
+        raise _io_error(root, error) from error
+
+
+def read_layout_file(root: Path) -> int:
+    """Reads and checks a root's layout file itself; a missing file is CORRUPT, never layout 2.
+
+    Args:
+        root: Folder that holds the repository.
+
+    Returns:
+        layout: The layout number the file names.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     _ = (Path(folder) / LAYOUT_FILE).write_text('{"format": "e8.repository", "layout": 2}')
+    ...     read_layout_file(Path(folder))
+    2
+    """
+    try:
+        return _declared_layout(root, root / LAYOUT_FILE)
     except OSError as error:
         raise _io_error(root, error) from error
 

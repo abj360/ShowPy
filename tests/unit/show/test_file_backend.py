@@ -77,6 +77,7 @@ import multiprocessing
 import os
 import sys
 import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -343,8 +344,12 @@ def test_unlanded_or_unknown_revision_is_an_unknown_ref(tmp_path: Path) -> None:
     loser, tree, blobs = _change(landed[0].id, 99)
     with pytest.raises(ConflictError):
         backend.commit(SHOW_ID, loser, tree, blobs)
-    assert _record(tmp_path, loser.id).exists()
-    for unknown in (loser.id, UNKNOWN_ID, "../escape"):
+    assert not _record(tmp_path, loser.id).exists()
+    orphan, orphan_tree, _ = _change(landed[1].id, 98)
+    for planted, seq, planted_tree in ((loser, 2, tree), (orphan, 3, orphan_tree)):
+        record = {"revision": planted.to_json(), "seq": seq, "tree": planted_tree}
+        _record(tmp_path, planted.id).write_bytes(dump_json(record))
+    for unknown in (loser.id, orphan.id, UNKNOWN_ID, "../escape"):
         with pytest.raises(UnknownRefError):
             backend.log(SHOW_ID, since=unknown)
         with pytest.raises(UnknownRefError):
@@ -455,7 +460,7 @@ def test_failed_temp_write_leaves_no_temp_file(
 
 
 def _rewrite_slot(root: Path, content: object) -> None:
-    _slot(root, 2).write_bytes(json.dumps(content).encode())
+    _slot(root, 2).write_bytes(jcs(content) + b"\n")
 
 
 def _rewrite_record(root: Path, stored: Revision, **changes: object) -> None:
@@ -469,7 +474,7 @@ TAMPERS: dict[str, Callable[[Path, list[Revision]], object]] = {
         root, landed[1].to_json() | {"at": "noon"}
     ),
     "slot id not hex": lambda root, landed: _rewrite_slot(root, landed[1].to_json() | {"id": "x"}),
-    "slot not json": lambda root, _: _slot(root, 2).write_bytes(b"{"),
+    "slot not json": lambda root, _: _slot(root, 2).write_bytes(b"{\n"),
     "slot forks": lambda root, landed: _rewrite_slot(
         root, landed[1].to_json() | {"parent": UNKNOWN_ID}
     ),
@@ -813,7 +818,8 @@ def test_log_reads_at_most_the_byte_budget(tmp_path: Path, monkeypatch: pytest.M
     assert caught.value.context["show"] == SHOW_ID
 
 
-def test_every_read_error_names_the_show(tmp_path: Path) -> None:
+def test_every_read_error_names_the_show(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
     landed = _landed(FileBackend(tmp_path), 2)
     _slot(tmp_path, 2).write_bytes(b"{")
     _record(tmp_path, landed[0].id).write_bytes(b"[]")
@@ -829,7 +835,10 @@ def test_every_read_error_names_the_show(tmp_path: Path) -> None:
         assert caught.value.context["show"] == SHOW_ID, name
 
 
-def test_regression_shows_errors_never_carry_an_empty_show(tmp_path: Path) -> None:
+def test_regression_shows_errors_never_carry_an_empty_show(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
     _landed(FileBackend(tmp_path), 1)
     manifest = _folder(tmp_path) / "show.json"
     manifest.write_bytes(b"{")

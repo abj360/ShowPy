@@ -177,6 +177,8 @@ class ErrorCode(StrEnum):
     """A show holds more sets than MAX_SETS."""
     TOO_MANY_SPOTS = "TOO_MANY_SPOTS"
     """A cast holds more spots than MAX_SPOTS, or a text form asks for more than its own cap."""
+    TORN_SLOT = "TORN_SLOT"
+    """A repository slot stays empty or cut short after every reread: its writer stopped early."""
     UNKNOWN_FORM = "UNKNOWN_FORM"
     """A placement names a form that does not exist."""
     UNKNOWN_FORMAT = "UNKNOWN_FORMAT"

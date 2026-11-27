@@ -6,8 +6,9 @@ test_durable_io.py --- tests the flushes a layout-2 commit makes before its slot
 Contains:
     test_commit_flushes_each_file_and_directory_before_its_slot: flushes blobs, record and their
         directories before the slot, which gets a full flush
-    test_first_commit_flushes_every_directory_it_creates_before_the_slot: flushes the layout entry's
-        folder, shows/ and the show folder after the first files and before the slot
+    test_first_commit_flushes_every_directory_it_creates_before_the_slot: probes hard links, then
+        flushes the layout entry's folder, shows/ and the show folder after the first files and
+        before the slot
     test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commit: flushes the same
         folders in a process that did not create them
     test_failed_macos_flush_fails_the_commit_with_io: maps a failing fcntl flush to IO and lands no
@@ -29,12 +30,21 @@ Contains:
     test_a_failing_fcntl_flush_raises_instead_of_being_swallowed: raises OSError for a closed
         descriptor
     test_other_systems_flush_every_file_with_fsync: calls fsync on the descriptor
+    test_stale_temp_removal_keeps_a_file_exactly_at_the_cut_off: keeps a temp file whose mtime
+        equals the cut-off and removes one a second older
+    test_stale_temp_removal_only_takes_prefixed_regular_files: keeps an old file without the temp
+        prefix and an old temp-named folder
+    test_stale_temp_removal_does_not_follow_a_link: keeps a temp-named symlink whose target is old
+    test_regression_failed_stale_removal_closes_the_folder_listing: raises the unlink error without
+        leaving a folder listing open
 """
 
 import errno
+import gc
 import os
 import sys
-from datetime import UTC, datetime
+import warnings
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -153,7 +163,8 @@ def test_first_commit_flushes_every_directory_it_creates_before_the_slot(
     calls = _record_calls(monkeypatch)
     revision, tree, blobs = _change("", 1)
     FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
-    assert calls[:8] == [
+    assert calls[:2] == [(FILE_ENTRY,), (LINK_ENTRY, "tmp")]
+    assert calls[2:10] == [
         (FILE_ENTRY,),
         (LINK_ENTRY, tmp_path.name),
         (FILE_ENTRY,),
@@ -347,3 +358,64 @@ def test_other_systems_flush_every_file_with_fsync(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(os, "fsync", synced.append)
     flush_file(7)
     assert synced == [7]
+
+
+CUT_OFF = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
+OLD = CUT_OFF - timedelta(days=7)
+NO_SYMLINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
+
+
+def _aged(path: Path, moment: datetime) -> Path:
+    """Sets a path's own times; Windows cannot set a link's own times, and its tests use none."""
+    stamp = moment.timestamp()
+    own_times = os.utime in os.supports_follow_symlinks
+    os.utime(path, (stamp, stamp), follow_symlinks=not own_times)
+    return path
+
+
+def _file(path: Path, moment: datetime) -> Path:
+    path.write_bytes(b"partial")
+    return _aged(path, moment)
+
+
+def test_stale_temp_removal_keeps_a_file_exactly_at_the_cut_off(tmp_path: Path) -> None:
+    at_cut_off = _file(tmp_path / ".tmp-edge", CUT_OFF)
+    older = _file(tmp_path / ".tmp-older", CUT_OFF - timedelta(seconds=1))
+    durable_io.remove_stale_temps(tmp_path, CUT_OFF)
+    assert (at_cut_off.exists(), older.exists()) == (True, False)
+
+
+def test_stale_temp_removal_only_takes_prefixed_regular_files(tmp_path: Path) -> None:
+    other = _file(tmp_path / "other-writer-file", OLD)
+    folder = tmp_path / ".tmp-folder"
+    folder.mkdir()
+    _aged(folder, OLD)
+    durable_io.remove_stale_temps(tmp_path, CUT_OFF)
+    assert (other.exists(), folder.is_dir()) == (True, True)
+
+
+@NO_SYMLINKS
+def test_stale_temp_removal_does_not_follow_a_link(tmp_path: Path) -> None:
+    target = _file(tmp_path / "target", OLD)
+    link = tmp_path / ".tmp-link"
+    link.symlink_to(target)
+    _aged(link, CUT_OFF)
+    durable_io.remove_stale_temps(tmp_path, CUT_OFF)
+    assert link.is_symlink()
+
+
+def test_regression_failed_stale_removal_closes_the_folder_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _file(tmp_path / ".tmp-old", OLD)
+
+    def refuse(_path: Path) -> None:
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(durable_io, "remove_file", refuse)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(PermissionError):
+            durable_io.remove_stale_temps(tmp_path, CUT_OFF)
+        gc.collect()
+    assert [w for w in caught if issubclass(w.category, ResourceWarning)] == []

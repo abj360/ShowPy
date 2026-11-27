@@ -15,18 +15,24 @@ Contains:
         lacks a file that tests/unit/tooling/test_noxfile.py reads, such as the CI workflow
     test_docker_image_holds_every_path_the_nightly_core_tests_read: the same for the fuzz crate
         and the nightly core workflow that tests/unit/tooling/test_nightly_core.py reads
+    test_docker_image_holds_every_path_the_nightly_failure_tests_read: the same for the nightly,
+        nightly core and nightly report workflows that test_nightly_failures.py reads
     test_regression_missing_dockerfile_fails_in_a_source_checkout: a moved or renamed Dockerfile
         fails the check instead of skipping it
     test_docker_path_check_flags_a_missing_and_an_ignored_path: proves the check can fail
     test_image_copies_every_tracked_top_level_entry: fails when the image skips a tracked
         top-level entry that NOT_IN_IMAGE does not name, or NOT_IN_IMAGE names a stale entry
     test_top_level_check_flags_a_dropped_copy_and_a_new_folder: proves the check can fail
+    stage_text(): returns the lines of one Dockerfile stage
+    test_runtime_image_installs_jq_for_the_report_tests: the nightly report tests apply the fake
+        gh's --jq filters with jq, so the image the suite runs in must hold it
     unlocked_builds(): lists the stages that run `uv build` without cargo's --locked
     test_image_build_fails_on_a_stale_cargo_lock: the builder never rewrites Cargo.lock
     test_unlocked_builds_sees_a_missing_or_late_lock: proves the lock check can fail
 """
 
 import ast
+import re
 import subprocess
 from pathlib import Path
 
@@ -38,7 +44,14 @@ LIBRARY_ROOT = REPO_ROOT / "e8s"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_noxfile.py"
 NIGHTLY_CORE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly_core.py"
+NIGHTLY_FAILURE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly_failures.py"
+NIGHTLY_WORKFLOWS = {
+    ".github/workflows/nightly.yml",
+    ".github/workflows/nightly-core.yml",
+    ".github/workflows/report-nightly.yml",
+}
 RUNTIME_STAGE = "runtime"
+JQ_INSTALL = re.compile(r"apt-get install [^&]*\bjq\b")
 BUILDER_STAGE = "builder"
 LOCKED_BUILD_ENV = "MATURIN_PEP517_ARGS=--locked"
 UV_BUILD = "uv build"
@@ -79,10 +92,11 @@ def copied_paths(dockerfile: str, stage: str = RUNTIME_STAGE) -> list[str]:
 
     Returns:
         sources: Each COPY source of that stage, relative to the build context, without `./`.
+            A line ending in a backslash continues on the next.
     """
     sources: list[str] = []
     current = ""
-    for line in dockerfile.splitlines():
+    for line in dockerfile.replace("\\\n", " ").splitlines():
         words = line.split()
         if not words or words[0].startswith("#"):
             continue
@@ -214,6 +228,13 @@ def test_docker_image_holds_every_path_the_nightly_core_tests_read() -> None:
     assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
 
 
+def test_docker_image_holds_every_path_the_nightly_failure_tests_read() -> None:
+    read = read_paths(NIGHTLY_FAILURE_TESTS.read_text(encoding="utf-8"))
+    assert set(read) == NIGHTLY_WORKFLOWS
+    missing = missing_image_paths(DOCKERFILE, DOCKERIGNORE, NIGHTLY_FAILURE_TESTS)
+    assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
+
+
 def test_regression_missing_dockerfile_fails_in_a_source_checkout() -> None:
     moved = REPO_ROOT / "docker" / "Dockerfile.moved"
     assert LIBRARY_ROOT.is_dir()
@@ -230,9 +251,10 @@ def test_docker_path_check_flags_a_missing_and_an_ignored_path() -> None:
         "COPY --from=builder /dist /dist\n"
         "COPY noxfile.py ./\n"
         "COPY docs ./docs\n"
+        "COPY a.yml \\\n    b.yml ./\n"
     )
     copied = copied_paths(dockerfile)
-    assert copied == ["noxfile.py", "docs"]
+    assert copied == ["noxfile.py", "docs", "a.yml", "b.yml"]
     assert is_in_image("noxfile.py", copied, [])
     assert not is_in_image("e8s/core/types.py", copied, [])
     assert not is_in_image("docs/a.md", copied, ["docs/"])
@@ -257,6 +279,20 @@ def test_top_level_check_flags_a_dropped_copy_and_a_new_folder() -> None:
     assert skipped_entries(entries, copied, ["docs/"]) == set()
     assert skipped_entries(entries, copied[1:], ["docs/"]) == {"scripts"}
     assert skipped_entries(entries | {"assets"}, copied, ["docs/"]) == {"assets"}
+
+
+def stage_text(dockerfile: str, stage: str = RUNTIME_STAGE) -> str:
+    """Returns the text of one stage of a Dockerfile, from its FROM line to the next."""
+    blocks = re.split(r"^(?=FROM )", dockerfile, flags=re.MULTILINE)
+    return next((block for block in blocks if block.split("\n", 1)[0].endswith(f" AS {stage}")), "")
+
+
+def test_runtime_image_installs_jq_for_the_report_tests() -> None:
+    runtime = stage_text(DOCKERFILE.read_text(encoding="utf-8"))
+    assert runtime.startswith("FROM ")
+    assert JQ_INSTALL.search(runtime), "E: docker/Dockerfile's runtime stage does not install jq"
+    assert not JQ_INSTALL.search(stage_text("FROM a AS runtime\nRUN apt-get install gcc\n"))
+    assert stage_text("FROM a AS builder\n") == ""
 
 
 def unlocked_builds(dockerfile: str) -> list[str]:
