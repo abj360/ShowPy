@@ -7,6 +7,8 @@ Contains:
     test_same_file_under_two_names_has_the_same_bytes: answers from the inode, reading nothing
     test_same_bytes_compares_every_piece: tells equal from unequal files of one size, the
         difference in the last piece
+    test_same_bytes_reads_each_file_a_piece_at_a_time: never asks either file for more than
+        COMPARE_PIECE_BYTES in one read
     test_regression_same_bytes_never_trusts_an_inode_of_zero: compares the bytes of two files
         whose file system reports inode 0 for both
     test_same_bytes_refuses_what_is_not_a_regular_file: answers False for a missing file, a
@@ -18,6 +20,7 @@ Contains:
 import os
 import sys
 from pathlib import Path
+from typing import IO
 
 import pytest
 
@@ -51,6 +54,46 @@ def test_same_bytes_compares_every_piece(tmp_path: Path, monkeypatch: pytest.Mon
     other.write_bytes(base[:-1] + b"X")
     assert has_same_bytes(first, same) is True
     assert has_same_bytes(first, other) is False
+
+
+class _RecordingReader:
+    """Wraps an open file, recording the size each read asks for."""
+
+    def __init__(self, handle: IO[bytes], sizes: list[int]) -> None:
+        self._handle = handle
+        self._sizes = sizes
+
+    def __enter__(self) -> "_RecordingReader":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._handle.close()
+
+    def fileno(self) -> int:
+        return self._handle.fileno()
+
+    def read(self, size: int = -1) -> bytes:
+        self._sizes.append(size)
+        return self._handle.read(size)
+
+
+def test_same_bytes_reads_each_file_a_piece_at_a_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(durable_reads, "COMPARE_PIECE_BYTES", PIECE)
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.write_bytes(b"abcd" * 5)
+    second.write_bytes(b"abcd" * 5)
+    sizes: list[int] = []
+    real_fdopen = os.fdopen
+
+    def recording_fdopen(descriptor: int, mode: str = "r") -> _RecordingReader:
+        return _RecordingReader(real_fdopen(descriptor, mode), sizes)
+
+    monkeypatch.setattr(os, "fdopen", recording_fdopen)
+    assert has_same_bytes(first, second) is True
+    assert len(sizes) >= 2 * 5
+    assert all(0 < size <= PIECE for size in sizes)
 
 
 def test_regression_same_bytes_never_trusts_an_inode_of_zero(
