@@ -14,9 +14,8 @@ from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
-from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
+from e8s.core.errors import ConflictError, UnknownRefError
 from e8s.core.json_types import JsonValue
-from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
@@ -25,17 +24,24 @@ from e8s.show.backend import (
     unknown_revision_error,
 )
 from e8s.show.backend_checks import (
+    FIRST_SEQ,
     ReadBudget,
     Record,
     corrupt,
+    parsed_json,
+    parsed_manifest,
+    parsed_slot,
     refuse_redirect,
+    require_blob_digest,
     require_caller_ids,
     require_plain_folders,
+    stored_revision,
 )
 from e8s.show.commit_writes import (
     STALE_TEMP_AGE,
+    FilePlacer,
     flush_directories,
-    place_file,
+    place_or_check,
     remove_lost_record,
     store_blobs,
     store_record,
@@ -49,7 +55,6 @@ from e8s.show.durable_io import (
     remove_stale_temps,
 )
 from e8s.show.history_models import Revision
-from e8s.show.integrity import blob_digest
 from e8s.show.layout import (
     HOUSEKEEPING_NAMES,
     TEMP_DIR,
@@ -62,6 +67,7 @@ from e8s.show.layout1 import (
 )
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.storage import ROOT_REVISION
+from e8s.show.torn_reads import is_unfinished_json, is_unfinished_line, read_settled
 
 SLOT_DIGITS = 12
 SHOWS_DIR = "shows"
@@ -69,10 +75,7 @@ LOG_DIR = "log"
 RECORD_DIR = "records"
 OBJECT_DIR = "objects"
 MANIFEST_FILE = "show.json"
-SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
-MANIFEST_KEYS = frozenset({"id", "legacy_before"})
-FIRST_SEQ = 1
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
 # A log call reads every slot after `since` and its record. The bytes it reads are capped at the
@@ -88,8 +91,9 @@ class FileBackend:
 
     Slot `n` (`log/000000000001` and on) holds the n-th revision as one line of canonical JSON.
     A commit writes its blobs and its record, then claims slot `parent seq + 1` with an exclusive
-    link: the writer that creates the slot lands, every other writer gets ConflictError. The
-    backend remembers the last slot it saw per show, so a warm head() looks up one name.
+    link, or an exclusive create where the file system cannot hard-link: the writer that creates
+    the slot lands, every other writer gets ConflictError. The backend remembers the last slot it
+    saw per show, so a warm head() looks up one name.
 
     Attributes:
         root: Repository root folder.
@@ -113,6 +117,7 @@ class FileBackend:
         self._manifests: dict[str, int] = {}
         self._has_layout = False
         self._flushed: set[str] = set()
+        self._placer = FilePlacer(root / TEMP_DIR)
 
     def _folder(self, show_id: str) -> Path:
         return self.root / SHOWS_DIR / show_folder(show_id)
@@ -127,40 +132,24 @@ class FileBackend:
         self, show_id: str, path: Path, kind: str, cap: int, budget: ReadBudget | None = None
     ) -> JsonValue:
         """Reads and parses one stored JSON file, mapping every refusal to CORRUPT."""
-        raw = read_capped(path, kind, cap, lambda source, why: corrupt(show_id, source, why))
+        return parsed_json(show_id, path, kind, self._read_raw(show_id, path, kind, cap, budget))
+
+    def _read_raw(
+        self, show_id: str, path: Path, kind: str, cap: int, budget: ReadBudget | None
+    ) -> bytes:
+        """Reads a stored file; one still being filled returns what it held, for its checks."""
+        fail = partial(corrupt, show_id)
+        raw = read_capped(path, kind, cap, fail, allows_growth=True)
         if budget is not None:
             budget.spend(len(raw))
-        try:
-            return parse_strict_json(raw, document=kind)
-        except SchemaError as error:
-            raise corrupt(show_id, path, f"{kind} is not valid JSON") from error
-
-    def _revision(self, show_id: str, path: Path, stored: JsonValue) -> Revision:
-        try:
-            revision = Revision._validated(stored)
-        except SchemaError as error:
-            raise corrupt(show_id, path, "stored revision is malformed") from error
-        ids = [revision.id] if revision.parent == ROOT_REVISION else [revision.id, revision.parent]
-        if not all(REVISION_ID_PATTERN.fullmatch(value) for value in ids):
-            raise corrupt(show_id, path, "stored revision ID is not a 64-digit hex id")
-        return revision
+        return raw
 
     def _manifest(self, show_id: str, folder: Path) -> tuple[str, int]:
         """Reads a manifest: the show ID its folder must encode and its `legacy_before` slot."""
         path = folder / MANIFEST_FILE
-        stored = self._read(show_id, path, "manifest", MANIFEST_MAX_BYTES)
-        if not isinstance(stored, dict) or not {"id"} <= stored.keys() <= MANIFEST_KEYS:
-            raise corrupt(show_id, path, "manifest must hold id and may hold legacy_before")
-        listed, legacy_before = stored["id"], stored.get("legacy_before", FIRST_SEQ)
-        if not isinstance(listed, str) or show_folder(listed) != folder.name:
-            raise corrupt(show_id, path, "manifest names a show stored in another folder")
-        if (
-            not isinstance(legacy_before, int)
-            or isinstance(legacy_before, bool)
-            or legacy_before < 1
-        ):
-            raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
-        return listed, legacy_before
+        read = partial(self._read_raw, show_id, path, "manifest", MANIFEST_MAX_BYTES, None)
+        stored = parsed_json(show_id, path, "manifest", read_settled(read, is_unfinished_json))
+        return parsed_manifest(show_id, path, stored)
 
     def _check_manifest(self, show_id: str) -> None:
         """Checks once per backend that no folder is a link and the manifest names this show."""
@@ -216,11 +205,10 @@ class FileBackend:
         return lstat_mode(show_id, self._slot_path(show_id, seq)) is not None
 
     def _read_slot(self, show_id: str, seq: int, budget: ReadBudget | None = None) -> Revision:
+        """Reads a slot, rereading it while it is not yet one finished line."""
         path = self._slot_path(show_id, seq)
-        stored = self._read(show_id, path, "slot", SLOT_MAX_BYTES, budget)
-        if not isinstance(stored, dict) or stored.keys() != SLOT_KEYS:
-            raise corrupt(show_id, path, f"slot must hold exactly {sorted(SLOT_KEYS)}")
-        return self._revision(show_id, path, stored)
+        read = partial(self._read_raw, show_id, path, "slot", SLOT_MAX_BYTES, budget)
+        return parsed_slot(show_id, path, read_settled(read, is_unfinished_line))
 
     def _remember(self, show_id: str, seq: int, revision_id: str) -> None:
         if seq >= self._seen.get(show_id, (0, ROOT_REVISION))[0]:
@@ -344,7 +332,7 @@ class FileBackend:
         seq, tree = stored["seq"], stored["tree"]
         if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
             raise corrupt(show_id, path, "record seq is not a positive integer")
-        revision = self._revision(show_id, path, stored["revision"])
+        revision = stored_revision(show_id, path, stored["revision"])
         if revision.id != revision_id:
             raise corrupt(show_id, path, "record holds another revision than its name")
         if not isinstance(tree, dict) or not all(
@@ -393,8 +381,7 @@ class FileBackend:
         data = read_capped(
             path, "blob", BLOB_MAX_BYTES, lambda source, why: corrupt(show_id, source, why)
         )
-        if blob_digest(data) != path.name:
-            raise corrupt(show_id, path, "blob bytes do not match their digest")
+        require_blob_digest(show_id, path, data)
         return data
 
     def commit(
@@ -453,7 +440,9 @@ class FileBackend:
         for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
             durable_io.make_folder(folder / name)
         if show_id not in self._manifests:
-            if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
+            check = partial(self._manifest, show_id, folder)
+            manifest, data = folder / MANIFEST_FILE, dump_json({"id": show_id})
+            if place_or_check(self._placer, show_id, manifest, data, check):
                 self._manifests[show_id] = FIRST_SEQ
             else:
                 self._check_manifest(show_id)
@@ -465,31 +454,26 @@ class FileBackend:
         """Links `layout.json` into place, after `tmp/` and before anything else is written."""
         if self._has_layout:
             return
-        write_layout_file(self.root, show_id)
+        write_layout_file(self.root, show_id, self._placer)
         self._has_layout = True
-
-    def _place(self, show_id: str, target: Path, data: bytes) -> bool:
-        """Writes `data` under `target` through a temp file; False when the name was taken."""
-        return place_file(self.root / TEMP_DIR, show_id, target, data)
 
     def _store_blobs(self, show_id: str, blobs: Mapping[str, bytes]) -> None:
         """Stores each blob, keeping one already there only when it holds the same bytes."""
-        objects = self._folder(show_id) / OBJECT_DIR
-        verify = partial(self._verified_blob, show_id)
-        store_blobs(self.root / TEMP_DIR, show_id, objects, blobs, verify)
+        store_blobs(self._placer, show_id, self._folder(show_id) / OBJECT_DIR, blobs)
 
     def _store_record(
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
     ) -> None:
         """Places the revision record, or checks the one an identical commit placed first."""
         record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
-        store_record(self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record)
+        store_record(self._placer, show_id, self._record_path(show_id, revision.id), record)
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
         self._require_no_gap(show_id, seq)
         slot = jcs(revision.to_json()) + b"\n"
         path = self._slot_path(show_id, seq)
-        if not place_file(self.root / TEMP_DIR, show_id, path, slot):
+        check = partial(self._read_slot, show_id, seq)
+        if not place_or_check(self._placer, show_id, path, slot, check):
             raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
         flush_directories(path.parent, is_commit_point=True)

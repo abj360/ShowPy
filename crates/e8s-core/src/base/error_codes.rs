@@ -168,6 +168,8 @@ pub enum ErrorCode {
     TooManySets,
     /// A cast holds more spots than MAX_SPOTS, or a text form asks for more than its own cap.
     TooManySpots,
+    /// A repository slot stays empty or cut short after every reread: its writer stopped early.
+    TornSlot,
     /// A placement names a form that does not exist.
     UnknownForm,
     /// A show.json or interchange document names no known format, or half a format header.
@@ -276,6 +278,7 @@ impl ErrorCode {
             Self::TooLarge => "TOO_LARGE",
             Self::TooManySets => "TOO_MANY_SETS",
             Self::TooManySpots => "TOO_MANY_SPOTS",
+            Self::TornSlot => "TORN_SLOT",
             Self::UnknownForm => "UNKNOWN_FORM",
             Self::UnknownFormat => "UNKNOWN_FORMAT",
             Self::UnknownRef => "UNKNOWN_REF",
