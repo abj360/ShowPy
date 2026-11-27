@@ -10,7 +10,11 @@ Contains:
         larger than it
     test_regression_write_with_an_older_expected_revision_normalizes_that_revision: stages a write
         on the show at the expected revision, not the one the workspace was opened at
-    test_get_script_on_a_v1_head_migrates_once: migrates a v1 tree once across reads and a write
+    test_get_script_on_a_v1_head_migrates_once: assembles a v1 tree's migrated show
+        once across reads and a write
+    test_layout1_tree_decodes_once_across_reads: assembles a layout-1 tree's show once across reads
+    test_regression_malformed_canvas_file_does_not_stop_a_v1_show_loading: loads the show of a v1
+        tree whose canvas selection file is not JSON
     test_regression_v1_workspace_reads_a_file_at_a_renamed_set_folder: reads `/sets/con_/set.py`
         of a v1 tree whose stored folder is `/sets/con/`
     test_canonical_revisions_are_bounded: remembers at most the cap of canonical revisions
@@ -26,7 +30,7 @@ import pytest
 
 from e8s.core.util import content_hash
 from e8s.examples import two_set_show
-from e8s.show import documents as documents_module
+from e8s.show import document_reading
 from e8s.show import workspace as workspace_module
 from e8s.show.document_paths import set_doc
 from e8s.show.documents import SHOW_DOC, dump_json, needs_rewrite
@@ -149,12 +153,30 @@ def test_regression_write_with_an_older_expected_revision_normalizes_that_revisi
 
 def test_get_script_on_a_v1_head_migrates_once(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _stored_repo(_v1_docs())
-    migrations = _counting(monkeypatch, documents_module, "read_migrated")
+    migrations = _counting(monkeypatch, document_reading, "_migrated_show")
     ws = open_workspace(repo, SHOW_ID)
     for _ in range(3):
         assert ws.read(f"/sets/{MIGRATED_SET}/set.py") == LEGACY_SCRIPT.decode()
     ws.write(f"/sets/{MIGRATED_SET}/set.py", "# edited\n", at=AT)
     assert migrations() == 1
+
+
+def test_layout1_tree_decodes_once_across_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _stored_repo(layout1_documents(two_set_show()))
+    assemblies = _counting(monkeypatch, document_reading, "_assemble")
+    ws = open_workspace(repo, SHOW_ID)
+    for _ in range(3):
+        ws.read("/sets/1/placements.csv")
+        ws.ls("/sets/")
+    assert assemblies() == 1
+
+
+def test_regression_malformed_canvas_file_does_not_stop_a_v1_show_loading() -> None:
+    docs = _v1_docs() | {"/canvas/selection.json": b"{not json"}
+    ws = open_workspace(_stored_repo(docs), SHOW_ID)
+    show = load_show(ws)
+    assert show.set_ids() == [MIGRATED_SET, "2"]
+    assert ws.show_at(ws.revision) is not None
 
 
 def test_regression_v1_workspace_reads_a_file_at_a_renamed_set_folder() -> None:

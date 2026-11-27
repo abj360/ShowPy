@@ -27,11 +27,14 @@ from datetime import datetime
 from e8s.core.errors import UnknownRefError
 from e8s.core.util import close_matches
 from e8s.show.decode_cache import DecodeCache
+from e8s.show.document_reading import read_migrated
 from e8s.show.documents import (
     SHOW_DOC,
+    MigratedRead,
     MigratedView,
     decode_show,
     encode_documents,
+    is_older_tree,
     is_show_doc,
     migrated_view,
     split_path,
@@ -85,6 +88,7 @@ class Workspace:
         self._revision = revision
         self._trees = RevisionCache[Mapping[str, bytes]](WORKSPACE_TREES)
         self._views = RevisionCache[Mapping[str, bytes]](WORKSPACE_VIEWS)
+        self._reads = RevisionCache[MigratedRead](WORKSPACE_SHOWS)
         self._shows = RevisionCache[Show | None](WORKSPACE_SHOWS)
         self._blobs = BlobCache(WORKSPACE_BLOB_BYTES)
         # Serves only show_at, which validates with one context, so entries never mix contexts.
@@ -123,9 +127,29 @@ class Workspace:
         through revisions decodes only what each one changed; the show is still validated whole.
         """
         if revision not in self._shows:
-            tree = self.tree_at(revision)
-            self._shows[revision] = self._decoded(tree, revision) if SHOW_DOC in tree else None
+            self._shows[revision] = self._decode_at(revision)
         return self._shows[revision]
+
+    def _decode_at(self, revision: str) -> Show | None:
+        """Returns the show at a revision, taken from its migration when it needs a rewrite."""
+        tree = self.tree_at(revision)
+        if SHOW_DOC not in tree:
+            return None
+        if is_older_tree(tree):
+            return self._older_read(revision, tree)[0].replace(revision=revision)
+        view = self._view_at(revision)
+        if isinstance(view, MigratedView) and view.show is not None:
+            return view.show.replace(revision=revision)
+        return self._decoded(tree, revision)
+
+    def _older_read(self, revision: str, tree: Mapping[str, bytes]) -> MigratedRead:
+        """Migrates an older tree once, so the show and the view share one reading.
+
+        The show needs no canvas files, so a malformed one stops only the view.
+        """
+        if revision not in self._reads:
+            self._reads[revision] = read_migrated(tree)
+        return self._reads[revision]
 
     def _decoded(self, tree: Mapping[str, bytes], revision: str) -> Show:
         """Decodes a tree, reusing documents whose blob digest an earlier revision decoded."""
@@ -145,7 +169,9 @@ class Workspace:
     def _view_at(self, revision: str) -> Mapping[str, bytes]:
         """Returns a revision's tree as the first save would store it, migrating it once."""
         if revision not in self._views:
-            self._views[revision] = migrated_view(self.tree_at(revision))
+            tree = self.tree_at(revision)
+            read = self._older_read(revision, tree) if is_older_tree(tree) else None
+            self._views[revision] = migrated_view(tree, read)
         return self._views[revision]
 
     def read(self, path: str) -> str | bytes:
