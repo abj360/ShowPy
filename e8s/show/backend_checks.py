@@ -6,6 +6,8 @@ Contains:
     corrupt(): builds the StorageError for a stored file that fails a check
     Record: holds a revision record's slot number, revision and tree
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
+    refuse_redirect(): refuses a folder that is a symlink or a junction
+    require_plain_folders(): refuses every listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
 """
 
@@ -16,6 +18,7 @@ from typing import NamedTuple
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.core.json_types import JsonValue
+from e8s.show import durable_io
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import REVISION_ID_PATTERN
 from e8s.show.storage import ROOT_REVISION
@@ -90,3 +93,22 @@ def require_caller_ids(
         _caller_id(show_id, revision.parent, "parent id")
     for digest in [*blobs, *tree.values()]:
         _caller_id(show_id, digest, "blob digest")
+
+
+def refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:
+    """Raises CORRUPT when `path`, with stat mode `mode`, is a symlink or a junction."""
+    if durable_io.is_redirect(path, mode):
+        raise corrupt(show_id, path, "folder is a symbolic link or junction")
+
+
+def require_plain_folders(show_id: str, *folders: Path) -> None:
+    """Raises CORRUPT for the first listed folder that is a symlink or a junction.
+
+    Args:
+        show_id: Show the folders belong to, named in the error.
+        folders: Folders a read or write passes through; a missing one is fine.
+    """
+    for path in folders:
+        mode = durable_io.lstat_mode(show_id, path)
+        if mode is not None:
+            refuse_redirect(path, mode, show_id)

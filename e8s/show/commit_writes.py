@@ -2,6 +2,8 @@
 commit_writes.py --- the writes of a layout-2 commit: files placed by exclusive link
 
 Contains:
+    LAYOUT_BYTES: holds the content of `layout.json` for the layout this backend writes
+    write_layout_file(): places `layout.json` under a layout-2 root, after `tmp/` exists
     flush_directories(): flushes each folder so the names placed in it survive power loss
     place_file(): writes bytes to a temp file and links it under a name that never gets replaced
     store_blobs(): places each blob, keeping one already there only when it holds the same bytes
@@ -11,9 +13,20 @@ Contains:
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
+from e8s.core.errors import VersionError
 from e8s.show import durable_io
 from e8s.show.backend_checks import corrupt
+from e8s.show.document_dump import dump_json
+from e8s.show.layout import (
+    CURRENT_LAYOUT,
+    LAYOUT_FILE,
+    LAYOUT_FORMAT,
+    TEMP_DIR,
+    read_layout,
+)
 from e8s.show.layout1 import TREE_MAX_BYTES
+
+LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
 
 
 def place_file(temp_folder: Path, show_id: str, target: Path, data: bytes) -> bool:
@@ -89,3 +102,21 @@ def flush_directories(*folders: Path, is_commit_point: bool = False) -> None:
     """
     for folder in folders:
         durable_io.flush_directory(folder, is_commit_point=is_commit_point)
+
+
+def write_layout_file(root: Path, show_id: str) -> None:
+    """Creates `tmp/` and links `layout.json` into place, or checks the one already there.
+
+    Args:
+        root: Repository root folder.
+        show_id: Show the commit belongs to, named in errors.
+    """
+    if read_layout(root) != CURRENT_LAYOUT:
+        raise VersionError(
+            f"repository at {root} is layout 1, which this backend does not write",
+            hint="open it with FileRepository, which reads layout 1",
+            context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(root)},
+        )
+    durable_io.make_folder(root / TEMP_DIR)
+    if not place_file(root / TEMP_DIR, show_id, root / LAYOUT_FILE, LAYOUT_BYTES):
+        read_layout(root)
