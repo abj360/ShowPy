@@ -417,15 +417,14 @@ class FileBackend:
             self._prepare(show_id)
             remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
             self._store_blobs(show_id, blobs)
-            is_record_new = self._store_record(show_id, revision, seq, tree)
+            self._store_record(show_id, revision, seq, tree)
             folder = self._folder(show_id)
             flush_directories(folder / OBJECT_DIR, folder / RECORD_DIR)
             try:
                 self._claim_slot(show_id, revision, seq)
             except ConflictError:
-                if is_record_new:
-                    winner = self._read_slot(show_id, seq).id
-                    remove_lost_record(self._record_path(show_id, revision.id), winner, revision.id)
+                winner = self._read_slot(show_id, seq).id
+                remove_lost_record(self._record_path(show_id, revision.id), winner, revision.id)
                 raise
             self._remember(show_id, seq, revision.id)
 
@@ -481,12 +480,10 @@ class FileBackend:
 
     def _store_record(
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
-    ) -> bool:
+    ) -> None:
         """Places the revision record, or checks the one an identical commit placed first."""
         record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
-        return store_record(
-            self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record
-        )
+        store_record(self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record)
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""

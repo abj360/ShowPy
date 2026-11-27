@@ -25,6 +25,8 @@ Contains:
         commit's `at`
     test_regression_losing_commit_leaves_no_orphan_tree: removes the tree file of a commit that lost
         the race
+    test_retried_commit_that_loses_leaves_no_orphan_record: removes the record a crashed attempt of
+        the same commit left, once the retry loses its slot
     test_losing_identical_commit_keeps_the_shared_record: keeps the record of a commit that lost
         its slot to an identical commit
     test_regression_tree_record_refuses_duplicate_keys: maps a tree record repeating a key to
@@ -311,6 +313,33 @@ def test_losing_identical_commit_keeps_the_shared_record(
     record = root / "shows" / show_folder(SHOW_ID) / "records" / f"{revision.id}.json"
     assert record.is_file()
     assert repo.head(SHOW_ID) == revision.id
+
+
+def test_retried_commit_that_loses_leaves_no_orphan_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Removes the record a crashed attempt left, once the retry of that commit loses its slot."""
+    repo, rev, root = _saved_v2(tmp_path)
+    blob = b"retried"
+    tree = {"/renders/b.txt": digest(blob)}
+    revision = Revision(
+        id=revision_id(rev, AT, tree), parent=rev, at=AT, changed=("/renders/b.txt",)
+    )
+    crashing = FileBackend(root)
+
+    def crash(*_args: object) -> None:
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(crashing, "_claim_slot", crash)
+        with pytest.raises(KeyboardInterrupt):
+            crashing.commit(SHOW_ID, revision, tree, {digest(blob): blob})
+    record = root / "shows" / show_folder(SHOW_ID) / "records" / f"{revision.id}.json"
+    assert record.is_file()
+    _second_revision(repo, rev)
+    with pytest.raises(ConflictError):
+        FileBackend(root).commit(SHOW_ID, revision, tree, {digest(blob): blob})
+    assert not record.exists()
 
 
 CORRUPT = "CORRUPT"

@@ -78,7 +78,7 @@ def store_blobs(
         verify(target)
 
 
-def store_record(temp_folder: Path, show_id: str, path: Path, record: bytes) -> bool:
+def store_record(temp_folder: Path, show_id: str, path: Path, record: bytes) -> None:
     """Places a revision record, or checks the one an identical commit placed first.
 
     Args:
@@ -86,18 +86,14 @@ def store_record(temp_folder: Path, show_id: str, path: Path, record: bytes) -> 
         show_id: Show the record belongs to, named in errors.
         path: Name of the record file.
         record: Encoded record bytes.
-
-    Returns:
-        is_placed: True when this call created the record, False when an identical one existed.
     """
     if place_file(temp_folder, show_id, path, record):
-        return True
+        return
     stored = durable_io.read_capped(
         path, "revision record", TREE_MAX_BYTES, lambda p, why: corrupt(show_id, p, why)
     )
     if stored != record:
         raise corrupt(show_id, path, "revision record differs from this commit")
-    return False
 
 
 def remove_lost_record(path: Path, winner_id: str, revision_id: str) -> None:
