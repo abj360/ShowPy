@@ -38,7 +38,6 @@ Contains:
 
 import dataclasses
 import gzip
-import hashlib
 import json
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -59,6 +58,7 @@ from e8s.choreo.engine_models import MotionSegment
 from e8s.choreo.models import Set
 from e8s.core.ids import SetId, SpotId
 from e8s.core.util import approx_equal, content_hash
+from e8s.show import document_repository
 from e8s.show.collab_models import CanvasEvent
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
@@ -200,8 +200,7 @@ def v1_documents() -> dict[str, bytes]:
 def _commit_v1(repo: FileRepository, show_id: str, docs: Mapping[str, bytes]) -> str:
     """Commits v1 documents through the backend, as a v0.3.0 writer stored them."""
     tree = {path: blob_digest(raw) for path, raw in docs.items()}
-    body = {"parent": ROOT_REVISION, "at": AT.isoformat(), "tree": tree}
-    revision_id = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+    revision_id = document_repository.revision_id(ROOT_REVISION, AT, tree)
     revision = Revision(id=revision_id, parent=ROOT_REVISION, at=AT, changed=tuple(sorted(docs)))
     repo.backend.commit(show_id, revision, tree, {blob_digest(raw): raw for raw in docs.values()})
     return revision_id
