@@ -39,6 +39,16 @@ Contains:
     test_shrink_conflicts_with_a_route_the_head_added: refuses a plain shrink beside a head route
     test_rescale_conflicts_with_a_facing_override_the_head_removed: refuses a rescale beside a
         head removal of an override it would shift
+    test_regression_paths_proposal_conflicts_with_a_head_rescale: refuses a proposed row timed
+        against counts the head rescaled
+    test_regression_proposed_row_conflicts_with_a_head_rescale_of_a_stored_row: refuses the
+        proposed row beside a stored row the head scaled
+    test_regression_paths_proposal_conflicts_with_a_head_rescale_grow: refuses a proposed row
+        after the head lengthened the set
+    test_regression_paths_proposal_conflicts_with_a_plain_head_retime: refuses a proposed row
+        after the head retimed without rescaling
+    test_placement_proposal_merges_beside_a_head_retime: keeps a proposal that touches no row or
+        route of the retimed transition
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -46,12 +56,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from e8s.choreo.models import Placement
 from e8s.choreo.path_models import FacingMode, FacingOverride, PathRow, Route, TransitionSpec
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, StorageError
 from e8s.core.ids import RouteId, SetId, SpotId, make_tid
 from e8s.geo.curves import Segment
-from e8s.show.collab_models import ChangeOp, CountsOp, PathsOp
+from e8s.show.collab_models import ChangeOp, CountsOp, PathsOp, PlacementOp
 from e8s.show.manage import add_set, set_counts
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
@@ -311,3 +322,61 @@ def test_rescale_conflicts_with_a_facing_override_the_head_removed() -> None:
     rescale = CountsOp(set_id=SetId("2"), counts=2 * base.set("2").counts, rescale=True)
     designer = _head_edits(base, rescale, lambda head: head.replace(facing_overrides=()))
     assert is_stale(designer, "p1")
+
+
+def _t1_row(start: float) -> Mapping[SpotId, PathRow]:
+    return {SpotId("T1"): PathRow(entity=SpotId("T1"), start=start)}
+
+
+def test_regression_paths_proposal_conflicts_with_a_head_rescale() -> None:
+    """Refuses a row timed against the base's counts once the head rescaled the set."""
+    base = two_set_show()
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base, rows=_t1_row(2.0))),
+        lambda head: set_counts(head, "2", SHORTER, rescale=True),
+    )
+    _assert_refused_everywhere(designer, "path_row", "T1")
+
+
+def test_regression_proposed_row_conflicts_with_a_head_rescale_of_a_stored_row() -> None:
+    """Refuses the proposed row when the head scaled the stored row it sits beside."""
+    stored = PathRow(entity=SpotId("T2"), start=4.0)
+    base = two_set_show()
+    base = base.replace(transitions=(_spec(base, rows={SpotId("T2"): stored}),))
+    proposed = _spec(base, rows={SpotId("T2"): stored, **_t1_row(2.0)})
+    designer = _head_edits(
+        base, PathsOp(spec=proposed), lambda head: set_counts(head, "2", SHORTER, rescale=True)
+    )
+    _assert_refused_everywhere(designer, "path_row", "T1")
+
+
+def test_regression_paths_proposal_conflicts_with_a_head_rescale_grow() -> None:
+    """Refuses a row that would land at the same absolute count in a longer transition."""
+    base = two_set_show()
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base, rows=_t1_row(6.0))),
+        lambda head: set_counts(head, "2", 2 * base.set("2").counts, rescale=True),
+    )
+    _assert_refused_everywhere(designer, "path_row", "T1")
+
+
+def test_regression_paths_proposal_conflicts_with_a_plain_head_retime() -> None:
+    """Refuses a proposed row after a head retime that did not rescale: it cannot be told apart."""
+    base = two_set_show()
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base, rows=_t1_row(2.0))),
+        lambda head: set_counts(head, "2", SHORTER),
+    )
+    _assert_refused_everywhere(designer, "path_row", "T1")
+
+
+def test_placement_proposal_merges_beside_a_head_retime() -> None:
+    """Keeps a proposal that changes no row or route of the transition the head retimed."""
+    move = PlacementOp(set_id=SetId("2"), placement=Placement(entity=SpotId("T1"), x=-2.0, y=9.0))
+    designer = _head_edits(two_set_show(), move, lambda head: set_counts(head, "2", SHORTER))
+    assert not is_stale(designer, "p1")
+    accept(designer, "p1", AT + 3 * STEP)
+    assert load_show(designer).set("2").counts == SHORTER

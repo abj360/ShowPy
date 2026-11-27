@@ -244,6 +244,35 @@ def _rescale_conflicts(
     ]
 
 
+def _head_retime_conflicts(base: Show, head: Show, theirs: Show) -> list[MergeConflict]:
+    """Lists rows and routes the proposal changed in a transition the head retimed after the base.
+
+    The proposal times them against the base's counts. The head does not record whether it
+    rescaled, so any change of the destination set's counts counts as a retime.
+    """
+    keys = set_keys_by_id(base)
+    folders = {
+        transition_key(keys, tid)
+        for tid in base.transition_ids()
+        if tid[1] in head.set_ids() and head.set(tid[1]).counts != base.set(tid[1]).counts
+    }
+    if not folders:
+        return []
+    on_head = {c.key.sort_key(): c for c in changes(base, head).changes}
+    return [
+        MergeConflict(
+            key=row.key,
+            base=row.before,
+            ours=on_head[row.key.sort_key()].after if row.key.sort_key() in on_head else row.before,
+            theirs=row.after,
+            reason="the head retimed the transition after the base, so the proposal's timing is "
+            "against the old counts",
+        )
+        for row in changes(base, theirs).changes
+        if row.key.kind in ("path_row", "route") and row.key.path[0] in folders
+    ]
+
+
 def _overrun_conflicts(head: Show, merged: Show) -> list[MergeConflict]:
     """Lists rows and routes the merge leaves running past the counts it gives their transition.
 
@@ -283,6 +312,7 @@ def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResu
     conflicts = [*result.conflicts]
     known = {c.key.sort_key() for c in conflicts}
     found = _rescale_conflicts(base, head, theirs, proposal.change)
+    found += _head_retime_conflicts(base, head, theirs)
     if result.show is not None and not found:
         found = _overrun_conflicts(head, result.show)
     conflicts += [c for c in found if c.key.sort_key() not in known]
