@@ -11,7 +11,8 @@ them:
 - a path row facing toward the spot takes the default `to_target` facing (`rows.<spot>`, its
   `facing_mode` and `facing_value`);
 - a route loses the spot with its offset (`routes.<id>`, the `members` and `offsets` removed);
-- a form slot the spot stood on becomes an open slot (`[i]` of the forms document, `members`);
+- a form slot the spot stood on becomes an open slot (`[i]` of the forms document, `members`),
+  except in a text form, which has no open slots: its member stays for validation to report;
 - a facing override loses the spot (`facing_overrides[i]`, `entities`), and goes whole when no
   spot is left or when it faces toward the spot;
 - an entity pin on the spot goes whole (`pins[i]`).
@@ -39,6 +40,7 @@ FORMS_DOC: Final = re.compile(r"^/sets/[^/]+/forms\.json$")
 PATHS_DOC: Final = re.compile(r"^/transitions/[^/]+/paths\.json$")
 TOWARD_ENTITY: Final = FacingMode.TOWARD_ENTITY.value
 DEFAULT_FACING_MODE: Final = FacingMode.TO_TARGET.value
+TEXT_KIND: Final = "text"
 
 type JsonObject = dict[str, JsonValue]
 
@@ -140,7 +142,7 @@ def _form(
 ) -> JsonObject:
     members = _list(form.get("members"))
     stray = [member for member in members if _is_stray(member, known)]
-    if not stray:
+    if not stray or _object(form.get("recipe")).get("kind") == TEXT_KIND:
         return form
     form_id = form.get("id")
     report.drop(

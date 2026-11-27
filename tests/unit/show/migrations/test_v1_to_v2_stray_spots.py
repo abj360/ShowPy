@@ -7,6 +7,8 @@ Contains:
     test_regression_every_reference_to_a_stray_spot_is_dropped_and_listed: drops a stray spot's
         path row, row facing, route membership, form slot, facing override and pin, lists each
         in MigrationReport.dropped, and the migrated show validates with no error
+    test_regression_v1_text_form_with_a_stray_member_still_reads: keeps a text form's stray member
+        in place, since a text form has no open slots, so validate_show reports UNKNOWN_SPOT
 """
 
 import copy
@@ -18,6 +20,7 @@ from typing import Any
 
 import pytest
 
+from e8s.core.ids import FormId
 from e8s.core.json_types import JsonValue
 from e8s.show.documents import decode_show, migrate_documents
 from e8s.show.file_repository import FileRepository
@@ -33,6 +36,9 @@ ROUTE_ID = "route"
 FACING_SPOT = "B1"
 TOWARD_ENTITY = "toward_entity"
 SET_DOC_SUFFIX = "/set.json"
+TEXT_FORMS_DOC = "/sets/8/forms.json"
+TEXT_FORM_ID = FormId("title")
+TEXT_STRAY_SLOT = 23
 
 type Docs = dict[str, Any]
 # The listed fields must hold these, as stored after the earlier sub-steps.
@@ -160,3 +166,15 @@ def test_regression_every_reference_to_a_stray_spot_is_dropped_and_listed(
     listed_fields = listed["fields"]
     assert isinstance(listed_fields, dict)
     assert {key: listed_fields.get(key) for key in fields} == fields
+
+
+def test_regression_v1_text_form_with_a_stray_member_still_reads(tmp_path: Path) -> None:
+    """Keeps a stray member of a v1 text form; the show reads and validate_show reports it."""
+    docs = _head(tmp_path)
+    (title,) = docs[TEXT_FORMS_DOC]
+    title["members"][TEXT_STRAY_SLOT] = STRAY
+    migrated, report = migrate_documents(_stored(docs))
+    show = decode_show(migrated)
+    assert show.forms[TEXT_FORM_ID].members[TEXT_STRAY_SLOT] == STRAY
+    assert "UNKNOWN_SPOT" in {i.code for i in validate_show(show).issues}
+    assert all(d.document != TEXT_FORMS_DOC for d in report.dropped)
