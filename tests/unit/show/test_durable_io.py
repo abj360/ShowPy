@@ -364,8 +364,10 @@ NO_SYMLINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need 
 
 
 def _aged(path: Path, moment: datetime) -> Path:
+    """Sets a path's own times; Windows cannot set a link's own times, and its tests use none."""
     stamp = moment.timestamp()
-    os.utime(path, (stamp, stamp), follow_symlinks=False)
+    own_times = os.utime in os.supports_follow_symlinks
+    os.utime(path, (stamp, stamp), follow_symlinks=not own_times)
     return path
 
 
