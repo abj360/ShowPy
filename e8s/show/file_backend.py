@@ -449,7 +449,8 @@ class FileBackend:
                 self._manifests[show_id] = FIRST_SEQ
             else:
                 self._check_manifest(show_id)
-        flush_directories(self.root, self.root / SHOWS_DIR, folder)
+        durable_io.flush_directory(self.root, follows_links=True)
+        flush_directories(self.root / SHOWS_DIR, folder)
         self._flushed.add(show_id)
 
     def _ensure_layout(self, show_id: str) -> None:

@@ -14,6 +14,8 @@ Contains:
         same folders in a process that did not create them
     test_commit_flushes_each_file_and_directory_before_its_slot: flushes blobs, record and their
         directories before the slot, which gets a full flush
+    test_regression_commit_on_a_symlinked_root_lands: commits and reads back through a root that
+        is a symlink
     test_directory_flush_is_skipped_on_windows: opens no directory on Windows
     test_directory_flush_opens_without_following_links_and_syncs: opens the folder with
         O_NOFOLLOW and syncs its descriptor
@@ -25,6 +27,7 @@ Contains:
 
 import errno
 import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -69,9 +72,11 @@ def _record_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
         calls.append((LINK_ENTRY, target.parent.name))
         return real_link_new(source, target)
 
-    def recording_flush_directory(path: Path, *, is_commit_point: bool = False) -> None:
+    def recording_flush_directory(
+        path: Path, *, is_commit_point: bool = False, follows_links: bool = False
+    ) -> None:
         calls.append((DIRECTORY_ENTRY, path.name, COMMIT_POINT if is_commit_point else ""))
-        real_flush_directory(path, is_commit_point=is_commit_point)
+        real_flush_directory(path, is_commit_point=is_commit_point, follows_links=follows_links)
 
     monkeypatch.setattr(durable_io, "flush_file", recording_flush_file)
     monkeypatch.setattr(durable_io, "link_new", recording_link_new)
@@ -172,6 +177,18 @@ def test_failed_directory_flush_fails_the_commit_with_io(
         FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
     assert caught.value.code == "IO"
     assert not list((tmp_path / "shows").glob("*/log/*"))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs privilege on Windows")
+def test_regression_commit_on_a_symlinked_root_lands(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    revision, tree, blobs = _change("", 1)
+    backend = FileBackend(link)
+    backend.commit(SHOW_ID, revision, tree, blobs)
+    assert backend.head(SHOW_ID) == revision.id
 
 
 def test_directory_flush_is_skipped_on_windows(
