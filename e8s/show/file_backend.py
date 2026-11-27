@@ -108,6 +108,7 @@ class FileBackend:
         self._seen: dict[str, tuple[int, str]] = {}
         self._manifests: dict[str, int] = {}
         self._has_layout = False
+        self._flushed: set[str] = set()
 
     def _folder(self, show_id: str) -> Path:
         return self.root / SHOWS_DIR / show_folder(show_id)
@@ -432,20 +433,24 @@ class FileBackend:
             raise conflict_error(show_id, parent, self.log(show_id)) from None
 
     def _prepare(self, show_id: str) -> None:
-        """Writes the layout file, the show's folders and its manifest when missing."""
+        """Writes what is missing of the layout file, folders and manifest, and flushes them.
+
+        Whichever process placed an entry, every process flushes the folders that hold them once
+        per show, so a commit never returns while an entry it relies on is still volatile.
+        """
         self._ensure_layout(show_id)
-        if show_id in self._manifests:
+        if show_id in self._flushed:
             return
         folder = self._folder(show_id)
         for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
             durable_io.make_folder(folder / name)
-        if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
-            flush_directories(
-                folder / LOG_DIR, folder / RECORD_DIR, folder / OBJECT_DIR, folder, folder.parent
-            )
-            self._manifests[show_id] = FIRST_SEQ
-        else:
-            self._check_manifest(show_id)
+        if show_id not in self._manifests:
+            if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
+                self._manifests[show_id] = FIRST_SEQ
+            else:
+                self._check_manifest(show_id)
+        flush_directories(self.root, self.root / SHOWS_DIR, folder)
+        self._flushed.add(show_id)
 
     def _ensure_layout(self, show_id: str) -> None:
         """Links `layout.json` into place, after `tmp/` and before anything else is written."""
@@ -458,9 +463,7 @@ class FileBackend:
                 context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(self.root)},
             )
         durable_io.make_folder(self.root / TEMP_DIR)
-        if self._place(show_id, self.root / LAYOUT_FILE, LAYOUT_BYTES):
-            flush_directories(self.root / TEMP_DIR, self.root)
-        else:
+        if not self._place(show_id, self.root / LAYOUT_FILE, LAYOUT_BYTES):
             read_layout(self.root)
         self._has_layout = True
 

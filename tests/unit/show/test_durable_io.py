@@ -4,6 +4,10 @@
 test_durable_io.py --- tests the flushes a layout-2 commit makes before its slot lands
 
 Contains:
+    test_first_commit_flushes_every_directory_it_creates_before_the_slot: flushes the layout
+        entry's folder, shows/ and the show folder after the first files and before the slot
+    test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commit: flushes the
+        same folders in a process that did not create them
     test_commit_flushes_each_file_and_directory_before_its_slot: flushes blobs, record and their
         directories before the slot, which gets a full flush
     test_directory_flush_is_skipped_on_windows: opens no directory on Windows
@@ -27,6 +31,7 @@ from e8s.show.document_repository import revision_id
 from e8s.show.durable_io import flush_directory, flush_file
 from e8s.show.file_backend import FileBackend
 from e8s.show.history_models import Revision
+from e8s.show.show_folders import show_folder
 
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 SHOW_ID = "flushes"
@@ -88,6 +93,47 @@ def test_commit_flushes_each_file_and_directory_before_its_slot(
         (LINK_ENTRY, "log"),
         (DIRECTORY_ENTRY, "log", COMMIT_POINT),
     ]
+
+
+def test_first_commit_flushes_every_directory_it_creates_before_the_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _record_calls(monkeypatch)
+    revision, tree, blobs = _change("", 1)
+    FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert calls[:8] == [
+        (FILE_ENTRY,),
+        (LINK_ENTRY, tmp_path.name),
+        (FILE_ENTRY,),
+        (LINK_ENTRY, show_folder(SHOW_ID)),
+        (DIRECTORY_ENTRY, tmp_path.name, ""),
+        (DIRECTORY_ENTRY, "shows", ""),
+        (DIRECTORY_ENTRY, show_folder(SHOW_ID), ""),
+        (FILE_ENTRY,),
+    ]
+    assert calls[-3:] == [
+        (FILE_ENTRY,),
+        (LINK_ENTRY, "log"),
+        (DIRECTORY_ENTRY, "log", COMMIT_POINT),
+    ]
+
+
+def test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, first_tree, first_blobs = _change("", 1)
+    FileBackend(tmp_path).commit(SHOW_ID, first, first_tree, first_blobs)
+    calls = _record_calls(monkeypatch)
+    second, second_tree, second_blobs = _change(first.id, 2)
+    FileBackend(tmp_path).commit(SHOW_ID, second, second_tree, second_blobs)
+    chain = [
+        (DIRECTORY_ENTRY, tmp_path.name, ""),
+        (DIRECTORY_ENTRY, "shows", ""),
+        (DIRECTORY_ENTRY, show_folder(SHOW_ID), ""),
+    ]
+    start = calls.index(chain[0])
+    assert calls[start : start + len(chain)] == chain
+    assert start < calls.index((LINK_ENTRY, "log"))
 
 
 def test_directory_flush_is_skipped_on_windows(
