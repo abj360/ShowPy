@@ -6,12 +6,18 @@ blobs exactly as a layout-2 repository stores them, read through the repository 
 memory repository exports too. Names are sorted and times zeroed, so equal histories give equal
 bytes. Revision IDs, parents and times travel unchanged.
 
+An import checks the whole archive before it writes anything, refuses a show the repository
+holds, and then commits each revision in order through the backend, which keeps every ID. A
+backend has no commit of several revisions at once, so an import that fails part way leaves the
+revisions that landed: a complete, valid, shorter history, which the error names.
+
 Contains:
     export_archive(): writes one show's whole history as an archive
+    import_archive(): verifies a whole archive, then commits its history as a new show
 """
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import StorageError, UnknownRefError
+from e8s.core.errors import ConflictError, StorageError, UnknownRefError
 from e8s.core.util import close_matches
 from e8s.show.archive_checks import (
     EXPORT_DAMAGE_HINT,
@@ -23,12 +29,15 @@ from e8s.show.archive_checks import (
     record_entry,
     slot_entry,
 )
+from e8s.show.archive_reading import VerifiedArchive, archive_record, verified_archive
 from e8s.show.archive_zip import ArchiveWriter
+from e8s.show.backend import SHORT_ID
 from e8s.show.backend_checks import FIRST_SEQ
 from e8s.show.commit_writes import record_bytes, slot_bytes
 from e8s.show.document_repository import DocumentRepository, require_new_show_id
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
+from e8s.show.storage import ROOT_REVISION
 
 
 def _history(repo: DocumentRepository, show_id: str) -> list[Revision]:
@@ -111,3 +120,81 @@ def export_archive(repo: DocumentRepository, show_id: str) -> bytes:
     for name in sorted(records):
         writer.add(name, records.pop(name))
     return writer.finish()
+
+
+def _exists(show_id: str) -> ConflictError:
+    return ConflictError(
+        f"show {show_id} already exists in this repository",
+        hint="an archive restores a show under the ID it was exported with: import it into a "
+        "repository that does not hold that show",
+        context={"show": show_id},
+    )
+
+
+def _stopped(archive: VerifiedArchive, seq: int, error: StorageError) -> StorageError:
+    """Builds the error of an import whose commit of slot `seq` failed after earlier ones landed."""
+    landed, total = seq - 1, len(archive.revisions)
+    last = archive.revisions[landed - 1].id
+    kind = ConflictError if isinstance(error, ConflictError) else StorageError
+    return kind(
+        f"import of show {archive.show_id} stopped after {landed} of {total} revisions: "
+        f"{error.message}",
+        hint=f"the show holds the archive's first {landed} revisions, each complete, ending at "
+        f"{last[:SHORT_ID]}, so it reads as a shorter history; an import refuses a show that "
+        "exists, so import the archive into a repository that does not hold it",
+        context={"show": archive.show_id, "landed": landed, "total": total, "revision": last},
+        code=error.code,
+    )
+
+
+def _commit_history(repo: DocumentRepository, archive: VerifiedArchive) -> None:
+    """Commits each revision in order, passing each blob with the first tree that names it."""
+    stored: set[str] = set()
+    for seq, revision in enumerate(archive.revisions, start=FIRST_SEQ):
+        tree = archive_record(seq, revision, archive.records[revision.id]).tree
+        blobs = {d: bytes(archive.objects[d]) for d in sorted(set(tree.values()) - stored)}
+        try:
+            repo.backend.commit(archive.show_id, revision, tree, blobs)
+        except ConflictError as error:
+            if seq == FIRST_SEQ:
+                raise _exists(archive.show_id) from error
+            raise _stopped(archive, seq, error) from error
+        except StorageError as error:
+            if seq == FIRST_SEQ:
+                raise
+            raise _stopped(archive, seq, error) from error
+        stored.update(blobs)
+
+
+def import_archive(repo: DocumentRepository, data: bytes) -> str:
+    """Verifies a whole archive, then commits its history into a repository as a new show.
+
+    Every entry is checked before anything is written: the ZIP form, sizes and CRCs, the
+    manifest, each slot, record and blob as a repository read and fsck check them, and that no
+    entry is left over. A refusal raises StorageError naming the entry and writes nothing. A
+    show the repository holds raises ConflictError, also when another writer creates it while
+    the import runs. Revisions keep their IDs, parents and times.
+
+    Args:
+        repo: Repository to import into.
+        data: Archive bytes, untrusted.
+
+    Returns:
+        show_id: The show the archive held, now stored in `repo`.
+
+    >>> from datetime import UTC, datetime
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.memory_backend import InMemoryRepository
+    >>> source, target = InMemoryRepository(), InMemoryRepository()
+    >>> at = datetime(2026, 11, 27, tzinfo=UTC)
+    >>> _ = source.put_show("show_1", two_set_show(), expected_revision="", at=at)
+    >>> import_archive(target, export_archive(source, "show_1"))
+    'show_1'
+    >>> target.revisions("show_1") == source.revisions("show_1")
+    True
+    """
+    archive = verified_archive(data)
+    if repo.head(archive.show_id) != ROOT_REVISION:
+        raise _exists(archive.show_id)
+    _commit_history(repo, archive)
+    return archive.show_id

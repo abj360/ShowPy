@@ -164,7 +164,7 @@ def parsed_slot(show_id: str, path: Path, raw: bytes) -> Revision:
     return stored_revision(show_id, path, stored)
 
 
-def require_blob_digest(show_id: str, path: Path, data: bytes) -> None:
+def require_blob_digest(show_id: str, path: Path, data: bytes | memoryview) -> None:
     """Raises CORRUPT unless a stored blob's bytes hash to its file name."""
     if blob_digest(data) != path.name:
         raise corrupt(show_id, path, "blob bytes do not match their digest")

@@ -13,6 +13,10 @@ Contains:
     ARCHIVE_FORMAT: names the archive format in its manifest; a frozen wire string
     ARCHIVE_VERSION: numbers the archive format this release writes and reads
     MANIFEST_ENTRY: names the manifest entry, the first of every archive
+    SLOT_PREFIX: starts the name of every slot entry
+    RECORD_PREFIX: starts the name of every record entry
+    RECORD_SUFFIX: ends the name of every record entry
+    OBJECT_PREFIX: starts the name of every blob entry
     EXPORT_DAMAGE_HINT: tells the caller how to find the damage an export found in a repository
     LEGACY_ID_HINT: tells the caller why a history whose IDs do not recompute has no archive
     slot_entry(): names the entry of a slot
@@ -50,6 +54,10 @@ from e8s.show.storage import ROOT_REVISION
 ARCHIVE_FORMAT = "e8.show-archive"
 ARCHIVE_VERSION = 1
 MANIFEST_ENTRY = "archive.json"
+SLOT_PREFIX = "log/"
+RECORD_PREFIX = "records/"
+RECORD_SUFFIX = ".json"
+OBJECT_PREFIX = "objects/"
 MANIFEST_KEYS = frozenset({"format", "show", "version"})
 SLOT_ENTRY = re.compile(rf"log/[0-9]{{{SLOT_DIGITS}}}")
 RECORD_ENTRY = re.compile(r"records/[0-9a-f]{64}\.json")
@@ -65,17 +73,17 @@ LEGACY_ID_HINT = (
 
 def slot_entry(seq: int) -> str:
     """Names the entry of slot `seq`, as the slot's file is named in a repository."""
-    return f"log/{seq:0{SLOT_DIGITS}d}"
+    return f"{SLOT_PREFIX}{seq:0{SLOT_DIGITS}d}"
 
 
 def record_entry(revision_id: str) -> str:
     """Names the entry of a revision record."""
-    return f"records/{revision_id}.json"
+    return f"{RECORD_PREFIX}{revision_id}{RECORD_SUFFIX}"
 
 
 def object_entry(digest: str) -> str:
     """Names the entry of a blob."""
-    return f"objects/{digest}"
+    return f"{OBJECT_PREFIX}{digest}"
 
 
 def manifest_bytes(show_id: str) -> bytes:
