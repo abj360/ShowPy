@@ -14,9 +14,8 @@ from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
-from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
+from e8s.core.errors import ConflictError, UnknownRefError
 from e8s.core.json_types import JsonValue
-from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
@@ -29,7 +28,9 @@ from e8s.show.backend_checks import (
     ReadBudget,
     Record,
     corrupt,
+    parsed_json,
     parsed_manifest,
+    parsed_slot,
     refuse_redirect,
     require_caller_ids,
     require_plain_folders,
@@ -65,6 +66,7 @@ from e8s.show.layout1 import (
 )
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.storage import ROOT_REVISION
+from e8s.show.torn_reads import is_unfinished_line, read_settled
 
 SLOT_DIGITS = 12
 SHOWS_DIR = "shows"
@@ -72,7 +74,6 @@ LOG_DIR = "log"
 RECORD_DIR = "records"
 OBJECT_DIR = "objects"
 MANIFEST_FILE = "show.json"
-SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
@@ -128,13 +129,15 @@ class FileBackend:
         self, show_id: str, path: Path, kind: str, cap: int, budget: ReadBudget | None = None
     ) -> JsonValue:
         """Reads and parses one stored JSON file, mapping every refusal to CORRUPT."""
+        return parsed_json(show_id, path, kind, self._read_raw(show_id, path, kind, cap, budget))
+
+    def _read_raw(
+        self, show_id: str, path: Path, kind: str, cap: int, budget: ReadBudget | None
+    ) -> bytes:
         raw = read_capped(path, kind, cap, lambda source, why: corrupt(show_id, source, why))
         if budget is not None:
             budget.spend(len(raw))
-        try:
-            return parse_strict_json(raw, document=kind)
-        except SchemaError as error:
-            raise corrupt(show_id, path, f"{kind} is not valid JSON") from error
+        return raw
 
     def _manifest(self, show_id: str, folder: Path) -> tuple[str, int]:
         """Reads a manifest: the show ID its folder must encode and its `legacy_before` slot."""
@@ -196,11 +199,10 @@ class FileBackend:
         return lstat_mode(show_id, self._slot_path(show_id, seq)) is not None
 
     def _read_slot(self, show_id: str, seq: int, budget: ReadBudget | None = None) -> Revision:
+        """Reads a slot, rereading it while it is not yet one finished line."""
         path = self._slot_path(show_id, seq)
-        stored = self._read(show_id, path, "slot", SLOT_MAX_BYTES, budget)
-        if not isinstance(stored, dict) or stored.keys() != SLOT_KEYS:
-            raise corrupt(show_id, path, f"slot must hold exactly {sorted(SLOT_KEYS)}")
-        return stored_revision(show_id, path, stored)
+        read = partial(self._read_raw, show_id, path, "slot", SLOT_MAX_BYTES, budget)
+        return parsed_slot(show_id, path, read_settled(read, is_unfinished_line))
 
     def _remember(self, show_id: str, seq: int, revision_id: str) -> None:
         if seq >= self._seen.get(show_id, (0, ROOT_REVISION))[0]:

@@ -459,7 +459,7 @@ def test_failed_temp_write_leaves_no_temp_file(
 
 
 def _rewrite_slot(root: Path, content: object) -> None:
-    _slot(root, 2).write_bytes(json.dumps(content).encode())
+    _slot(root, 2).write_bytes(jcs(content) + b"\n")
 
 
 def _rewrite_record(root: Path, stored: Revision, **changes: object) -> None:
@@ -473,7 +473,7 @@ TAMPERS: dict[str, Callable[[Path, list[Revision]], object]] = {
         root, landed[1].to_json() | {"at": "noon"}
     ),
     "slot id not hex": lambda root, landed: _rewrite_slot(root, landed[1].to_json() | {"id": "x"}),
-    "slot not json": lambda root, _: _slot(root, 2).write_bytes(b"{"),
+    "slot not json": lambda root, _: _slot(root, 2).write_bytes(b"{\n"),
     "slot forks": lambda root, landed: _rewrite_slot(
         root, landed[1].to_json() | {"parent": UNKNOWN_ID}
     ),
