@@ -42,11 +42,15 @@ from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_DIR, ROOT_LINK, TREE_DIR, Layo
 from e8s.show.manifests import manifest_json
 from e8s.show.show_folders import show_folder
 from e8s.show.storage_models import ShowUpgrade, UpgradeReport
-from e8s.show.upgrade_source import SourceShow, left_out, list_source
+from e8s.show.upgrade_source import SourceListing, SourceShow, left_out, list_source
 
 SOURCE_HINT = (
     "pass the root folder of a repository written before v0.5.0; a root that holds "
     f"{LAYOUT_FILE} needs no upgrade"
+)
+WRITER_HINT = (
+    "stop every writer on the source, delete the target and run upgrade_repository again; no "
+    "writer may run on the source while it is upgraded"
 )
 TARGET_HINT = (
     "pass a folder that does not exist yet, or an empty one, outside the source; a folder an "
@@ -102,6 +106,7 @@ class _Target:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.links_blobs = True
+        self.heads: dict[str, str] = {}
         with mapped_io("", root):
             durable_io.make_folder(root / SHOWS_DIR)
             durable_io.make_folder(root / TEMP_DIR)
@@ -221,6 +226,7 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
     """Copies one show's history slot by slot, its blobs first, and reports what it moved."""
     show_id = listed.show_id
     revisions = reader.log(show_id)
+    target.heads[show_id] = revisions[-1].id
     folder = target.show_folder(show_id)
     budget = ReadBudget(show_id, LOG_READ_MAX_BYTES)
     blobs: set[str] = set()
@@ -266,6 +272,28 @@ def _used_files(revisions: list[Revision], blobs: set[str]) -> dict[str, set[str
     }
 
 
+def _require_unchanged(source: Path, listing: SourceListing, heads: dict[str, str]) -> None:
+    """Refuses a source a writer changed while the upgrade read it: a show, a head or an asset.
+
+    Run just before the layout file is placed, so a commit that landed on the source during the
+    upgrade is never left behind in a target that looks complete.
+    """
+    again = list_source(source)
+    reader = Layout1Reader(source)
+    shows = [show.show_id for show in again.shows]
+    if (
+        shows != [show.show_id for show in listing.shows]
+        or again.assets != listing.assets
+        or any(reader.head(show_id) != heads[show_id] for show_id in shows)
+    ):
+        raise StorageError(
+            f"layout-1 repository at {source} changed while it was upgraded",
+            hint=WRITER_HINT,
+            context={"root": str(source)},
+            code=ErrorCode.CONFLICT,
+        )
+
+
 def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     """Copies every show of a layout-1 root, with its whole history, into a new layout-2 root.
 
@@ -276,6 +304,10 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     apply. `layout.json` is written last, after everything else is flushed, so an interrupted
     upgrade leaves a target that readers refuse; delete it and run the upgrade again. The host
     swaps the folders afterwards, so rolling back is keeping the source.
+
+    No writer may run on the source while it is upgraded. Just before `layout.json` is placed,
+    the source is listed again and every show's head read again; a show, head or asset that
+    changed raises StorageError CONFLICT and leaves no layout file.
 
     Args:
         source: Root of a repository written before v0.5.0.
@@ -310,6 +342,7 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     writer = _Target(target)
     upgraded = tuple(_upgrade_show(reader, writer, show) for show in listing.shows)
     linked = writer.carry_assets(source / ASSET_DIR, listing.assets)
+    _require_unchanged(source, listing, writer.heads)
     writer.finish()
     return UpgradeReport(
         shows=upgraded,
