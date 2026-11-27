@@ -30,6 +30,8 @@ Contains:
     link_new(): links a file under a new name, reporting whether the name was free
     CREATE_FLAGS: creates a file only where no file or link has its name
     CREATED_FILE_MODE: gives a file created in place the mode of a linked temp file
+    open_new(): creates an empty file only where no file or link has its name
+    write_new(): writes a new file's bytes in one call, raising when it writes fewer
     create_new(): creates a file under a new name, writes it in one call and flushes it
     remove_file(): removes a file when it exists
     remove_stale_temps(): removes the temp files in a folder last modified before a cut-off
@@ -331,6 +333,34 @@ def link_new(source: Path, target: Path) -> bool:
     return True
 
 
+def open_new(target: Path) -> int | None:
+    """Creates an empty file only where no file or link has the name `target`.
+
+    Args:
+        target: New name for the file.
+
+    Returns:
+        descriptor: Open descriptor of the new file for writing, or None when the name was taken.
+    """
+    try:
+        return os.open(target, CREATE_FLAGS, CREATED_FILE_MODE)
+    except FileExistsError:
+        return None
+
+
+def write_new(descriptor: int, target: Path, data: bytes) -> None:
+    """Writes the bytes of a new file in one call, raising OSError when it writes fewer.
+
+    Args:
+        descriptor: Open descriptor of the new file.
+        target: Name of the file, named in the error.
+        data: Bytes to write.
+    """
+    written = os.write(descriptor, data)
+    if written != len(data):
+        raise OSError(errno.EIO, f"wrote {written} of {len(data)} bytes", str(target))
+
+
 def create_new(target: Path, data: bytes) -> bool:
     """Creates `target`, which must not exist, writes `data` in one call and flushes it.
 
@@ -353,14 +383,11 @@ def create_new(target: Path, data: bytes) -> bool:
     ...     create_new(target, b"x"), create_new(target, b"y"), target.read_bytes()
     (True, False, b'x')
     """
-    try:
-        descriptor = os.open(target, CREATE_FLAGS, CREATED_FILE_MODE)
-    except FileExistsError:
+    descriptor = open_new(target)
+    if descriptor is None:
         return False
     try:
-        written = os.write(descriptor, data)
-        if written != len(data):
-            raise OSError(errno.EIO, f"wrote {written} of {len(data)} bytes", str(target))
+        write_new(descriptor, target, data)
     except OSError:
         os.close(descriptor)
         remove_file(target)

@@ -11,11 +11,14 @@ Contains:
         that fails or writes less than asked
     test_failed_slot_write_without_hard_links_leaves_no_torn_slot: fails the commit with IO and
         removes the slot it created
+    test_commit_stopped_at_each_create_seam_leaves_what_readers_expect: leaves no slot when stopped
+        at the create and an empty slot readers report as torn when stopped at the write
 """
 
 import errno
 import os
 import sys
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -133,3 +136,46 @@ def test_failed_slot_write_without_hard_links_leaves_no_torn_slot(
     assert caught.value.code == "IO"
     assert caught.value.context["errno"] == errno.ENOSPC
     assert not slot.exists()
+
+
+class _Stopped(BaseException):
+    """Stands in for a process that dies between two file-system calls."""
+
+
+def _stop_at(monkeypatch: pytest.MonkeyPatch, seam: str, path: Path) -> None:
+    """Makes the durable_io function `seam` stop the process when it reaches `path`."""
+    real = getattr(durable_io, seam)
+
+    def stopping(*args: object) -> object:
+        if path in args:
+            raise _Stopped
+        return real(*args)
+
+    monkeypatch.setattr(durable_io, seam, stopping)
+
+
+@pytest.mark.parametrize(("seam", "code"), [("open_new", None), ("write_new", "TORN_SLOT")])
+def test_commit_stopped_at_each_create_seam_leaves_what_readers_expect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seam: str, code: str | None
+) -> None:
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(os, "link", refuse)
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    backend = FileBackend(tmp_path)
+    first, first_tree, first_blobs = _change("", 1)
+    backend.commit(SHOW_ID, first, first_tree, first_blobs)
+    slot = tmp_path / "shows" / show_folder(SHOW_ID) / "log" / "000000000002"
+    _stop_at(monkeypatch, seam, slot)
+    second, second_tree, second_blobs = _change(first.id, 2)
+    with pytest.raises(_Stopped):
+        backend.commit(SHOW_ID, second, second_tree, second_blobs)
+    if code is None:
+        assert not slot.exists()
+        assert FileBackend(tmp_path).log(SHOW_ID) == [first]
+        return
+    assert slot.read_bytes() == b""
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == code
