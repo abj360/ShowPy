@@ -14,6 +14,8 @@ Contains:
         slot
     test_failed_directory_flush_fails_the_commit_with_io: maps a failing directory fsync to IO and
         lands no slot
+    test_failed_macos_directory_barrier_fails_the_commit_with_io: maps a failing barrier flush of a
+        folder to IO and lands no slot
     test_a_failed_chain_flush_is_retried_by_the_next_commit: flushes the chain again after a failed
         first flush
     test_regression_commit_on_a_symlinked_root_lands: commits and reads back through a root that is
@@ -226,6 +228,29 @@ def test_failed_directory_flush_fails_the_commit_with_io(
     with pytest.raises(StorageError) as caught:
         FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
     assert failed == [FAKE_DIRECTORY_DESCRIPTOR]
+    assert caught.value.code == "IO"
+    assert not list((tmp_path / "shows").glob("*/log/*"))
+
+
+def test_failed_macos_directory_barrier_fails_the_commit_with_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    failed: list[tuple[int, int]] = []
+
+    def failing_directory_barrier(descriptor: int, command: int) -> None:
+        if descriptor != FAKE_DIRECTORY_DESCRIPTOR or command != BARRIER_FSYNC:
+            return
+        failed.append((descriptor, command))
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(durable_io, "IS_MACOS", True)
+    monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
+    _fake_directory_open(monkeypatch)
+    monkeypatch.setattr(durable_io, "fcntl_flush", failing_directory_barrier)
+    revision, tree, blobs = _change("", 1)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert failed == [(FAKE_DIRECTORY_DESCRIPTOR, BARRIER_FSYNC)]
     assert caught.value.code == "IO"
     assert not list((tmp_path / "shows").glob("*/log/*"))
 
