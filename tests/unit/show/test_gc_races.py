@@ -17,6 +17,8 @@ Contains:
         when a writer placed the file again while gc held it aside
     test_regression_gc_stops_on_a_show_whose_head_moves_during_removal: puts the file back and
         skips the show once a slot lands while gc removes
+    test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside: puts back a blob gc held
+        aside when a commit that did not pass it, so never freshened it, landed naming it
     test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back: reports the
         set-aside file, then puts it back and removes it when no slot reaches it
     test_gc_puts_back_a_set_aside_file_a_slot_reaches: restores a set-aside blob a tree names
@@ -264,6 +266,31 @@ def test_regression_gc_stops_on_a_show_whose_head_moves_during_removal(
     assert report.skipped == (_folder(tmp_path).relative_to(tmp_path).as_posix(),)
     assert fsck(tmp_path).findings == ()
     assert FileBackend(tmp_path).log(SHOW_ID) == [first, landing[0]]
+
+
+def test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The backend protocol lets a commit name a stored blob it does not pass; nothing freshens it.
+
+    Only the check that no slot landed while the blob was aside keeps it.
+    """
+    now = datetime.now(UTC)
+    first, blob = _unreachable_blob(tmp_path, now)
+    revision, tree, blobs = _change(first.id, REDO)
+    unpassed = {name: data for name, data in blobs.items() if name != digest(REDO)}
+
+    def land() -> None:
+        FileBackend(tmp_path).commit(SHOW_ID, revision, tree, unpassed)
+
+    _moved_name_freed(monkeypatch, blob, land)
+    report = gc(tmp_path, at=now, confirm=True)
+    monkeypatch.undo()
+    assert report.removed == ()
+    assert report.skipped == (_folder(tmp_path).relative_to(tmp_path).as_posix(),)
+    assert blob.read_bytes() == REDO
+    assert fsck(tmp_path).findings == ()
+    assert FileBackend(tmp_path).log(SHOW_ID) == [first, revision]
 
 
 def test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back(
