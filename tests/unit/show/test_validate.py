@@ -76,6 +76,8 @@ Contains:
         placements in show order, then its unlocked forms
     test_regression_entity_pin_check_visits_only_unflagged_placements: checks each entity pin
         against its unflagged placements alone
+    test_regression_validate_show_reports_a_facing_override_selector_that_does_not_resolve: reports
+        a facing override whose selector names a spot outside the cast
 """
 
 import math
@@ -612,7 +614,7 @@ def test_regression_validate_show_reports_a_pin_on_a_missing_transition() -> Non
 
 def test_regression_validate_show_accepts_a_pin_made_by_pin() -> None:
     """Reports nothing for pins that pin() flagged, on every target."""
-    show = two_set_show()
+    show = pin(_formed(), "form", FORM_ID)
     show = pin(pin(pin(show, "entity", "T1"), "set", "2"), "transition", "1->2")
     assert validate_show(show).ok
 
@@ -699,3 +701,13 @@ def test_regression_entity_pin_check_visits_only_unflagged_placements(
     monkeypatch.setattr(validate_refs, "covers_placement", counted)
     assert len(_mismatch_messages(show)) == len(show.pins)
     assert sorted(calls) == sorted(show.cast.ids())
+
+
+def test_regression_validate_show_reports_a_facing_override_selector_that_does_not_resolve() -> (
+    None
+):
+    """Reports a facing override whose selector names a spot outside the cast."""
+    override = _override().replace(entities="T1 + ZZ")
+    (issue,) = _issues(_edited(facing_overrides=(override,)), "UNKNOWN_SPOT")
+    assert issue.context["override"] == 0
+    assert "ZZ" in issue.message
