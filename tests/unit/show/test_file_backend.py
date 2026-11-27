@@ -114,7 +114,9 @@ def _record(root: Path, revision_id: str) -> Path:
 
 
 class _LstatRecorder:
-    """Records the path of every os.lstat call while it is installed.
+    """Records the path of every no-follow lookup (os.lstat or os.stat without following links).
+
+    Python 3.13 routes Path.lstat through os.stat(follow_symlinks=False); 3.14 calls os.lstat.
 
     Attributes:
         paths: Paths looked up, in call order.
@@ -122,13 +124,20 @@ class _LstatRecorder:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.paths: list[Path] = []
-        real = os.lstat
+        real_lstat = os.lstat
+        real_stat = os.stat
 
-        def recorded(path: str | Path, **kwargs: bool) -> os.stat_result:
+        def recorded_lstat(path: str | Path, **kwargs: bool) -> os.stat_result:
             self.paths.append(Path(path))
-            return real(path, **kwargs)
+            return real_lstat(path, **kwargs)
 
-        monkeypatch.setattr(os, "lstat", recorded)
+        def recorded_stat(path: str | Path, **kwargs: bool) -> os.stat_result:
+            if kwargs.get("follow_symlinks", True) is False:
+                self.paths.append(Path(path))
+            return real_stat(path, **kwargs)
+
+        monkeypatch.setattr(os, "lstat", recorded_lstat)
+        monkeypatch.setattr(os, "stat", recorded_stat)
 
     def slots(self) -> list[int]:
         return [int(p.name) for p in self.paths if p.parent.name == "log"]
