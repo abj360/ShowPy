@@ -52,6 +52,7 @@ from e8s.show.commit_writes import (
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import mapped_io, remove_stale_temps
 from e8s.show.durable_reads import lstat_mode, read_capped
+from e8s.show.fsck_findings import SET_ASIDE_PREFIX
 from e8s.show.history_models import Revision
 from e8s.show.layout import (
     HOUSEKEEPING_NAMES,
@@ -285,14 +286,28 @@ class FileBackend:
 
     def _landed_seq(self, show_id: str, revision_id: str, last: int) -> int:
         """Returns the slot number of a landed revision, read from its record and its slot."""
-        is_known = REVISION_ID_PATTERN.fullmatch(revision_id) and lstat_mode(
-            show_id, self._record_path(show_id, revision_id)
-        )
-        if is_known:
+        if self._has_record(show_id, revision_id):
             seq = self._record(show_id, revision_id).seq
             if seq <= last and self._read_slot(show_id, seq).id == revision_id:
                 return seq
         raise unknown_revision_error(show_id, revision_id, [])
+
+    def _has_record(self, show_id: str, revision_id: str) -> bool:
+        """Tells whether a revision ID is well formed and has a record, raising when it is lost.
+
+        A record a stopped gc holds aside, and a missing record the head slot names, are damage
+        fsck reports, never an unknown revision; one confirmed gc puts a set-aside record back.
+        """
+        if not REVISION_ID_PATTERN.fullmatch(revision_id):
+            return False
+        path = self._record_path(show_id, revision_id)
+        if lstat_mode(show_id, path) is not None:
+            return True
+        if lstat_mode(show_id, path.with_name(SET_ASIDE_PREFIX + path.name)) is not None:
+            raise missing_file(show_id, path, "the revision's record is set aside")
+        if self._head(show_id)[1] == revision_id:
+            raise missing_file(show_id, path, "the head slot names a revision that has no record")
+        return False
 
     def _slots_after(self, show_id: str, first: int, last: int, parent: str) -> list[Revision]:
         """Reads slots `first + 1` to `last`, checking each against its parent and its record."""
@@ -329,8 +344,7 @@ class FileBackend:
         """Returns path to blob digest at a landed revision, read from its record."""
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
-            path = self._record_path(show_id, revision_id)
-            if REVISION_ID_PATTERN.fullmatch(revision_id) and lstat_mode(show_id, path):
+            if self._has_record(show_id, revision_id):
                 stored = self._record(show_id, revision_id)
                 if self._has_slot(show_id, stored.seq) and (
                     self._read_slot(show_id, stored.seq).id == revision_id

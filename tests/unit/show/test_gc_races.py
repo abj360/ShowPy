@@ -25,7 +25,9 @@ Contains:
         placed between a rename put-back's lookup and its rename, which swapped in the old copy
     test_gc_puts_back_a_set_aside_file_a_slot_reaches: restores a set-aside blob a tree names
     test_regression_a_read_of_a_file_a_stopped_gc_holds_aside_names_fsck_and_gc: hints at
-        fsck and gc, not at a backup restore, when a blob or record is missing
+        fsck and gc, not at a backup restore or head(), when a blob or record is set aside
+    test_regression_the_tree_of_a_head_whose_record_is_lost_is_corrupt: raises CORRUPT naming
+        fsck, not UnknownRefError, when the head's record is gone
     test_fsck_reports_a_set_aside_name_it_does_not_understand: reports a malformed set-aside name
     test_gc_leaves_a_set_aside_copy_that_differs_from_its_name: reports a set-aside copy whose
         name holds other bytes as needing an operator, and gc skips the show saying why
@@ -396,21 +398,34 @@ def test_gc_puts_back_a_set_aside_file_a_slot_reaches(tmp_path: Path) -> None:
     assert FileBackend(tmp_path).blob(SHOW_ID, digest(b"render 0")) == b"render 0"
 
 
-@pytest.mark.parametrize("kind", ["blob", "record"])
+@pytest.mark.parametrize("kind", ["blob", "record", "head_tree", "since"])
 def test_regression_a_read_of_a_file_a_stopped_gc_holds_aside_names_fsck_and_gc(
     tmp_path: Path, kind: str
 ) -> None:
-    """Restoring a backup could roll back acknowledged commits; one confirmed gc puts it back."""
+    """Restoring a backup could roll back acknowledged commits; one confirmed gc puts it back.
+
+    Reading the tree of the head, or the log since a revision, whose record is aside once
+    raised UnknownRefError with a hint to read the head with head().
+    """
     first = _change("", b"render 0")
-    FileBackend(tmp_path).commit(SHOW_ID, *first)
-    if kind == "blob":
-        path = _folder(tmp_path) / "objects" / digest(b"render 0")
-        read: Callable[[], object] = partial(
-            FileBackend(tmp_path).blob, SHOW_ID, digest(b"render 0")
-        )
-    else:
-        path = _folder(tmp_path) / "records" / f"{first[0].id}.json"
-        read = partial(FileBackend(tmp_path).log, SHOW_ID)
+    second = _change(first[0].id, b"render 1")
+    backend = FileBackend(tmp_path)
+    for change in (first, second):
+        backend.commit(SHOW_ID, *change)
+    record = _folder(tmp_path) / "records" / f"{first[0].id}.json"
+    reads: dict[str, tuple[Path, Callable[[], object]]] = {
+        "blob": (
+            _folder(tmp_path) / "objects" / digest(b"render 0"),
+            partial(FileBackend(tmp_path).blob, SHOW_ID, digest(b"render 0")),
+        ),
+        "record": (record, partial(FileBackend(tmp_path).log, SHOW_ID)),
+        "head_tree": (
+            _folder(tmp_path) / "records" / f"{second[0].id}.json",
+            partial(FileBackend(tmp_path).tree, SHOW_ID, second[0].id),
+        ),
+        "since": (record, partial(FileBackend(tmp_path).log, SHOW_ID, since=first[0].id)),
+    }
+    path, read = reads[kind]
     path.rename(path.with_name(".gc-" + path.name))
     with pytest.raises(StorageError) as caught:
         read()
@@ -418,7 +433,20 @@ def test_regression_a_read_of_a_file_a_stopped_gc_holds_aside_names_fsck_and_gc(
     assert "fsck(root)" in caught.value.hint
     assert "gc(root, at=datetime.now(UTC), confirm=True)" in caught.value.hint
     assert gc(tmp_path, at=datetime.now(UTC), confirm=True).removed == ()
-    assert FileBackend(tmp_path).log(SHOW_ID) == [first[0]]
+    read()
+    assert FileBackend(tmp_path).log(SHOW_ID) == [first[0], second[0]]
+
+
+def test_regression_the_tree_of_a_head_whose_record_is_lost_is_corrupt(tmp_path: Path) -> None:
+    """The head slot names the revision, so it is a lost file, never an unknown revision."""
+    first = _change("", b"render 0")
+    FileBackend(tmp_path).commit(SHOW_ID, *first)
+    (_folder(tmp_path) / "records" / f"{first[0].id}.json").unlink()
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).tree(SHOW_ID, first[0].id)
+    assert caught.value.code == ErrorCode.CORRUPT
+    assert "head slot" in caught.value.message
+    assert "fsck(root)" in caught.value.hint
 
 
 def test_fsck_reports_a_set_aside_name_it_does_not_understand(tmp_path: Path) -> None:
