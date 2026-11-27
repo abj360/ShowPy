@@ -110,8 +110,9 @@ class MigrationReport(FrozenModel):
         from_version: Format version the documents were stored in.
         renamed: Per ID kind (`spot`, `set`, `form`, ...), each (old, new) rename in show order.
         repairs: Each repair a sub-step made, in the order it was made.
-        dropped: Each stored object that lost fields the current format no longer has, with
-            those fields' stored values, in the order the sub-steps dropped them.
+        dropped: Each stored object that lost fields the current format no longer has, or was
+            dropped whole (a placement of a spot outside the cast), with those fields' stored
+            values, in the order the sub-steps dropped them.
 
     >>> MigrationReport(from_version=1).renamed
     ReadOnlyMap({})
