@@ -134,6 +134,24 @@ class _LstatRecorder:
         return [int(p.name) for p in self.paths if p.parent.name == "log"]
 
 
+class _SlotReadRecorder:
+    """Records the slot number of every slot read the backend makes while it is installed.
+
+    Attributes:
+        seqs: Slot numbers read, in call order.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.seqs: list[int] = []
+        real = FileBackend._read_slot
+
+        def recorded(backend: FileBackend, show_id: str, seq: int) -> Revision:
+            self.seqs.append(seq)
+            return real(backend, show_id, seq)
+
+        monkeypatch.setattr(FileBackend, "_read_slot", recorded)
+
+
 def test_commit_writes_the_layout_2_files(tmp_path: Path) -> None:
     backend = FileBackend(tmp_path)
     [first] = _landed(backend, 1)
@@ -263,9 +281,9 @@ def test_log_since_reads_only_the_later_slots(
     landed = _landed(FileBackend(tmp_path), 5)
     backend = FileBackend(tmp_path)
     backend.head(SHOW_ID)
-    recorder = _LstatRecorder(monkeypatch)
+    recorder = _SlotReadRecorder(monkeypatch)
     assert backend.log(SHOW_ID, since=landed[2].id) == landed[3:]
-    assert min(recorder.slots()) == 3
+    assert recorder.seqs == [3, 4, 5]
     assert backend.log(SHOW_ID, since=landed[-1].id) == []
 
 
