@@ -14,7 +14,7 @@ Contains:
     TreeParts.set(): returns the set stored under a key
     TreeParts.stored_paths(): returns the paths stored for two consecutive sets, or None
     TreeParts.form_sources(): maps each form's item path to the form and its set's key
-    TreeParts.forms(): maps each form ID to its form, as Show.forms does
+    TreeParts.form(): returns a form by ID, as Show.forms holds it
     TreeParts.sheet(), TreeParts.timeline(): return the sheet and the timeline
 """
 
@@ -146,9 +146,13 @@ class TreeParts:
         """
         return self._form_sources
 
-    def forms(self) -> Mapping[str, Form]:
-        """Maps each form ID to its form, as Show.forms holds them."""
+    @cached_property
+    def _forms(self) -> dict[str, Form]:
         return {path[0]: form for path, (form, _) in self._form_sources.items()}
+
+    def form(self, form_id: str) -> Form:
+        """Returns a form by ID, as Show.forms holds it."""
+        return self._forms[form_id]
 
     def sheet(self) -> Sheet:
         """Returns the stored sheet."""

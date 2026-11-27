@@ -11,41 +11,39 @@ Contains:
     events_since(): derives the canvas events of every revision after a revision
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 
-from e8s.choreo.models import Placement
 from e8s.core.errors import (
     LockedError,
+    SchemaError,
     UnknownRefError,
 )
-from e8s.core.ids import FormId, SetId
+from e8s.core.ids import FormId
 from e8s.core.json_types import JsonValue
-from e8s.show.change_models import ItemChange
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import (
     CanvasEvent,
     ChangeOp,
     Comment,
     CountsOp,
-    EventKind,
-    EventPayload,
     FormOp,
     Highlight,
     PathsOp,
     PlacementOp,
 )
+from e8s.show.document_reading import reraised_for_show
 from e8s.show.documents import is_show_doc
+from e8s.show.event_derivation import Edit, WholeShow, pin_edits, show_edits
 from e8s.show.history_models import Revision
 from e8s.show.integrity import changed_paths
-from e8s.show.item_table import TIMING, set_keys_by_id, transition_key
 from e8s.show.items import changes
 from e8s.show.locks import require_unlocked
 from e8s.show.migrate import ReportBuilder
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin, pin_key, unpin
-from e8s.show.set_keys import set_key
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.structured import COMMENTS_DOC, decode_comments
+from e8s.show.tree_items import reads_alone, tree_changes
 from e8s.show.workspace import Workspace
 
 EVENT_ID_LENGTH = 12
@@ -129,15 +127,6 @@ def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, *, force: bool
     )
 
 
-def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, EventPayload]]:
-    removed = [p for p in before.pins if p not in after.pins]
-    added = [p for p in after.pins if p not in before.pins]
-    return [
-        *(("unpin", p) for p in removed),
-        *(("pin", p) for p in added),
-    ]
-
-
 def edit_ops(before: Show, after: Show) -> list[ChangeOp]:
     """Lists the path, count, placement and form edits between two shows, for overlap checks.
 
@@ -211,98 +200,34 @@ def delete_form(show: Show, form_id: FormId, *, force: bool = False) -> Show:
     return edited
 
 
-type _Edit = tuple[EventKind, EventPayload]
-
-
-def _move_edit(set_id: SetId, placement: Placement) -> _Edit:
-    return "move", PlacementOp(set_id=set_id, placement=placement)
-
-
-def _touched_sets(delta: Iterable[ItemChange], before: Show, after: Show) -> list[_Edit]:
-    """Lists the count and placement edits of sets present in both shows, in set order."""
-    old = {set_key(s) for s in before.sets}
-    timing: set[str] = set()
-    moved: dict[str, set[str]] = {}
-    for change in delta:
-        key, path = change.key, change.key.path
-        if key.kind not in ("set", "placement"):
-            continue
-        if change.before is None or change.after is None or path[0] not in old:
-            continue
-        if key.kind == "set" and key.role == TIMING:
-            timing.add(path[0])
-        elif key.kind == "placement":
-            moved.setdefault(path[0], set()).add(path[1])
-    touched = timing | moved.keys()
-    counts: list[_Edit] = []
-    placements: list[_Edit] = []
-    for current in after.sets:
-        name = set_key(current)
-        if name not in touched:
-            continue
-        if name in timing:
-            counts.append(("set_counts", CountsOp(set_id=current.id, counts=current.counts)))
-        entities = moved.get(name, set())
-        placements += [
-            _move_edit(current.id, p) for p in current.placements if p.entity in entities
-        ]
-    return [*counts, *placements]
-
-
-def _edited_transitions(delta: Iterable[ItemChange]) -> set[str]:
-    """Names the transitions whose rows, routes, notes or source hash changed, not their counts."""
-    found: set[str] = set()
-    for change in delta:
-        if change.key.kind not in ("transition", "path_row", "route"):
-            continue
-        if change.key.kind == "transition" and _without_counts(change.before) == _without_counts(
-            change.after
-        ):
-            continue
-        found.add(change.key.path[0])
-    return found
-
-
-def _without_counts(value: object) -> object:
-    if not isinstance(value, Mapping):
-        return value
-    return {name: field for name, field in value.items() if name != "counts"}
-
-
-def _path_edits(delta: Iterable[ItemChange], before: Show, after: Show) -> list[_Edit]:
-    names = _edited_transitions(delta)
-    if not names:
+def _whole_edits(ws: Workspace, r: Revision) -> list[Edit]:
+    """Derives a revision's edits from its parent's whole show and its own."""
+    before, after = ws.show_at(r.parent), ws.show_at(r.id)
+    if before is None or after is None:
         return []
-    keys = set_keys_by_id(after)
-    shared = set(before.transition_ids())
-    return [
-        ("edit_paths", PathsOp(spec=after.transition(tid)))
-        for tid in after.transition_ids()
-        if tid in shared and transition_key(keys, tid) in names
-    ]
-
-
-def _form_edits(delta: Iterable[ItemChange], before: Show, after: Show) -> list[_Edit]:
-    edits: list[_Edit] = []
-    for change in sorted(delta, key=lambda c: c.key.path):
-        if change.key.kind != "form":
-            continue
-        form_id = FormId(change.key.path[0])
-        if change.after is None:
-            edits.append(("delete_form", FormOp(form=before.forms[form_id])))
-        else:
-            edits.append(("edit_form", FormOp(form=after.forms[form_id])))
-    return edits
-
-
-def _show_events(before: Show, after: Show) -> list[_Edit]:
     delta = changes(before, after).changes
-    return [
-        *_pin_events(before, after),
-        *_path_edits(delta, before, after),
-        *_touched_sets(delta, before, after),
-        *_form_edits(delta, before, after),
-    ]
+    return [*pin_edits(before, after), *show_edits(delta, WholeShow(before), WholeShow(after))]
+
+
+def _revision_edits(ws: Workspace, r: Revision, paths: list[str]) -> list[Edit]:
+    """Derives a revision's edits, from its changed documents alone when they hold all of them.
+
+    A revision whose parent holds no show only has its show checked. One that changed no
+    show.json, cast document or set ID is read part by part: each changed document is decoded
+    and checked, and nothing else; pins live in show.json, so it has no pin edits.
+    """
+    before, after = ws._parts_at(r.parent), ws._parts_at(r.id)
+    if not after.has_show():
+        return []
+    if not before.has_show():
+        ws.show_at(r.id)
+        return []
+    try:
+        if reads_alone(before, after, paths):
+            return show_edits(tree_changes(before, after, paths).changes, before, after)
+    except SchemaError as exc:
+        raise reraised_for_show(exc) from exc
+    return _whole_edits(ws, r)
 
 
 def _comments(ws: Workspace, revision: str) -> dict[str, Comment]:
@@ -310,7 +235,7 @@ def _comments(ws: Workspace, revision: str) -> dict[str, Comment]:
     return {} if raw is None else {c.id: c for c in decode_comments(raw)}
 
 
-def _comment_events(ws: Workspace, r: Revision, paths: list[str]) -> list[_Edit]:
+def _comment_events(ws: Workspace, r: Revision, paths: list[str]) -> list[Edit]:
     if COMMENTS_DOC not in paths:
         return []
     old, new = _comments(ws, r.parent), _comments(ws, r.id)
@@ -318,7 +243,7 @@ def _comment_events(ws: Workspace, r: Revision, paths: list[str]) -> list[_Edit]
     return [("comment", c) for c in changed]
 
 
-def _stamped(r: Revision, found: list[_Edit]) -> list[CanvasEvent]:
+def _stamped(r: Revision, found: list[Edit]) -> list[CanvasEvent]:
     return [
         CanvasEvent(
             id=f"{r.id[:EVENT_ID_LENGTH]}-{n}",
@@ -334,9 +259,11 @@ def _stamped(r: Revision, found: list[_Edit]) -> list[CanvasEvent]:
 def events_since(ws: Workspace, revision: str) -> list[CanvasEvent]:
     """Derives the canvas events of every revision after `revision`, oldest first.
 
-    Events are derived from the items that changed between stored states, so a revision that
-    changed no show document decodes no show. What a revision changed is read from the blob
-    digests of its tree and its parent's, never from its stored record. Replaying the events
+    Events are derived from the items each revision changed. What a revision changed is read
+    from the blob digests of its tree and its parent's, never from its stored record, and only
+    the documents it changed are decoded: a revision that changed no show document decodes
+    nothing. A revision that changed show.json, the cast or a set's ID, or that is stored in an
+    older format or layout, is compared as two whole shows instead. Replaying the events
     with apply_event() on the show at `revision` reproduces each later placement, form, path and
     count edit. Structural edits (sets added or removed, cast or sheet changes) show up in
     changelog() only. Replaying a log that holds unpin events or pin replacements needs
@@ -353,15 +280,10 @@ def events_since(ws: Workspace, revision: str) -> list[CanvasEvent]:
     if revision != ROOT_REVISION:
         ws.repo.get_revision(ws.show_id, revision)
         log = log[[r.id for r in log].index(revision) + 1 :]
-    current = None if revision == ROOT_REVISION else ws.show_at(revision)
+        ws.show_at(revision)
     events: list[CanvasEvent] = []
     for r in log:
         changed = changed_paths(ws.tree_at(r.parent), ws.tree_at(r.id))
-        found: list[_Edit] = []
-        if any(is_show_doc(path) for path in changed):
-            after = ws.show_at(r.id)
-            if current is not None and after is not None:
-                found = _show_events(current, after)
-            current = after
+        found = _revision_edits(ws, r, changed) if any(map(is_show_doc, changed)) else []
         events += _stamped(r, [*found, *_comment_events(ws, r, changed)])
     return events

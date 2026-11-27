@@ -12,6 +12,7 @@ older version is first split into the documents a stored tree of that version ho
 Contains:
     read_show(): assembles a show from stored documents, migrating an older format in memory
     read_migrated(): migrates stored documents of an older format and returns the report too
+    reraised_for_show(): turns a document or model refusal into the error a show decode raises
     decode_show_dump(): assembles a show from an interchange dump of an older format version
     migrate_dump(): migrates an older interchange dump to a show, its report and the documents
         beside it
@@ -167,8 +168,15 @@ def _migrated_show(source: Source, meta: JsonObject, version: int, revision: str
     return _Migrated(checked, report, migrate_beside(checked, migrated, version, report))
 
 
-def _reraised_for_show(exc: SchemaError) -> SchemaError:
-    """Turns a model validation error into one that names every failing field."""
+def reraised_for_show(exc: SchemaError) -> SchemaError:
+    """Turns a model validation error into the error a show decode raises, naming every field.
+
+    Args:
+        exc: The error a document or model check raised.
+
+    Returns:
+        error: The SchemaError read_show raises for it.
+    """
     errors = field_errors(exc)
     return SchemaError(
         "show documents do not match the Show schema",
@@ -226,7 +234,7 @@ def migrate_dump(
             source, meta, version, revision if isinstance(revision, str) else ""
         )
     except SchemaError as exc:
-        raise _reraised_for_show(exc) from exc
+        raise reraised_for_show(exc) from exc
     return migrated.show, migrated.report.build(), migrated.beside
 
 
@@ -255,7 +263,7 @@ def read_show(
             return _migrated_show(source, older.meta, older.version, revision).show
         return _assemble(reading, without_header(meta), revision, is_current=True)
     except SchemaError as exc:
-        raise _reraised_for_show(exc) from exc
+        raise reraised_for_show(exc) from exc
 
 
 def read_migrated(
@@ -278,4 +286,4 @@ def read_migrated(
         migrated = _migrated_show(source, meta, version_of(meta, name=SHOW_DOC), "")
         return migrated.show, migrated.report, migrated.beside
     except SchemaError as exc:
-        raise _reraised_for_show(exc) from exc
+        raise reraised_for_show(exc) from exc
