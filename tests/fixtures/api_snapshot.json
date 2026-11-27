@@ -369,6 +369,7 @@
       "PATH": "'PATH'",
       "PINNED_CHANGED": "'PINNED_CHANGED'",
       "PROPOSAL_CLOSED": "'PROPOSAL_CLOSED'",
+      "PROPOSAL_STALE": "'PROPOSAL_STALE'",
       "RAMP_CUT": "'RAMP_CUT'",
       "RAMP_INCOMPLETE": "'RAMP_INCOMPLETE'",
       "RAMP_LENGTH": "'RAMP_LENGTH'",
@@ -398,6 +399,7 @@
       "TOO_LARGE": "'TOO_LARGE'",
       "TOO_MANY_SETS": "'TOO_MANY_SETS'",
       "TOO_MANY_SPOTS": "'TOO_MANY_SPOTS'",
+      "TORN_SLOT": "'TORN_SLOT'",
       "UNKNOWN_FORM": "'UNKNOWN_FORM'",
       "UNKNOWN_FORMAT": "'UNKNOWN_FORMAT'",
       "UNKNOWN_REF": "'UNKNOWN_REF'",
@@ -450,6 +452,8 @@
       "amplitude": "Finite"
     }
   },
+  "FileAssetStore": "(root: pathlib.Path) -> None",
+  "FileBackend": "(root: pathlib.Path) -> None",
   "FileRepository": "(root: str | pathlib.Path)",
   "FillRecipe": {
     "model": {
@@ -1050,6 +1054,7 @@
   "ProposalPreview": {
     "model": {
       "blocked": "tuple[str, ...]",
+      "conflicts": "tuple[e8s.show.change_models.MergeConflict, ...]",
       "counts": "dict[e8s.core.ids.SetId, float]",
       "forms": "tuple[e8s.choreo.form_models.Form, ...]",
       "paths": "tuple[e8s.choreo.path_models.TransitionSpec, ...]",
@@ -1138,6 +1143,9 @@
   },
   "SHEET_ID_PATTERN": {
     "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.\\\\-]{0,62}[A-Za-z0-9_])?$')"
+  },
+  "SLOT_DIGITS": {
+    "constant": "12"
   },
   "ScatterRecipe": {
     "model": {
@@ -1554,14 +1562,14 @@
       "cycles": "WaveCycles"
     }
   },
-  "accept": "(ws: e8s.show.workspace.Workspace, proposal: e8s.show.collab_models.Proposal, at: datetime.datetime) -> e8s.show.history_models.Revision",
+  "accept": "(ws: e8s.show.workspace.Workspace, proposal_id: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
   "add_cue": "(tl: e8s.time.models.Timeline, cue: e8s.time.models.Cue) -> e8s.time.models.Timeline",
   "add_facing_override": "(show: e8s.show.models.Show, override: e8s.choreo.path_models.FacingOverride) -> e8s.show.models.Show",
   "add_group": "(show: 'Show', group: e8s.cast.models.Group) -> 'Show'",
   "add_guide": "(sheet: e8s.sheet.models.Sheet, item: e8s.sheet.models.GuideLine) -> e8s.sheet.models.Sheet",
   "add_hold": "(tl: e8s.time.models.Timeline, hold: e8s.time.models.Hold) -> e8s.time.models.Timeline",
   "add_marker": "(tl: e8s.time.models.Timeline, marker: e8s.time.models.Marker) -> e8s.time.models.Timeline",
-  "add_set": "(show: e8s.show.models.Show, set_id: str, counts: float, after: str | None = None, placements: collections.abc.Sequence[e8s.choreo.models.Placement] | None = None, *, force: bool = False) -> e8s.show.models.Show",
+  "add_set": "(show: e8s.show.models.Show, set_id: str, counts: float, after: str | None = None, placements: collections.abc.Sequence[e8s.choreo.models.Placement] | None = None, *, before: str | None = None, force: bool = False) -> e8s.show.models.Show",
   "add_spot": "(show: 'Show', point: Point, group: str, set_id: str, *, force: bool = False) -> 'Show'",
   "add_spots_along": "(show: 'Show', curve: e8s.geo.curve_base.Curve, n: int, group: str, set_id: str, *, force: bool = False) -> 'Show'",
   "add_tempo": "(tl: e8s.time.models.Timeline, section: e8s.time.models.TempoSection) -> e8s.time.models.Timeline",
@@ -1586,6 +1594,7 @@
   "attach_audio": "(tl: e8s.time.models.Timeline, track: e8s.time.models.AudioTrack) -> e8s.time.models.Timeline",
   "balance": "(s: e8s.choreo.models.Set, sheet: e8s.sheet.models.Sheet, axis: Literal['x', 'y'] = 'x') -> float",
   "bezier": "(*control: Point) -> e8s.geo.curves.BezierCurve",
+  "blame": "(ws: e8s.show.workspace.Workspace, key: e8s.show.change_models.ItemKey) -> e8s.show.history_models.Revision | None",
   "blank_sheet": "(width_m: float, depth_m: float, grid_spacing: float = 1.0, units: str = 'm') -> e8s.sheet.models.Sheet",
   "block": "(origin: Point, rows: int, cols: int, interval: Meters, facing: Degrees = 0.0, anchor: BlockAnchor = 'center') -> Points",
   "block_form": "(form_id: str, members: collections.abc.Sequence[str], origin: Point, rows: int, cols: int, interval: Meters, direction_deg: Degrees = 0.0, anchor: BlockAnchor = 'center', facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '') -> e8s.choreo.form_models.Form",
@@ -1641,7 +1650,7 @@
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: str = 'detected', members: collections.abc.Sequence[str] = ()) -> e8s.choreo.form_models.Form",
   "diff_paths": "(a: e8s.choreo.path_models.TransitionSpec, b: e8s.choreo.path_models.TransitionSpec) -> e8s.show.history_models.PathDiff",
   "diff_sets": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set, tol: float = 1e-06) -> e8s.show.history_models.SetDiff",
-  "diff_show": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> dict[str, Any]",
+  "diff_show": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> dict[str, JsonValue]",
   "difference": "(a: Area, b: Area) -> Area",
   "digest": "(data: bytes) -> str",
   "direction_of_travel": "(show: e8s.show.models.Show, entity: str, tid: tuple[str, str], tau: float) -> Degrees | None",
@@ -1691,11 +1700,13 @@
   "from_json": "(d: dict[str, Any]) -> e8s.time.models.Timeline",
   "gate": "(form: e8s.choreo.form_models.Form, hinge: Literal['start', 'end'] | int, deg: Degrees, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "generated_form": "(form_id: str, members: collections.abc.Sequence[str], fn: str, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, registry: e8s.choreo.form_fns.FormFnRegistry = ..., *, set_id: str = '', n: int | None = None, **params: Any) -> e8s.choreo.form_models.Form",
+  "get_proposal": "(ws: e8s.show.workspace.Workspace, proposal_id: str) -> e8s.show.collab_models.Proposal",
   "get_sheet": "(ref: SheetRef, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.sheet.models.Sheet",
   "glyph_strokes": "(char: str, font: str) -> Glyph",
   "gym_floor": "() -> e8s.sheet.models.Sheet",
   "highlight": "(target: e8s.show.anchors.Anchor | str, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> e8s.show.collab_models.CanvasEvent",
   "hold": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
+  "id_changes": "(before: e8s.show.models.Show, after: e8s.show.models.Show) -> e8s.show.change_models.IdChanges",
   "import_fonts": "(d: collections.abc.Mapping[str, Any], font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.geo.fonts.FontRegistry",
   "import_json": "(d: collections.abc.Mapping[str, Any]) -> e8s.show.models.Show",
   "import_positions": "(base: e8s.show.models.Show, text: str, group: str, columns: collections.abc.Mapping[str, str] | None = None, *, force: bool = False) -> e8s.show.models.Show",
@@ -1708,6 +1719,7 @@
   "is_device_name": "(text: str) -> bool",
   "is_label_dependent": "(expr: str) -> bool",
   "is_similarity": "(matrix: Matrix) -> bool",
+  "is_stale": "(ws: e8s.show.workspace.Workspace, proposal_id: str) -> bool",
   "items": "(show: e8s.show.models.Show) -> dict[e8s.show.change_models.ItemKey, JsonValue]",
   "jcs": "(obj: object) -> bytes",
   "join": "(*curves: AnyCurve, bridge: bool = False) -> e8s.geo.curves.CompositeCurve",
@@ -1718,6 +1730,7 @@
   "line": "(a: Point, b: Point) -> e8s.geo.curves.Segment",
   "line_form": "(form_id: str, members: collections.abc.Sequence[str], a: Point, b: Point, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "load_font": "(data: bytes) -> e8s.geo.models.Font",
+  "load_fonts": "(ws: e8s.show.workspace.Workspace) -> e8s.geo.fonts.FontRegistry",
   "load_paths": "(ws: e8s.show.workspace.Workspace, tid: tuple[str, str]) -> e8s.choreo.path_models.TransitionSpec",
   "load_show": "(ws: e8s.show.workspace.Workspace) -> e8s.show.models.Show",
   "lock": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel) -> e8s.choreo.path_models.TransitionSpec",
@@ -1728,6 +1741,7 @@
   "match": "(from_: Source, to_slots: SlotSource, entities: collections.abc.Sequence[str] | None = None, options: e8s.choreo.match_models.MatchOptions | None = None, groups: collections.abc.Mapping[str, str] | None = None, slot_groups: collections.abc.Sequence[str | None] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.match_models.MatchResult",
   "match_by_order": "(ordered_sel: collections.abc.Sequence[str], form: e8s.choreo.form_models.Form | Points, from_: e8s.choreo.models.Set | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.match_models.MatchResult",
   "measure_to_count": "(tl: e8s.time.models.Timeline, measure: int, count_in_measure: float = 1.0) -> Count",
+  "merge": "(base: e8s.show.models.Show, ours: e8s.show.models.Show, theirs: e8s.show.models.Show) -> e8s.show.change_models.MergeResult",
   "merge_forms": "(a: e8s.choreo.form_models.Form, b: e8s.choreo.form_models.Form, form_id: str, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "migrate_documents": "(docs: collections.abc.Mapping[str, bytes]) -> tuple[dict[str, bytes], e8s.show.migrate.MigrationReport]",
   "migrate_json": "(d: collections.abc.Mapping[str, Any]) -> tuple[e8s.show.models.Show, e8s.show.migrate.MigrationReport, dict[str, JsonValue] | None]",
@@ -1768,8 +1782,9 @@
   "polyline": "(*pts: Point, closed: bool = False) -> e8s.geo.curves.Polyline",
   "polyline_form": "(form_id: str, members: collections.abc.Sequence[str], *pts: Point, closed: bool = False, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "position_at": "(show: e8s.show.models.Show, entity: str, t: Count) -> Points",
-  "preview_proposal": "(show: e8s.show.models.Show, proposal: e8s.show.collab_models.Proposal) -> e8s.show.collab_models.ProposalPreview",
-  "propose": "(show: e8s.show.models.Show, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str) -> e8s.show.collab_models.Proposal",
+  "preview_proposal": "(ws: e8s.show.workspace.Workspace, proposal_id: str) -> e8s.show.collab_models.ProposalPreview",
+  "proposals": "(ws: e8s.show.workspace.Workspace) -> list[e8s.show.collab_models.Proposal]",
+  "propose": "(ws: e8s.show.workspace.Workspace, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str, at: datetime.datetime) -> e8s.show.collab_models.Proposal",
   "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",
   "reachable_region": "(start: Point, counts: Count, max_speed: float) -> Polygon",
   "read_layout": "(root: pathlib.Path) -> int",
@@ -1784,7 +1799,7 @@
   "register_unit": "(registry: e8s.core.units.UnitRegistry, name: str, meters_per_unit: float) -> e8s.core.units.UnitRegistry",
   "regroup": "(show: 'Show', sel: Selector, group: str) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
   "regular_polygon": "(center: Point, radius: Meters, n: int, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
-  "reject": "(proposal: e8s.show.collab_models.Proposal, reason: str) -> e8s.show.collab_models.Proposal",
+  "reject": "(ws: e8s.show.workspace.Workspace, proposal_id: str, reason: str, at: datetime.datetime) -> e8s.show.collab_models.Proposal",
   "relabel": "(show: 'Show', scheme: e8s.cast.models.LabelScheme) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
   "remove_audio": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
   "remove_cue": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
@@ -1809,7 +1824,7 @@
   "round_to": "(value: float, step: float = 0.01) -> float",
   "save_paths": "(ws: e8s.show.workspace.Workspace, spec: e8s.choreo.path_models.TransitionSpec, at: datetime.datetime) -> str",
   "save_sheet": "(store: e8s.sheet.templates.SheetStore, sheet: e8s.sheet.models.Sheet, scope: SheetScope = 'mine') -> SheetRef",
-  "save_show": "(ws: e8s.show.workspace.Workspace, show: e8s.show.models.Show, at: datetime.datetime) -> e8s.show.history_models.Revision",
+  "save_show": "(ws: e8s.show.workspace.Workspace, show: e8s.show.models.Show, at: datetime.datetime, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.show.history_models.Revision",
   "scale": "(obj: T, sx: float, sy: float | None = None, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "scale_matrix": "(sx: float, sy: float, about: Point) -> Matrix",
   "scatter": "(area: Area, n: int, min_gap: Meters, seed: int = 0) -> Points",
@@ -1833,6 +1848,7 @@
   "set_sync": "(tl: e8s.time.models.Timeline, label: str, offset_s: Seconds) -> e8s.time.models.Timeline",
   "sheet_templates": "(surface_type: e8s.sheet.models.SurfaceType | None = None) -> list[e8s.sheet.models.Sheet]",
   "shift": "(obj: T, dx: Meters, dy: Meters, sel: SetSelector = 'all', *, force: bool = False) -> T",
+  "show_folder": "(show_id: str) -> str",
   "similarity_fit": "(src: Points, dst: Points) -> Matrix",
   "sine_wave_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "skew": "(obj: T, deg_x: Degrees = 0.0, deg_y: Degrees = 0.0, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
@@ -1903,5 +1919,6 @@
   "where": "(set_: e8s.choreo.models.Set, predicate: collections.abc.Callable[[e8s.choreo.models.Placement], bool]) -> e8s.core.selection.Selection",
   "window": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, start: float, end: float, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "with_set": "(show: e8s.show.models.Show, new: e8s.choreo.models.Set) -> e8s.show.models.Show",
+  "withdraw": "(ws: e8s.show.workspace.Workspace, proposal_id: str, at: datetime.datetime) -> e8s.show.collab_models.Proposal",
   "zigzag": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points"
 }

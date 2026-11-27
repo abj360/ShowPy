@@ -95,7 +95,6 @@ from e8s.show.change_models import (
     MergeConflict,
     MergeResult,
 )
-from e8s.show.collab import preview_proposal, propose
 from e8s.show.collab_models import (
     CanvasEvent,
     Comment,
@@ -104,13 +103,17 @@ from e8s.show.collab_models import (
     Highlight,
     PathsOp,
     PlacementOp,
+    Proposal,
 )
 from e8s.show.counts import spot_counts
 from e8s.show.history import diff_paths, diff_sets
 from e8s.show.history_models import Revision
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.migrate import DroppedFields, MigrationReport
-from e8s.show.models import Pin
+from e8s.show.models import Pin, Show
+from e8s.show.proposals import preview_proposal, propose
 from e8s.show.set_queries import index
+from e8s.show.show_io import save_show
 from e8s.show.storage_models import (
     ConformanceReport,
     FsckFinding,
@@ -118,6 +121,7 @@ from e8s.show.storage_models import (
     GcReport,
     UpgradeReport,
 )
+from e8s.show.workspace import open_workspace
 from e8s.time.measures import count_to_measure
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting
 from e8s.time.timeline import set_measures
@@ -300,7 +304,7 @@ def _collab_examples() -> list[FrozenModel]:
     anchor = Anchor.on_set("1")
     pin = Pin(target="set", id="1")
     placement = PlacementOp(set_id=SetId("2"), placement=show.sets[1].placements[0])
-    proposal = propose(show, [placement], "nudge", "p1")
+    proposal = Proposal(id="p1", base_revision=show.revision, change=(placement,), note="nudge")
     examples: list[FrozenModel] = [
         anchor,
         pin,
@@ -311,12 +315,20 @@ def _collab_examples() -> list[FrozenModel]:
         Highlight(anchor=anchor, ttl_s=5.0),
         CanvasEvent(id="e1", at=AT, kind="pin", payload=pin),
         proposal,
-        preview_proposal(show, proposal),
+        _example_preview(show, placement),
         Revision(id="r2", parent="r1", at=AT),
         Note(id=NoteId("n1"), text="tighten", anchor=anchor, author="ada", created_at=AT),
         NotesDocument(show=show.id),
     ]
     return examples
+
+
+def _example_preview(show: Show, op: PlacementOp) -> FrozenModel:
+    storable = show.replace(id="show_1")
+    ws = open_workspace(InMemoryRepository(), storable.id)
+    save_show(ws, storable, AT)
+    propose(ws, [op], "nudge", "p1", AT)
+    return preview_proposal(ws, "p1")
 
 
 def _storage_examples() -> list[FrozenModel]:

@@ -329,7 +329,7 @@ def test_notes_document_header_is_written_first(tmp_path: Path) -> None:
 
 
 def test_workspace_writes_a_checked_notes_document() -> None:
-    show = two_set_show()
+    show = two_set_show().replace(id="show_1")
     repo = InMemoryRepository()
     repo.put_show(show.id, show, expected_revision="", at=AT)
     ws = open_workspace(repo, show.id)
@@ -345,7 +345,7 @@ def test_workspace_writes_a_checked_notes_document() -> None:
 
 
 def test_regression_workspace_refuses_the_notes_of_another_show() -> None:
-    show = two_set_show()
+    show = two_set_show().replace(id="show_1")
     repo = InMemoryRepository()
     repo.put_show(show.id, show, expected_revision="", at=AT)
     ws = open_workspace(repo, show.id)

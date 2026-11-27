@@ -10,6 +10,8 @@ Contains:
     TEXT_SUFFIXES: lists the file suffixes read as UTF-8 text
     decode_text(): decodes a text file's bytes, raising SchemaError for invalid UTF-8
     decode_comments(): decodes a comments file into its comments
+    decode_notes(): decodes a notes document into its model
+    decode_selection(): decodes a selection file into its selection
     require_structured(): checks a text file decodes the way its reader decodes it
 """
 
@@ -20,7 +22,7 @@ from pydantic import TypeAdapter
 from e8s.core.errors import SchemaError
 from e8s.core.selection import Selection
 from e8s.core.strict_json import parse_strict_json
-from e8s.core.validation import validate_adapter_json
+from e8s.core.validation import validate_adapter
 from e8s.show._notes_document import NotesDocument
 from e8s.show.collab_models import Comment
 from e8s.show.migrations.v1_to_v2_notes import NOTES_DOC
@@ -59,7 +61,7 @@ def decode_text(path: str, raw: bytes) -> str:
 
 
 def decode_comments(raw: bytes) -> list[Comment]:
-    """Decodes a comments file, raising SchemaError for bad UTF-8, JSON or comment shapes.
+    """Decodes a comments file, raising SchemaError for bad UTF-8, loose JSON or comment shapes.
 
     Args:
         raw: Comments file bytes.
@@ -70,15 +72,41 @@ def decode_comments(raw: bytes) -> list[Comment]:
     >>> decode_comments(b"[]")
     []
     """
-    return validate_adapter_json(COMMENTS_ADAPTER, raw, name="Comments")
+    parsed = parse_strict_json(raw, document=COMMENTS_DOC)
+    return validate_adapter(COMMENTS_ADAPTER, parsed, name="Comments")
 
 
-def _check_selection(raw: bytes) -> None:
-    validate_adapter_json(SELECTION_ADAPTER, raw, name="Selection")
+def decode_notes(raw: bytes) -> NotesDocument:
+    """Decodes a notes document, raising SchemaError for bad UTF-8, loose JSON or a wrong shape.
+
+    Args:
+        raw: Notes document bytes.
+
+    Returns:
+        notes: The stored notes document.
+
+    >>> decode_notes(b'{"show": "show-1"}').show
+    'show-1'
+    """
+    parsed = parse_strict_json(raw, document=NOTES_DOC)
+    return validate_adapter(NOTES_ADAPTER, parsed, name="NotesDocument")
 
 
-def _check_notes(raw: bytes) -> None:
-    validate_adapter_json(NOTES_ADAPTER, raw, name="NotesDocument")
+def decode_selection(raw: str | bytes) -> Selection:
+    """Decodes a selection file, raising SchemaError for loose JSON or a wrong shape.
+
+    Args:
+        raw: Selection file bytes, or the text a workspace read returns for them.
+
+    Returns:
+        selection: The stored canvas selection.
+
+    >>> decode_selection('{"ids": ["T1"]}').ids
+    ('T1',)
+    """
+    data = raw.encode() if isinstance(raw, str) else raw
+    parsed = parse_strict_json(data, document=SELECTION_DOC)
+    return validate_adapter(SELECTION_ADAPTER, parsed, name="Selection")
 
 
 def _check_json(raw: bytes) -> None:
@@ -86,17 +114,17 @@ def _check_json(raw: bytes) -> None:
 
 
 EXACT_CHECKS: dict[str, Callable[[bytes], object]] = {
-    SELECTION_DOC: _check_selection,
+    SELECTION_DOC: decode_selection,
     COMMENTS_DOC: decode_comments,
-    NOTES_DOC: _check_notes,
+    NOTES_DOC: decode_notes,
 }
 
 
 def require_structured(path: str, raw: bytes) -> None:
     r"""Checks a text file decodes as its reader decodes it; other files pass unread.
 
-    Text files must be UTF-8; `.json` files must parse; the selection, comments and notes files
-    must also match their models.
+    Text files must be UTF-8; `.json` files must parse as strict JSON; the selection, comments and
+    notes files must also match their models. The error keeps the code of the failed check.
 
     Args:
         path: Workspace or stored path.
@@ -129,4 +157,5 @@ def require_structured(path: str, raw: bytes) -> None:
             f"{path} does not hold valid content: {exc.message}",
             hint="write UTF-8 text; JSON files must parse and match their model",
             context={**exc.context, "path": path},
+            code=exc.code,
         ) from exc

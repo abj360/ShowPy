@@ -82,7 +82,7 @@ pub enum ErrorCode {
     MissingSpot,
     /// A selector mixes `&` with `+` or `-` at one parenthesis level without parentheses.
     MixedOperators,
-    /// A named selection is defined under a name that already holds a selection.
+    /// A named selection or a proposal is created under a name that is already taken.
     NameTaken,
     /// A file repository path is longer than the file system allows.
     NameTooLong,
@@ -106,8 +106,10 @@ pub enum ErrorCode {
     Path,
     /// An edit changes a pinned placement.
     PinnedChanged,
-    /// A proposal that is already accepted or rejected is changed again.
+    /// A proposal that is already accepted, rejected or withdrawn is changed again.
     ProposalClosed,
+    /// An open proposal touches items that changed since its base revision, so it is not applied.
+    ProposalStale,
     /// A tempo ramp is cut short by the next tempo section.
     RampCut,
     /// A tempo ramp sets only one of `ramp_to` and `ramp_counts`.
@@ -160,12 +162,14 @@ pub enum ErrorCode {
     TooFewPoints,
     /// A form or text asks for fewer spots than its curves or strokes need.
     TooFewSpots,
-    /// A file written to a repository is over the per-file byte cap.
+    /// A repository file, or the history of a show, is over its size cap.
     TooLarge,
     /// A show holds more sets than MAX_SETS.
     TooManySets,
     /// A cast holds more spots than MAX_SPOTS, or a text form asks for more than its own cap.
     TooManySpots,
+    /// A repository slot stays empty or cut short after every reread: its writer stopped early.
+    TornSlot,
     /// A placement names a form that does not exist.
     UnknownForm,
     /// A show.json or interchange document names no known format, or half a format header.
@@ -244,6 +248,7 @@ impl ErrorCode {
             Self::Path => "PATH",
             Self::PinnedChanged => "PINNED_CHANGED",
             Self::ProposalClosed => "PROPOSAL_CLOSED",
+            Self::ProposalStale => "PROPOSAL_STALE",
             Self::RampCut => "RAMP_CUT",
             Self::RampIncomplete => "RAMP_INCOMPLETE",
             Self::RampLength => "RAMP_LENGTH",
@@ -273,6 +278,7 @@ impl ErrorCode {
             Self::TooLarge => "TOO_LARGE",
             Self::TooManySets => "TOO_MANY_SETS",
             Self::TooManySpots => "TOO_MANY_SPOTS",
+            Self::TornSlot => "TORN_SLOT",
             Self::UnknownForm => "UNKNOWN_FORM",
             Self::UnknownFormat => "UNKNOWN_FORMAT",
             Self::UnknownRef => "UNKNOWN_REF",

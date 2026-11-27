@@ -492,3 +492,31 @@ retires at 2.0.0, it accepts the layout-1 documents (`set.json` holding `placeme
 `facing.json`, `labels.json` and `/cast/cast.json`), so older trees still validate. A tree that
 holds both forms of one set still fails to decode. Model and interchange shapes are unchanged:
 the schema's model definitions stay as they are, and `export_json` writes the same bytes.
+
+### Addendum 2026-11-27: `events_since` decodes the show documents each revision changed
+
+Decision 10 ships in part. `events_since` finds what each revision changed by comparing the blob
+digests of its tree and its parent's tree, never from the revision record's `changed` list. A
+revision that changed a show document gets its show from `Workspace.show_at`. The decode cache
+decodes only the documents that revision changed, but the show is still assembled and validated
+whole. Events come from `changes()` between that show and the one before it. A revision that
+changed no show document, such as a comment-only revision, decodes nothing. Its comment events
+come from the two comment documents.
+
+Measured on 2026-11-27 on an Apple M4, Python 3.14.8, load average 3.2 to 3.8. The show is
+`seeded_show(11, 300, 60)` with 200 one-spot revisions, each moving one spot in one set. Times
+are the minimum of 3 rounds, with the base revision's show already decoded. That first decode
+adds 0.20 s.
+
+| Operation                                       | Before (4f4cda58) | After  | Budget |
+| ----------------------------------------------- | ----------------- | ------ | ------ |
+| `events_since`, 200 revisions, memory           | 4.99 s            | 1.32 s | < 1 s  |
+| `events_since`, 200 revisions, files            |                   | 1.54 s | < 1 s  |
+| Documents decoded (decode cache misses), memory | 200               | 200    |        |
+
+Where the 1.32 s goes: `show_at` assembling and validating each whole show takes 0.80 s, and
+`changes()` between two whole shows takes 0.50 s. The budget is not met. Meeting it means
+deriving events from the item values of the changed documents alone, without assembling either
+show. That needs a document-level item reader, which belongs with the item table. It is
+follow-up work, to start once the item reader of the Phase 3 diff and merge work (lane C) is on
+`main`.

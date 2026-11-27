@@ -17,6 +17,9 @@ Contains:
     encode_documents(): encodes only the named stored documents of a show
     decode_show(): assembles a show from documents of any readable format version
     migrate_documents(): migrates a stored document set to the current format and reports it
+    MigratedRead: names what read_migrated returns, so a caller can pass it on
+    Migration: holds a rewrite's writes and the show read while computing them
+    migration_of(): computes the rewrite of a tree, decoding its show once
     migration_changes(): lists the writes and deletes that store a migrated document set
     is_older_tree(): tells whether stored documents hold a show of an older format version
     needs_rewrite(): tells whether stored documents hold an older format or layout-1 documents
@@ -24,28 +27,18 @@ Contains:
     migrated_view(): returns stored documents as the migration would store them
 """
 
-import functools
-import json
-from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
-from functools import partial
+from collections.abc import Collection, Iterator, Mapping
+from typing import NamedTuple
 
 from e8s.core.errors import StorageError
 from e8s.core.json_types import JsonValue
-from e8s.core.types import FrozenModel
 from e8s.show.canvas_renames import renamed_canvas
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_dump import dump_dumped_json as dump_dumped_json
 from e8s.show.document_dump import dump_headed_json as dump_headed_json
 from e8s.show.document_dump import dump_json as dump_json
 from e8s.show.document_dump import dump_show_doc as dump_show_doc
-from e8s.show.document_paths import (
-    CAST_DOC,
-    CAST_FIELD,
-    ROLE_NAMES,
-    SET_DOC_NAME,
-    SPLIT_FIELDS,
-    docs_for_order,
-)
+from e8s.show.document_paths import CAST_DOC, docs_for_order, is_set_document
 from e8s.show.document_paths import FORMS_NAME as FORMS_NAME
 from e8s.show.document_paths import LEGACY_NOTES_DOC as LEGACY_NOTES_DOC
 from e8s.show.document_paths import NOTES_DOC as NOTES_DOC
@@ -64,17 +57,18 @@ from e8s.show.document_paths import script_doc as script_doc
 from e8s.show.document_paths import set_doc as set_doc
 from e8s.show.document_paths import split_path as split_path
 from e8s.show.document_reading import read_migrated, read_show
+from e8s.show.document_sources import load_object, raw_source
+from e8s.show.encode_cache import EncodeCache, document_groups, encode_groups
 from e8s.show.migrate import (
     CURRENT_VERSION,
     MigrationReport,
     ReportBuilder,
-    format_header,
     read_version,
     without_header,
 )
 from e8s.show.migrate import SHOW_DOC as SHOW_DOC
 from e8s.show.models import Show
-from e8s.show.role_documents import holds_layout1_documents, set_documents
+from e8s.show.role_documents import holds_layout1_documents
 from e8s.show.set_keys import set_key
 from e8s.show.storable import require_storable as require_storable
 
@@ -92,12 +86,20 @@ def expected_show_docs(show: Show) -> frozenset[str]:
     return docs_for_order([set_key(s) for s in show.sets])
 
 
-def encode_show(show: Show) -> dict[str, bytes]:
+def encode_show(show: Show, *, cache: EncodeCache | None = None) -> dict[str, bytes]:
     """Splits a show into documents under set keys; empty forms and paths are left out.
 
     show.json starts with `"format"` and `"version"`; the rest of every document is canonical.
     Each set is stored as set.json plus its drill, facing and labels role documents, and the
     cast as /cast/cast.json, out of show.json.
+
+    Args:
+        show: Show to encode; one that cannot be stored raises.
+        cache: Encoded documents to reuse, keyed by the identity of their sources; the bytes
+            are the same with or without it.
+
+    Returns:
+        documents: Stored path to canonical bytes.
 
     >>> from e8s.examples import two_set_show
     >>> sorted(encode_show(two_set_show()))[:4]
@@ -105,7 +107,9 @@ def encode_show(show: Show) -> dict[str, bytes]:
     >>> encode_show(two_set_show())["/show/show.json"].splitlines()[1:3]
     [b'  "format": "e8.show",', b'  "version": 2,']
     """
-    return {path: encode() for path, encode in _encoders(show).items()}
+    if cache is not None:
+        return cache.documents(show)
+    return encode_groups(document_groups(show))
 
 
 def encode_documents(show: Show, paths: Collection[str]) -> dict[str, bytes]:
@@ -115,48 +119,9 @@ def encode_documents(show: Show, paths: Collection[str]) -> dict[str, bytes]:
     >>> sorted(encode_documents(two_set_show(), ["/show/sheet.json", "/sets/9/set.json"]))
     ['/show/sheet.json']
     """
-    encoders = _encoders(show)
-    return {path: encoders[path]() for path in paths if path in encoders}
-
-
-def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
-    """Maps each stored document path of a show to a call that encodes it."""
-    require_storable(show)
-    keys = {s.id: set_key(s) for s in show.sets}
-    meta = show._json_dumped(exclude={*SPLIT_FIELDS, CAST_FIELD})
-    encoders: dict[str, Callable[[], bytes]] = {
-        SHOW_DOC: lambda: dump_show_doc(
-            {**format_header(), **meta, SET_ORDER_FIELD: list(keys.values())}
-        ),
-        SHEET_DOC: lambda: dump_dumped_json(show.sheet.to_json()),
-        TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.to_json()),
-        CAST_DOC: lambda: dump_dumped_json(show.cast.to_json()),
-    }
-    for current in show.sets:
-        folder = keys[current.id]
-        split = functools.cache(partial(set_documents, current))
-        encoders[set_doc(folder)] = partial(_dump_part, split, SET_DOC_NAME)
-        for name in ROLE_NAMES:
-            encoders[f"/sets/{folder}/{name}"] = partial(_dump_part, split, name)
-        forms = [f for _, f in sorted(show.forms.items()) if f.set == current.id]
-        if forms:
-            encoders[forms_doc(folder)] = partial(_dump_models, forms)
-    for spec in show.transitions:
-        folder_pair = (keys[spec.id[0]], keys[spec.id[1]])
-        encoders[paths_doc(folder_pair)] = partial(_dump_model, spec)
-    return encoders
-
-
-def _dump_model(model: FrozenModel) -> bytes:
-    return dump_dumped_json(model.to_json())
-
-
-def _dump_part(split: Callable[[], Mapping[str, JsonValue]], name: str) -> bytes:
-    return dump_dumped_json(split()[name])
-
-
-def _dump_models(models: Sequence[FrozenModel]) -> bytes:
-    return dump_dumped_json([m.to_json() for m in models])
+    wanted = set(paths)
+    groups = [g for g in document_groups(show) if not wanted.isdisjoint(g.paths)]
+    return {path: raw for path, raw in encode_groups(groups).items() if path in wanted}
 
 
 def decode_show(
@@ -217,17 +182,23 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
     version = read_version(docs)
     if version == CURRENT_VERSION:
         return dict(docs), ReportBuilder(version).build()
-    encoded, folders, report = _migrated_parts(docs)
+    _, encoded, folders, report = _migrated_parts(docs)
     others = {path: raw for path, raw in docs.items() if not is_show_doc(path)}
     return _moved_set_files(others, folders, set(docs)) | encoded, report
 
 
+type MigratedRead = tuple[Show, ReportBuilder, dict[str, JsonValue]]
+
+
 def _migrated_parts(
-    docs: Mapping[str, bytes],
-) -> tuple[dict[str, bytes], dict[str, str], MigrationReport]:
-    """Migrates an older tree's show documents, notes and canvas files; maps renamed set folders."""
-    show, report, beside = read_migrated(docs)
-    order = without_header(json.loads(docs[SHOW_DOC])).get(SET_ORDER_FIELD, [])
+    docs: Mapping[str, bytes], read: MigratedRead | None = None
+) -> tuple[Show, dict[str, bytes], dict[str, str], MigrationReport]:
+    """Migrates an older tree's show documents, notes and canvas files; maps renamed set folders.
+
+    Returns the migrated show beside the documents it encodes to.
+    """
+    show, report, beside = read_migrated(docs) if read is None else read
+    order = without_header(load_object(raw_source(docs), SHOW_DOC)).get(SET_ORDER_FIELD, [])
     stored_keys = [key for key in order if isinstance(key, str)] if isinstance(order, list) else []
     folders = {
         old: new
@@ -237,7 +208,7 @@ def _migrated_parts(
     built = report.build()
     canvas = {path: dump_json(value) for path, value in renamed_canvas(docs, built).items()}
     written = {path: _dump_beside(value) for path, value in beside.items()}
-    return encode_show(show) | written | canvas, folders, built
+    return show, encode_show(show) | written | canvas, folders, built
 
 
 def _dump_beside(value: JsonValue) -> bytes:
@@ -285,12 +256,55 @@ def _moved_set_files(
     return moved
 
 
-def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
-    """Lists the writes and deletes that turn a stored document set into its migrated form.
+class Migration(NamedTuple):
+    """Holds what the first save over a tree changes, and the show it reads from the tree.
+
+    Attributes:
+        show: The show the tree holds at revision "", or None when the tree needs no rewrite.
+        changes: The writes, and None for each path the rewrite leaves behind.
+    """
+
+    show: Show | None
+    changes: dict[str, bytes | None]
+
+
+def migration_of(docs: Mapping[str, bytes], read: MigratedRead | None = None) -> Migration:
+    """Computes the rewrite the first save makes over a tree, decoding the show once.
 
     Only show documents and the files of renamed set folders are read, so large renders and
     exports stay unread. A tree of the current format that still stores a layout-1 set or cast
     is re-encoded as role documents, which changes no content.
+
+    Args:
+        docs: Stored path to document bytes, as a repository tree holds them.
+        read: What `read_migrated` returned for an older `docs`, when the caller already has it.
+
+    Returns:
+        migration: The tree's show with the writes, and None for each path the migration leaves
+            behind (the old folder of a renamed set); no show and no changes when `docs` is
+            already current and stored as role documents.
+
+    >>> from e8s.examples import two_set_show
+    >>> migration_of(encode_show(two_set_show()))
+    Migration(show=None, changes={})
+    """
+    if not is_older_tree(docs):
+        if not _holds_listed_layout1(docs):
+            return Migration(None, {})
+        show = read_show(docs)
+        encoded = encode_show(show)
+        return Migration(show, {p: d for p, d in encoded.items() if docs.get(p) != d})
+    show, encoded, folders, _ = _migrated_parts(docs, read)
+    moving = [p for p in docs if not is_show_doc(p) and _set_folder(p) in folders]
+    changes: dict[str, bytes | None] = {p: d for p, d in encoded.items() if docs.get(p) != d}
+    changes.update(_moved_set_files({p: docs[p] for p in moving}, folders, set(docs)))
+    changes.update(dict.fromkeys(p for p in docs if is_show_doc(p) and p not in encoded))
+    changes.update(dict.fromkeys(moving))
+    return Migration(show, changes)
+
+
+def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
+    """Lists the writes and deletes that turn a stored document set into its migrated form.
 
     Args:
         docs: Stored path to document bytes, as a repository tree holds them.
@@ -304,35 +318,36 @@ def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
     >>> migration_changes(encode_show(two_set_show()))
     {}
     """
-    if not is_older_tree(docs):
-        return _role_changes(docs) if holds_layout1_documents(docs) else {}
-    encoded, folders, _ = _migrated_parts(docs)
-    moving = [p for p in docs if not is_show_doc(p) and _set_folder(p) in folders]
-    changes: dict[str, bytes | None] = {p: d for p, d in encoded.items() if docs.get(p) != d}
-    changes.update(_moved_set_files({p: docs[p] for p in moving}, folders, set(docs)))
-    changes.update(dict.fromkeys(p for p in docs if is_show_doc(p) and p not in encoded))
-    changes.update(dict.fromkeys(moving))
-    return changes
+    return migration_of(docs).changes
 
 
-def _role_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
-    """Lists the writes that re-encode a current tree's layout-1 documents as roles.
+def _holds_listed_layout1(docs: Mapping[str, bytes]) -> bool:
+    """Tells whether a tree stores layout-1 documents of a set it lists, ignoring unlisted sets.
 
-    Each listed set's set.json is rewritten in place beside its new role documents, so nothing
-    is deleted: a document the show does not read stays as it is.
+    A set document of a set the show does not list stays as it is (nothing reads it), so it must
+    not keep a re-encoded tree looking like layout 1.
     """
-    encoded = encode_show(read_show(docs))
-    return {p: d for p, d in encoded.items() if docs.get(p) != d}
+    if not holds_layout1_documents(docs):
+        return False
+    if CAST_DOC not in docs:
+        return True
+    order = without_header(load_object(raw_source(docs), SHOW_DOC)).get(SET_ORDER_FIELD, [])
+    listed = {key for key in order if isinstance(key, str)} if isinstance(order, list) else set()
+    return holds_layout1_documents(
+        {p for p in docs if not is_set_document(p) or p.split("/")[2] in listed}
+    )
 
 
 def needs_rewrite(docs: Mapping[str, bytes]) -> bool:
     """Tells whether the first save rewrites stored documents: an older format or layout 1.
 
+    Layout-1 documents of a set the show does not list are ignored, since the rewrite keeps them.
+
     >>> from e8s.examples import two_set_show
     >>> needs_rewrite(encode_show(two_set_show())), needs_rewrite({})
     (False, False)
     """
-    return is_older_tree(docs) or holds_layout1_documents(docs)
+    return is_older_tree(docs) or _holds_listed_layout1(docs)
 
 
 def is_older_tree(docs: Mapping[str, bytes]) -> bool:
@@ -350,11 +365,13 @@ class MigratedView(Mapping[str, bytes]):
 
     Attributes:
         changes: The migration's writes, and None for each path it leaves behind.
+        show: The show the migration read from the documents, at revision "".
     """
 
-    def __init__(self, docs: Mapping[str, bytes], changes: Mapping[str, bytes | None]) -> None:
+    def __init__(self, docs: Mapping[str, bytes], migration: Migration) -> None:
         self._docs = docs
-        self.changes = changes
+        self.changes = migration.changes
+        self.show = migration.show
 
     def __getitem__(self, path: str) -> bytes:
         if path not in self.changes:
@@ -372,11 +389,14 @@ class MigratedView(Mapping[str, bytes]):
         return sum(1 for _ in self)
 
 
-def migrated_view(docs: Mapping[str, bytes]) -> Mapping[str, bytes]:
+def migrated_view(
+    docs: Mapping[str, bytes], read: MigratedRead | None = None
+) -> Mapping[str, bytes]:
     """Returns stored documents as the first save would store them, so reads see renamed folders.
 
     Args:
         docs: Stored path to document bytes, as a repository tree holds them.
+        read: What `read_migrated` returned for an older `docs`, when the caller already has it.
 
     Returns:
         view: `docs` itself when it is current; otherwise a MigratedView in which every file of
@@ -387,5 +407,5 @@ def migrated_view(docs: Mapping[str, bytes]) -> Mapping[str, bytes]:
     >>> migrated_view(docs) is docs
     True
     """
-    changes = migration_changes(docs)
-    return MigratedView(docs, changes) if changes else docs
+    migration = migration_of(docs, read)
+    return MigratedView(docs, migration) if migration.changes else docs

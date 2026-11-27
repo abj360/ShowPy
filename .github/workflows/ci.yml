@@ -329,8 +329,9 @@ jobs:
         if: env.RUN_RUST_JOB == 'true'
         id: pins
         run: >-
-          echo "versions=$(grep -hE '^(channel|CARGO_[A-Z]+_VERSION) = ' rust-toolchain.toml
-          noxfile.py | cut -d '"' -f 2 | paste -s -d '-' -)" >> "$GITHUB_OUTPUT"
+          echo "versions=$(grep -hE '^(channel|CARGO_(DENY|ABOUT)_VERSION) = '
+          rust-toolchain.toml noxfile.py | cut -d '"' -f 2 | paste -s -d '-' -)" >>
+          "$GITHUB_OUTPUT"
       - if: env.RUN_RUST_JOB == 'true'
         id: restore-cargo-tools
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

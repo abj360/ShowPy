@@ -9,6 +9,8 @@ Contains:
     remove_set(): deletes a set with its forms and paths, optionally keeping the total time
     replace_sets(): replaces a show's sets, syncing transitions and refusing locked edits
     set_counts(): retimes a set and the transition into it
+    late_rows(): lists the spots whose path window does not fit a transition's counts
+    late_routes(): lists the routes that end after a transition's counts
 """
 
 import re
@@ -17,7 +19,7 @@ from collections.abc import Sequence
 
 from e8s.cast.models import Cast
 from e8s.choreo.models import Placement, Set
-from e8s.choreo.path_models import Route, TransitionSpec, Waypoint
+from e8s.choreo.path_models import FacingOverride, Route, TransitionSpec, Waypoint
 from e8s.core.errors import (
     PathError,
     SchemaError,
@@ -30,6 +32,7 @@ from e8s.core.ids import (
     format_ref,
     format_tid,
     parse_ref,
+    parse_tid,
 )
 from e8s.sheet.models import Sheet
 from e8s.show.locks import require_unlocked
@@ -199,6 +202,7 @@ def add_set(
     after: str | None = None,
     placements: Sequence[Placement] | None = None,
     *,
+    before: str | None = None,
     force: bool = False,
 ) -> Show:
     """Inserts a set; spots without a given placement copy their place in the previous set.
@@ -211,31 +215,58 @@ def add_set(
     because forms belong to one set. They are pinned when the spot has an entity pin.
     Inserting between two sets drops the stored paths between them.
 
+    `before` inserts in front of a set. For the first set, the new set opens the show at 0 counts,
+    its missing placements copy the old opener, and `counts` becomes the old opener's counts: the
+    move into it. The old opener had no incoming transition, so none is dropped, and its stored
+    paths, pins and forms stay as they were. The show grows by `counts`.
+
     Args:
         show: Show to edit.
         set_id: New set ID.
-        counts: Counts of the move into the new set; 0 when it is the first set.
+        counts: Counts of the move the insertion adds: into the new set, or into the old opener
+            when the new set opens the show. 0 only for the first set of an empty show.
         after: Set to insert after; None appends.
         placements: Placements for some or all spots.
-        force: Allows dropping locked paths between `after` and its successor.
+        before: Set to insert before; cannot be combined with `after`.
+        force: Allows dropping locked paths between the neighbours of the new set.
 
     >>> from e8s.examples import two_set_show
     >>> show = add_set(two_set_show(), "3", 4.0)
     >>> show.set_ids(), show.set("3").get("T1").y
     (['1', '2', '3'], 9.0)
+
+    >>> opened = add_set(two_set_show(), "0", 4.0, before="1")
+    >>> opened.set_ids(), [s.counts for s in opened.sets]
+    (['0', '1', '2'], [0.0, 4.0, 8.0])
     """
     new_id = _checked_set_id(show, set_id)
-    position = len(show.sets) if after is None else show.set_index(after) + 1
-    _require_counts(counts, is_first=position == 0)
+    if after is not None and before is not None:
+        raise SchemaError(
+            "add_set() got both after and before",
+            hint="give one of after= or before=; before=X equals after= the set preceding X",
+            context={"after": after, "before": before},
+        )
+    if before is not None:
+        position = show.set_index(before)
+    else:
+        position = len(show.sets) if after is None else show.set_index(after) + 1
+    opens_before_old_opener = before is not None and position == 0
+    _require_counts(counts, is_first=position == 0 and not opens_before_old_opener)
     given = _given_placements(show, placements or ())
-    previous = show.sets[position - 1] if position > 0 else None
-    rows = tuple(given.get(e) or _carried(show, previous, e) for e in show.cast.ids())
-    new = Set(id=new_id, key=_new_key(show, new_id), counts=counts, placements=rows)
-    return replace_sets(show, [*show.sets[:position], new, *show.sets[position:]], force=force)
+    source_index = 0 if opens_before_old_opener else position - 1
+    source = show.sets[source_index] if source_index >= 0 else None
+    rows = tuple(given.get(e) or _carried(show, source, e) for e in show.cast.ids())
+    following = list(show.sets[position:])
+    new_counts = counts
+    if opens_before_old_opener:
+        following[0] = following[0].replace(counts=counts)
+        new_counts = 0.0
+    new = Set(id=new_id, key=_new_key(show, new_id), counts=new_counts, placements=rows)
+    return replace_sets(show, [*show.sets[:position], new, *following], force=force)
 
 
 def _subset_id(show: Show, after: str) -> SetId:
-    base = after.rstrip(SUBSET_LETTERS)
+    base = after.rstrip(SUBSET_LETTERS) or after[0]
     suffix = after[len(base) :]
     start = SUBSET_LETTERS.index(suffix[-1]) + 1 if suffix else 0
     for letter in SUBSET_LETTERS[start:]:
@@ -292,15 +323,21 @@ def insert_subset(
     return replace_sets(show, sets, force=force), new_id
 
 
+def _names_set(tid_text: str, set_id: str) -> bool:
+    try:
+        return set_id in parse_tid(tid_text)
+    except SchemaError:
+        return False
+
+
 def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
     dropped_forms = {f for f, form in show.forms.items() if form.set == set_id}
-    tids = {format_tid(t) for t in show.transition_ids() if set_id in t}
 
     def kept(pin: Pin) -> bool:
         return not (
             (pin.target == "set" and pin.id == set_id)
             or (pin.target == "form" and pin.id in dropped_forms)
-            or (pin.target == "transition" and pin.id in tids)
+            or (pin.target == "transition" and _names_set(pin.id, set_id))
         )
 
     return tuple(filter(kept, show.pins))
@@ -312,7 +349,9 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     Args:
         show: Show to edit.
         set_id: Set to delete.
-        merge_counts: Adds its counts to the next set so the total time stays the same.
+        merge_counts: Adds its counts to the next set, or to the previous set when it is the last,
+            so the total time stays the same. The first set always keeps 0 counts, so removing
+            the second of two sets drops its time.
         force: Allows deleting pinned placements, locked forms or locked paths.
 
     Returns:
@@ -325,9 +364,9 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     position = show.set_index(set_id)
     removed = show.sets[position]
     sets = [s for s in show.sets if s.id != set_id]
-    if merge_counts and position < len(sets):
-        following = sets[position]
-        sets[position] = following.replace(counts=following.counts + removed.counts)
+    receiver = min(position, len(sets) - 1)
+    if merge_counts and receiver > 0:
+        sets[receiver] = sets[receiver].replace(counts=sets[receiver].counts + removed.counts)
     if position == 0 and sets:
         sets[0] = sets[0].replace(counts=0.0)
     forms = {f: form for f, form in show.forms.items() if form.set != set_id}
@@ -352,16 +391,34 @@ def _scale_spec(spec: TransitionSpec, factor: float) -> TransitionSpec:
     return spec.replace(rows=rows, routes=routes)
 
 
-def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
-    late: list[str] = [
+def late_rows(spec: TransitionSpec, counts: float) -> list[SpotId]:
+    """Lists the spots whose stored path window does not fit a transition of `counts`.
+
+    >>> from e8s.examples import two_set_show
+    >>> late_rows(two_set_show().transition(("1", "2")), 8.0)
+    []
+    """
+    return [
         entity
         for entity, row in spec.rows.items()
         if row.window(counts)[1] > counts
         or row.start >= counts
         or any(w.at is not None and w.at > counts for w in row.waypoints)
     ]
-    late += [key for key, r in spec.routes.items() if (r.end or counts) > counts]
-    return late
+
+
+def late_routes(spec: TransitionSpec, counts: float) -> list[str]:
+    """Lists the routes of a transition that end after `counts`.
+
+    >>> from e8s.examples import two_set_show
+    >>> late_routes(two_set_show().transition(("1", "2")), 8.0)
+    []
+    """
+    return [key for key, r in spec.routes.items() if (r.end or counts) > counts]
+
+
+def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
+    return [*late_rows(spec, counts), *late_routes(spec, counts)]
 
 
 def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> TransitionSpec:
@@ -377,6 +434,28 @@ def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> Tran
     return spec.replace(counts=counts)
 
 
+def _remapped_count(count: float, start: float, old: float, new: float) -> float:
+    if count <= start:
+        return count
+    if count <= start + old:
+        return start + (count - start) * new / old
+    return count + new - old
+
+
+def _remapped_overrides(
+    overrides: tuple[FacingOverride, ...], start: float, old: float, new: float
+) -> tuple[FacingOverride, ...]:
+    if old <= 0:
+        return overrides
+    return tuple(
+        o.replace(
+            start=_remapped_count(o.start, start, old, new),
+            end=_remapped_count(o.end, start, old, new),
+        )
+        for o in overrides
+    )
+
+
 def set_counts(
     show: Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False
 ) -> Show:
@@ -388,7 +467,8 @@ def set_counts(
         show: Show to edit.
         set_id: Set to retime.
         counts: New counts; 0 for the first set, positive otherwise.
-        rescale: Scales stored path windows, waypoint times and route windows proportionally.
+        rescale: Scales stored path windows, waypoint times and route windows proportionally, and
+            maps facing override counts: unchanged before the move, scaled inside it, shifted after.
         force: Allows retiming a pinned set or rescaling locked path rows.
 
     Returns:
@@ -400,10 +480,15 @@ def set_counts(
     """
     position = show.set_index(set_id)
     _require_counts(counts, is_first=position == 0)
+    old = show.sets[position].counts
+    start = sum(s.counts for s in show.sets[:position])
     sets = list(show.sets)
     sets[position] = sets[position].replace(counts=counts)
+    update: dict[str, object] = {}
+    if rescale:
+        update["facing_overrides"] = _remapped_overrides(show.facing_overrides, start, old, counts)
     specs = tuple(
         _retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
     )
-    return replace_sets(show, sets, force=force, transitions=specs)
+    return replace_sets(show, sets, force=force, transitions=specs, **update)

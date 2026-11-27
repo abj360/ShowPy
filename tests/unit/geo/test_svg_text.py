@@ -51,6 +51,10 @@ Contains:
     test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises an E8sError for
         50,000 pieces
     test_regression_simplex_tables_are_read_only: refuses item assignment on SIMPLEX and FONTS
+    test_regression_svg_arc_with_scaled_radii_round_trips: re-parses the written path data of an
+        arc whose radii were scaled to reach its end into the same arc
+    test_regression_scaled_arc_center_is_the_chord_midpoint: centers an arc whose radii were scaled
+        to reach its end exactly on the chord midpoint
 """
 
 import math
@@ -67,7 +71,7 @@ from e8s.core.types import Box2
 from e8s.core.util import approx_equal
 from e8s.geo.curves import SvgCurve
 from e8s.geo.shapes import svg_outline, text_outline
-from e8s.geo.svg import parse_path
+from e8s.geo.svg import ArcPiece, parse_path
 from e8s.geo.text import FONTS, SIMPLEX
 from tests.helpers import fails_after
 
@@ -81,6 +85,10 @@ TIMING_RUNS = 5
 SCALING_TIMEOUT_S = 10
 MAX_SCALING_RATIO = 3.0
 FIT_TOL_M = 1e-6
+ROUND_TRIP_ABS_TOL = 1e-6
+ROUND_TRIP_REL_TOL = 1e-9
+SCALED_ARC_PATH = "M 0 0 M 0 0 A 0.4 -2E-1 1 0 0 2 -12"
+SHORT_RADII_ARC_PATH = "M 0 0 A 6.1 3 1 0 0 2 -12"
 FLATTEN_TOL_M = 0.001
 BAD_PATH_INDEX = 5
 VIEWBOX_SVG = '<svg viewBox="0 0 100 100"><path d="M10 10 L20 10 L20 20"/></svg>'
@@ -376,3 +384,25 @@ def test_regression_parse_path_numbers_after_close_name_the_token() -> None:
     assert "start with M" not in caught.value.message
     assert caught.value.context == {"token": "1", "token_index": 7}
     assert "command letter" in caught.value.hint
+
+
+def test_regression_svg_arc_with_scaled_radii_round_trips() -> None:
+    """Re-parses an arc whose too-small radii were scaled up into the same arc."""
+    subpath = parse_path(SCALED_ARC_PATH)[0]
+    first = subpath.pieces[0]
+    second = parse_path(subpath.to_d())[0].pieces[0]
+    assert isinstance(first, ArcPiece)
+    assert isinstance(second, ArcPiece)
+    assert approx_equal(
+        (*first.center, first.rx, first.ry, first.theta1_deg, first.dtheta_deg),
+        (*second.center, second.rx, second.ry, second.theta1_deg, second.dtheta_deg),
+        abs_tol=ROUND_TRIP_ABS_TOL,
+        rel_tol=ROUND_TRIP_REL_TOL,
+    )
+
+
+def test_regression_scaled_arc_center_is_the_chord_midpoint() -> None:
+    """Centers an arc on the chord midpoint once its too-small radii are scaled to fit."""
+    piece = parse_path(SHORT_RADII_ARC_PATH)[0].pieces[0]
+    assert isinstance(piece, ArcPiece)
+    assert piece.center == (1.0, -6.0)

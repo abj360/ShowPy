@@ -46,7 +46,7 @@ from e8s.core.selection import Selection
 from e8s.geo.shapes import line
 from e8s.show.anchors import Anchor
 from e8s.show.changes import apply_change
-from e8s.show.collab import accept, highlight, pins, preview_proposal, propose, reject, selection
+from e8s.show.collab import highlight, pins, selection
 from e8s.show.collab_models import (
     CanvasEvent,
     Comment,
@@ -60,12 +60,14 @@ from e8s.show.collab_models import (
 from e8s.show.documents import dump_json
 from e8s.show.events import apply_event, decode_event, events_since
 from e8s.show.manage import add_set, set_counts
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.migrate import ReportBuilder
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin, unpin
+from e8s.show.proposals import accept, preview_proposal, propose, reject
 from e8s.show.show_io import load_show, save_show
 from e8s.show.structured import COMMENTS_DOC
-from e8s.show.workspace import Workspace
+from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
@@ -274,60 +276,69 @@ def test_agent_pin_event_applies() -> None:
 
 def test_propose_preview_and_reject() -> None:
     show = pin(two_set_show(), "entity", "T1")
+    _, agent, designer = open_session(show, AT)
+    base_revision = agent.revision
     proposal = propose(
-        show,
+        agent,
         [_move("T1", 1.0), _move("T2", 3.5), CountsOp(set_id=SetId("2"), counts=6)],
         "wider",
         "p1",
+        AT + STEP,
     )
-    assert (proposal.state, proposal.base_revision) == ("open", "")
-    preview = preview_proposal(show, proposal)
+    assert (proposal.state, proposal.base_revision) == ("open", base_revision)
+    designer.refresh()
+    preview = preview_proposal(designer, "p1")
     assert [p.entity for p in preview.placements[SetId("2")]] == ["T1", "T2"]
     assert preview.counts == {"2": 6.0}
     assert preview.paths[0].counts == 6.0
     assert preview.blocked == ("placement T1 in set 2",)
-    rejected = reject(proposal, "too wide")
+    rejected = reject(designer, "p1", "too wide", AT + 2 * STEP)
     assert (rejected.state, rejected.reason) == ("rejected", "too wide")
     with pytest.raises(SchemaError):
-        reject(rejected, "again")
+        reject(designer, "p1", "again", AT + 3 * STEP)
 
 
 def test_accept_saves_the_proposal_as_the_new_head() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
-    proposal = propose(load_show(agent), [_move("T3", -1.0)], "shift", "p1")
-    rev = accept(designer, proposal, AT + STEP)
+    propose(agent, [_move("T3", -1.0)], "shift", "p1", AT)
+    rev = accept(designer, "p1", AT + STEP)
     assert (rev.id, rev.at) == (designer.repo.head("s"), AT + STEP)
     assert load_show(designer).set("2").get("T3").x == -1.0
 
 
 def test_accept_rebases_when_unrelated_items_moved() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
-    proposal = propose(load_show(agent), [_move("T3", -1.0)], "shift", "p1")
+    propose(agent, [_move("T3", -1.0)], "shift", "p1", AT)
+    designer.refresh()
     other = apply_change(load_show(designer), [_move("T1", 8.0)])
     save_show(designer, other, AT + STEP)
-    accept(designer, proposal, AT + 2 * STEP)
+    accept(designer, "p1", AT + 2 * STEP)
     head = load_show(designer)
     assert (head.set("2").get("T1").x, head.set("2").get("T3").x) == (8.0, -1.0)
 
 
 def test_accept_conflicts_when_same_items_moved() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
-    proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT)
+    designer.refresh()
     save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), AT + STEP)
     with pytest.raises(ConflictError) as info:
-        accept(designer, proposal, AT + 2 * STEP)
-    assert info.value.context["overlap"] == ["placement T1 in set 2"]
+        accept(designer, "p1", AT + 2 * STEP)
+    assert info.value.context["conflicts"] == [
+        "placement 2/T1 (drill): both sides changed this item differently"
+    ]
 
 
 def test_accept_respects_pins() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
-    proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT)
+    designer.refresh()
     save_show(designer, pin(load_show(designer), "entity", "T2"), AT + STEP)
-    accept(designer, proposal, AT + 2 * STEP)
+    accept(designer, "p1", AT + 2 * STEP)
     save_show(designer, pin(load_show(designer), "entity", "T1"), AT + 3 * STEP)
-    pinned_t1 = propose(load_show(designer), [_move("T1", 5.0)], "again", "p2")
+    propose(designer, [_move("T1", 5.0)], "again", "p2", AT + 4 * STEP)
     with pytest.raises(LockedError):
-        accept(designer, pinned_t1, AT + 4 * STEP)
+        accept(designer, "p2", AT + 5 * STEP)
 
 
 def test_highlight_and_selection() -> None:
@@ -364,8 +375,6 @@ def _with_path_row(show: Show) -> Show:
     return show.replace(transitions=(STRAIGHT_ROW,))
 
 
-@pytest.mark.defect("UP-9.7-32")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-32")
 def test_regression_counts_only_change_is_not_reported_as_a_paths_edit() -> None:
     """Reports a counts-only retime as set_counts, not edit_paths (audit 9.7 collab)."""
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
@@ -377,8 +386,6 @@ def test_regression_counts_only_change_is_not_reported_as_a_paths_edit() -> None
     assert "edit_paths" not in kinds
 
 
-@pytest.mark.defect("UP-9.7-33")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-33")
 def test_regression_events_since_replay_reproduces_a_form_deletion() -> None:
     """Replays a form deletion so the replayed show equals head (audit 9.7 collab)."""
     with_form = two_set_show().replace(forms={"f1": FORM})
@@ -392,54 +399,51 @@ def test_regression_events_since_replay_reproduces_a_form_deletion() -> None:
     assert replayed.forms == load_show(designer).forms
 
 
-@pytest.mark.defect("UP-9.7-34")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-34")
 def test_regression_accepting_twice_says_the_proposal_was_accepted() -> None:
     """Names the accepted state when a proposal is accepted twice (audit 9.7 collab)."""
     _, agent, designer = open_session(two_set_show(), AT)
-    proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
-    accept(designer, proposal, AT + STEP)
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT)
+    accept(designer, "p1", AT + STEP)
     with pytest.raises(E8sError, match="accepted"):
-        accept(designer, proposal, AT + 2 * STEP)
+        accept(designer, "p1", AT + 2 * STEP)
 
 
-@pytest.mark.defect("UP-9.7-35")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-35")
 def test_regression_proposal_against_unsaved_show_can_be_accepted() -> None:
     """Accepts a proposal made against a show that was saved afterwards (audit 9.7 collab)."""
     unsaved = two_set_show()
-    proposal = propose(unsaved, [_move("T1", -1.0)], "shift", "p1")
-    _, _, designer = open_session(unsaved, AT)
-    revision = accept(designer, proposal, AT + STEP)
+    repo = InMemoryRepository()
+    designer = open_workspace(repo, "s")
+    propose(open_workspace(repo, "s"), [_move("T1", -1.0)], "shift", "p1", AT)
+    designer.refresh()
+    save_show(designer, unsaved.replace(revision=designer.revision), AT + STEP)
+    revision = accept(designer, "p1", AT + 2 * STEP)
     assert load_show(designer).set("2").get("T1").x == -1.0
     assert revision.id == designer.revision
 
 
-@pytest.mark.defect("UP-9.7-46")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-46")
 def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_transition() -> None:
     """Refuses a rescale proposal after the designer edited that transition's rows (audit 9.7)."""
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
     rescale = CountsOp(set_id=SetId("2"), counts=RESCALED_COUNTS, rescale=True)
-    proposal = propose(load_show(agent), [rescale], "", "p1")
+    propose(agent, [rescale], "", "p1", AT)
+    designer.refresh()
     newer = STRAIGHT_ROW.replace(rows={"T1": PathRow(entity=SpotId("T1"), start=4)})
     designer_show = load_show(designer).replace(transitions=(newer,))
     save_show(designer, designer_show, AT + STEP)
     with pytest.raises(ConflictError):
-        accept(designer, proposal, AT + 2 * STEP)
+        accept(designer, "p1", AT + 2 * STEP)
 
 
-@pytest.mark.defect("UP-9.7-91")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-91")
 def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() -> None:
     """Refuses, or keeps the form deleted, when accepting an edit of a deleted form (audit 9.7)."""
     with_form = two_set_show().replace(forms={"f1": FORM})
     _, agent, designer = open_session(with_form, AT)
     edited_form = FORM.replace(recipe=LineRecipe(curve=line((0.0, 0.0), (9.0, 0.0))))
-    proposal = propose(load_show(agent), [FormOp(form=edited_form)], "longer", "p1")
+    propose(agent, [FormOp(form=edited_form)], "longer", "p1", AT)
+    designer.refresh()
     save_show(designer, load_show(designer).replace(forms={}), AT + STEP)
     try:
-        accept(designer, proposal, AT + 2 * STEP)
+        accept(designer, "p1", AT + 2 * STEP)
     except E8sError:
         return
     assert "f1" not in load_show(designer).forms

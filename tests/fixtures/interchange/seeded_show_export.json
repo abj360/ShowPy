@@ -488,10 +488,10 @@
      "limits": {},
      "moves": true
     },
-    "woodwinds": {
-     "key": "woodwinds",
-     "name": "Woodwinds",
-     "label_prefix": "W",
+    "guard": {
+     "key": "guard",
+     "name": "Guard",
+     "label_prefix": "G",
      "symbol": "circle",
      "color": "#808080",
      "default_radius": 0.3,
@@ -508,10 +508,10 @@
      "limits": {},
      "moves": true
     },
-    "guard": {
-     "key": "guard",
-     "name": "Guard",
-     "label_prefix": "G",
+    "woodwinds": {
+     "key": "woodwinds",
+     "name": "Woodwinds",
+     "label_prefix": "W",
      "symbol": "circle",
      "color": "#808080",
      "default_radius": 0.3,
@@ -1780,87 +1780,6 @@
     "locked": false,
     "meta": {}
    },
-   "woodwinds_2": {
-    "id": "woodwinds_2",
-    "set": "2",
-    "recipe": {
-     "recipe_version": 1,
-     "n": 4,
-     "transform": null,
-     "kind": "block",
-     "origin": [
-      -29.684081726065518,
-      30.424568367655326
-     ],
-     "rows": 1,
-     "cols": 4,
-     "interval": 1.5,
-     "facing": 168.45658302373948,
-     "anchor": "center"
-    },
-    "members": [
-     "W1",
-     "W2",
-     "W3",
-     "W4"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "fixed",
-     "value": 168.45658302373948
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "guard_2": {
-    "id": "guard_2",
-    "set": "2",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "segment",
-      "a": [
-       -17.857011092074185,
-       19.568512242015466
-      ],
-      "b": [
-       -5.77909768960819,
-       19.568512242015466
-      ]
-     },
-     "kind": "line"
-    },
-    "members": [
-     "G1",
-     "G2",
-     "G3",
-     "G4"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "audience",
-     "value": null
-    },
-    "locked": false,
-    "meta": {}
-   },
    "brass_3": {
     "id": "brass_3",
     "set": "3",
@@ -1900,57 +1819,9 @@
     "locked": false,
     "meta": {}
    },
-   "woodwinds_3": {
-    "id": "woodwinds_3",
-    "set": "3",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "polyline",
-      "points": [
-       [
-        8.911180077617143,
-        9.659833881458486
-       ],
-       [
-        14.506256841711426,
-        15.829912101260913
-       ],
-       [
-        20.676335061513853,
-        10.23483533716663
-       ]
-      ]
-     },
-     "kind": "wedge"
-    },
-    "members": [
-     "W1",
-     "W2",
-     "W3",
-     "W4"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "fixed",
-     "value": 182.79800506812597
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "percussion_3": {
-    "id": "percussion_3",
-    "set": "3",
+   "brass_5": {
+    "id": "brass_5",
+    "set": "5",
     "recipe": {
      "recipe_version": 1,
      "n": null,
@@ -1959,21 +1830,21 @@
       "closed": false,
       "kind": "segment",
       "a": [
-       13.494890063915136,
-       21.22528118028315
+       9.887681096772413,
+       14.285423793692212
       ],
       "b": [
-       31.065835139230543,
-       21.22528118028315
+       27.943072262633066,
+       14.285423793692212
       ]
      },
      "kind": "line"
     },
     "members": [
-     "P1",
-     "P2",
-     "P3",
-     "P4"
+     "B1",
+     "B2",
+     "B3",
+     "B4"
     ],
     "spacing": {
      "mode": "count",
@@ -1990,9 +1861,9 @@
     "locked": false,
     "meta": {}
    },
-   "woodwinds_4": {
-    "id": "woodwinds_4",
-    "set": "4",
+   "guard_2": {
+    "id": "guard_2",
+    "set": "2",
     "recipe": {
      "recipe_version": 1,
      "n": null,
@@ -2001,62 +1872,21 @@
       "closed": false,
       "kind": "segment",
       "a": [
-       -26.870802203238167,
-       32.55811369489049
+       -17.857011092074185,
+       19.568512242015466
       ],
       "b": [
-       -10.033578400561947,
-       32.55811369489049
+       -5.77909768960819,
+       19.568512242015466
       ]
      },
      "kind": "line"
     },
     "members": [
-     "W1",
-     "W2",
-     "W3",
-     "W4"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "audience",
-     "value": null
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "percussion_4": {
-    "id": "percussion_4",
-    "set": "4",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "arc",
-      "center": [
-       23.0434136517882,
-       26.831434104449613
-      ],
-      "radius": 8.557554195790463,
-      "start_deg": 135.46362100677123,
-      "sweep_deg": 180.0
-     },
-     "kind": "arc"
-    },
-    "members": [
-     "P1",
-     "P2",
-     "P3",
-     "P4"
+     "G1",
+     "G2",
+     "G3",
+     "G4"
     ],
     "spacing": {
      "mode": "count",
@@ -2114,9 +1944,48 @@
     "locked": false,
     "meta": {}
    },
-   "brass_5": {
-    "id": "brass_5",
+   "guard_5": {
+    "id": "guard_5",
     "set": "5",
+    "recipe": {
+     "recipe_version": 1,
+     "n": 4,
+     "transform": null,
+     "kind": "block",
+     "origin": [
+      -8.212382966978904,
+      17.588120551342932
+     ],
+     "rows": 1,
+     "cols": 4,
+     "interval": 1.5,
+     "facing": 341.3246621078933,
+     "anchor": "center"
+    },
+    "members": [
+     "G1",
+     "G2",
+     "G3",
+     "G4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 341.3246621078933
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "percussion_3": {
+    "id": "percussion_3",
+    "set": "3",
     "recipe": {
      "recipe_version": 1,
      "n": null,
@@ -2125,21 +1994,62 @@
       "closed": false,
       "kind": "segment",
       "a": [
-       9.887681096772413,
-       14.285423793692212
+       13.494890063915136,
+       21.22528118028315
       ],
       "b": [
-       27.943072262633066,
-       14.285423793692212
+       31.065835139230543,
+       21.22528118028315
       ]
      },
      "kind": "line"
     },
     "members": [
-     "B1",
-     "B2",
-     "B3",
-     "B4"
+     "P1",
+     "P2",
+     "P3",
+     "P4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "percussion_4": {
+    "id": "percussion_4",
+    "set": "4",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "arc",
+      "center": [
+       23.0434136517882,
+       26.831434104449613
+      ],
+      "radius": 8.557554195790463,
+      "start_deg": 135.46362100677123,
+      "sweep_deg": 180.0
+     },
+     "kind": "arc"
+    },
+    "members": [
+     "P1",
+     "P2",
+     "P3",
+     "P4"
     ],
     "spacing": {
      "mode": "count",
@@ -2197,29 +2107,29 @@
     "locked": false,
     "meta": {}
    },
-   "guard_5": {
-    "id": "guard_5",
-    "set": "5",
+   "woodwinds_2": {
+    "id": "woodwinds_2",
+    "set": "2",
     "recipe": {
      "recipe_version": 1,
      "n": 4,
      "transform": null,
      "kind": "block",
      "origin": [
-      -8.212382966978904,
-      17.588120551342932
+      -29.684081726065518,
+      30.424568367655326
      ],
      "rows": 1,
      "cols": 4,
      "interval": 1.5,
-     "facing": 341.3246621078933,
+     "facing": 168.45658302373948,
      "anchor": "center"
     },
     "members": [
-     "G1",
-     "G2",
-     "G3",
-     "G4"
+     "W1",
+     "W2",
+     "W3",
+     "W4"
     ],
     "spacing": {
      "mode": "count",
@@ -2231,7 +2141,97 @@
     },
     "facing": {
      "mode": "fixed",
-     "value": 341.3246621078933
+     "value": 168.45658302373948
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_3": {
+    "id": "woodwinds_3",
+    "set": "3",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "polyline",
+      "points": [
+       [
+        8.911180077617143,
+        9.659833881458486
+       ],
+       [
+        14.506256841711426,
+        15.829912101260913
+       ],
+       [
+        20.676335061513853,
+        10.23483533716663
+       ]
+      ]
+     },
+     "kind": "wedge"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 182.79800506812597
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_4": {
+    "id": "woodwinds_4",
+    "set": "4",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       -26.870802203238167,
+       32.55811369489049
+      ],
+      "b": [
+       -10.033578400561947,
+       32.55811369489049
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
     },
     "locked": false,
     "meta": {}
@@ -2245,6 +2245,225 @@
     ],
     "counts": 16.0,
     "rows": {
+     "B1": {
+      "entity": "B1",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 21.02623853371965,
+        "y": 4.0,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B2": {
+      "entity": "B2",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       8.211795100263892,
+       15.759368762389101
+      ],
+      "sweep_deg": 156.58584958688164,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B3": {
+      "entity": "B3",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B4": {
+      "entity": "B4",
+      "style": "straight",
+      "start": 4.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G1": {
+      "entity": "G1",
+      "style": "straight",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G2": {
+      "entity": "G2",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -9.290519978959427,
+        "y": 16.784256121007733,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G3": {
+      "entity": "G3",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -9.805068823763522,
+        "y": 10.0,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G4": {
+      "entity": "G4",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -4.062662944918036,
+       12.855870375660738
+      ],
+      "sweep_deg": 128.68546080871454,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
      "P1": {
       "entity": "P1",
       "style": "follow",
@@ -2371,66 +2590,6 @@
        "points": []
       }
      },
-     "G2": {
-      "entity": "G2",
-      "style": "curve",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": -9.290519978959427,
-        "y": 16.784256121007733,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B1": {
-      "entity": "B1",
-      "style": "polyline",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 21.02623853371965,
-        "y": 4.0,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
      "W2": {
       "entity": "W2",
       "style": "polyline",
@@ -2446,63 +2605,6 @@
       "route": null,
       "pivot": null,
       "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "G3": {
-      "entity": "G3",
-      "style": "polyline",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": -9.805068823763522,
-        "y": 10.0,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "ease_in_out",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B2": {
-      "entity": "B2",
-      "style": "rotate",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": [
-       8.211795100263892,
-       15.759368762389101
-      ],
-      "sweep_deg": 156.58584958688164,
       "facing_mode": "to_target",
       "facing_value": null,
       "turn_counts": 0.0,
@@ -2545,60 +2647,6 @@
        "points": []
       }
      },
-     "G4": {
-      "entity": "G4",
-      "style": "rotate",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": [
-       -4.062662944918036,
-       12.855870375660738
-      ],
-      "sweep_deg": 128.68546080871454,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B3": {
-      "entity": "B3",
-      "style": "custom",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": "weave",
-      "motion_params": {
-       "amplitude": 0.5,
-       "cycles": 2.0
-      },
-      "easing": {
-       "kind": "ease_in_out",
-       "strength": 2.0,
-       "points": []
-      }
-     },
      "W4": {
       "entity": "W4",
       "style": "custom",
@@ -2622,54 +2670,6 @@
       },
       "easing": {
        "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B4": {
-      "entity": "B4",
-      "style": "straight",
-      "start": 4.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "ease_in_out",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "G1": {
-      "entity": "G1",
-      "style": "straight",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "ease_in_out",
        "strength": 2.0,
        "points": []
       }
@@ -2725,6 +2725,90 @@
     ],
     "counts": 12.0,
     "rows": {
+     "B1": {
+      "entity": "B1",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       19.74505112998048,
+       20.71240671075864
+      ],
+      "sweep_deg": 128.42260913378368,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B2": {
+      "entity": "B2",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "ease_in",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B4": {
+      "entity": "B4",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 14.678205510645721,
+        "y": 20.241879765611174,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
      "G1": {
       "entity": "G1",
       "style": "follow",
@@ -2821,36 +2905,6 @@
        "points": []
       }
      },
-     "B4": {
-      "entity": "B4",
-      "style": "curve",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 14.678205510645721,
-        "y": 20.241879765611174,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
      "P1": {
       "entity": "P1",
       "style": "curve",
@@ -2860,36 +2914,6 @@
        {
         "x": 9.622445031957568,
         "y": 12.612640590141575,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "W1": {
-      "entity": "W1",
-      "style": "polyline",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 8.911180077617143,
-        "y": 29.97431989148621,
         "at": null
        }
       ],
@@ -2941,18 +2965,75 @@
        "points": []
       }
      },
-     "B1": {
-      "entity": "B1",
+     "P3": {
+      "entity": "P3",
       "style": "rotate",
       "start": 0.0,
       "end": null,
       "waypoints": [],
       "route": null,
       "pivot": [
-       19.74505112998048,
-       20.71240671075864
+       13.320731147776748,
+       11.92919086226685
       ],
-      "sweep_deg": 128.42260913378368,
+      "sweep_deg": -157.06744334332734,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P4": {
+      "entity": "P4",
+      "style": "custom",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "ease_in",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W1": {
+      "entity": "W1",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 8.911180077617143,
+        "y": 29.97431989148621,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
       "facing_mode": "to_target",
       "facing_value": null,
       "turn_counts": 0.0,
@@ -2995,91 +3076,10 @@
        "points": []
       }
      },
-     "P3": {
-      "entity": "P3",
-      "style": "rotate",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": [
-       13.320731147776748,
-       11.92919086226685
-      ],
-      "sweep_deg": -157.06744334332734,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B2": {
-      "entity": "B2",
-      "style": "custom",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": "weave",
-      "motion_params": {
-       "amplitude": 0.5,
-       "cycles": 2.0
-      },
-      "easing": {
-       "kind": "ease_in",
-       "strength": 2.0,
-       "points": []
-      }
-     },
      "W3": {
       "entity": "W3",
       "style": "custom",
       "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": "weave",
-      "motion_params": {
-       "amplitude": 0.5,
-       "cycles": 2.0
-      },
-      "easing": {
-       "kind": "ease_in",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "P4": {
-      "entity": "P4",
-      "style": "custom",
-      "start": 3.0,
       "end": null,
       "waypoints": [],
       "route": null,
@@ -3274,96 +3274,6 @@
        "points": []
       }
      },
-     "W3": {
-      "entity": "W3",
-      "style": "curve",
-      "start": 3.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": -1.5415183765708926,
-        "y": 25.261500104059987,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "P4": {
-      "entity": "P4",
-      "style": "curve",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 32.10455928077399,
-        "y": 19.027386024853378,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "W4": {
-      "entity": "W4",
-      "style": "polyline",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": -10.033578400561947,
-        "y": 10.23483533716663,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
      "G1": {
       "entity": "G1",
       "style": "polyline",
@@ -3376,6 +3286,84 @@
         "at": null
        }
       ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G2": {
+      "entity": "G2",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -10.514594375753324,
+       23.680483731783383
+      ],
+      "sweep_deg": 138.11261819580966,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G3": {
+      "entity": "G3",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G4": {
+      "entity": "G4",
+      "style": "straight",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
       "route": null,
       "pivot": null,
       "sweep_deg": null,
@@ -3421,91 +3409,10 @@
        "points": []
       }
      },
-     "G2": {
-      "entity": "G2",
-      "style": "rotate",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": [
-       -10.514594375753324,
-       23.680483731783383
-      ],
-      "sweep_deg": 138.11261819580966,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "W1": {
-      "entity": "W1",
-      "style": "custom",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": "weave",
-      "motion_params": {
-       "amplitude": 0.5,
-       "cycles": 2.0
-      },
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
      "P2": {
       "entity": "P2",
       "style": "custom",
       "start": 3.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": "weave",
-      "motion_params": {
-       "amplitude": 0.5,
-       "cycles": 2.0
-      },
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "G3": {
-      "entity": "G3",
-      "style": "custom",
-      "start": 0.0,
       "end": null,
       "waypoints": [],
       "route": null,
@@ -3553,12 +3460,18 @@
        "points": []
       }
      },
-     "G4": {
-      "entity": "G4",
-      "style": "straight",
+     "P4": {
+      "entity": "P4",
+      "style": "curve",
       "start": 0.0,
       "end": null,
-      "waypoints": [],
+      "waypoints": [
+       {
+        "x": 32.10455928077399,
+        "y": 19.027386024853378,
+        "at": null
+       }
+      ],
       "route": null,
       "pivot": null,
       "sweep_deg": null,
@@ -3572,7 +3485,94 @@
       "motion_fn": null,
       "motion_params": {},
       "easing": {
-       "kind": "ease_in_out",
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W1": {
+      "entity": "W1",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W3": {
+      "entity": "W3",
+      "style": "curve",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -1.5415183765708926,
+        "y": 25.261500104059987,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W4": {
+      "entity": "W4",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -10.033578400561947,
+        "y": 10.23483533716663,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
        "strength": 2.0,
        "points": []
       }
@@ -3628,6 +3628,264 @@
     ],
     "counts": 16.0,
     "rows": {
+     "B2": {
+      "entity": "B2",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 23.331678316597483,
+        "y": 18.1061716690053,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B3": {
+      "entity": "B3",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 21.924608540679515,
+        "y": 25.926919544318384,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B4": {
+      "entity": "B4",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       27.003092126500416,
+       20.252116824456508
+      ],
+      "sweep_deg": 120.44070583660618,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G1": {
+      "entity": "G1",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -5.409256000099682,
+       19.900662039469715
+      ],
+      "sweep_deg": -109.29890759671129,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G2": {
+      "entity": "G2",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G4": {
+      "entity": "G4",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -9.221923247871475,
+        "y": 18.29525604423248,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P1": {
+      "entity": "P1",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P3": {
+      "entity": "P3",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 7.914316447798706,
+        "y": 22.77738766881027,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P4": {
+      "entity": "P4",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 6.2902483486152345,
+        "y": 20.8294908694236,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
      "W1": {
       "entity": "W1",
       "style": "follow",
@@ -3718,264 +3976,6 @@
       "note": null,
       "motion_fn": null,
       "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B2": {
-      "entity": "B2",
-      "style": "curve",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 23.331678316597483,
-        "y": 18.1061716690053,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "ease_out",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "P3": {
-      "entity": "P3",
-      "style": "curve",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 7.914316447798706,
-        "y": 22.77738766881027,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "G4": {
-      "entity": "G4",
-      "style": "curve",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": -9.221923247871475,
-        "y": 18.29525604423248,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B3": {
-      "entity": "B3",
-      "style": "polyline",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 21.924608540679515,
-        "y": 25.926919544318384,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "P4": {
-      "entity": "P4",
-      "style": "polyline",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [
-       {
-        "x": 6.2902483486152345,
-        "y": 20.8294908694236,
-        "at": null
-       }
-      ],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "B4": {
-      "entity": "B4",
-      "style": "rotate",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": [
-       27.003092126500416,
-       20.252116824456508
-      ],
-      "sweep_deg": 120.44070583660618,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "G1": {
-      "entity": "G1",
-      "style": "rotate",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": [
-       -5.409256000099682,
-       19.900662039469715
-      ],
-      "sweep_deg": -109.29890759671129,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": null,
-      "motion_params": {},
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "P1": {
-      "entity": "P1",
-      "style": "custom",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": "weave",
-      "motion_params": {
-       "amplitude": 0.5,
-       "cycles": 2.0
-      },
-      "easing": {
-       "kind": "linear",
-       "strength": 2.0,
-       "points": []
-      }
-     },
-     "G2": {
-      "entity": "G2",
-      "style": "custom",
-      "start": 0.0,
-      "end": null,
-      "waypoints": [],
-      "route": null,
-      "pivot": null,
-      "sweep_deg": null,
-      "facing_mode": "to_target",
-      "facing_value": null,
-      "turn_counts": 0.0,
-      "turn_direction": "shortest",
-      "pace": 1.0,
-      "locked": false,
-      "note": null,
-      "motion_fn": "weave",
-      "motion_params": {
-       "amplitude": 0.5,
-       "cycles": 2.0
-      },
       "easing": {
        "kind": "linear",
        "strength": 2.0,

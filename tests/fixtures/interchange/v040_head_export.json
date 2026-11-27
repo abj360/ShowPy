@@ -4291,91 +4291,6 @@
     "locked": false,
     "meta": {}
    },
-   "guard_2": {
-    "id": "guard_2",
-    "set": "2",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "segment",
-      "a": [
-       -22.74421081241615,
-       22.90152611765293
-      ],
-      "b": [
-       -6.671438669088898,
-       22.90152611765293
-      ]
-     },
-     "kind": "line"
-    },
-    "members": [
-     "G1",
-     "G2",
-     "G3",
-     "G4",
-     "G5",
-     "G6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "audience",
-     "value": null
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "woodwinds_2": {
-    "id": "woodwinds_2",
-    "set": "2",
-    "recipe": {
-     "recipe_version": 1,
-     "n": 6,
-     "transform": null,
-     "kind": "block",
-     "origin": [
-      17.824165725122775,
-      23.358699056874414
-     ],
-     "rows": 1,
-     "cols": 6,
-     "interval": 1.5,
-     "facing": 100.2332203562784,
-     "anchor": "center"
-    },
-    "members": [
-     "W1",
-     "W2",
-     "W3",
-     "W4",
-     "W5",
-     "W6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "fixed",
-     "value": 100.2332203562784
-    },
-    "locked": false,
-    "meta": {}
-   },
    "brass_3": {
     "id": "brass_3",
     "set": "4",
@@ -4413,230 +4328,6 @@
     "facing": {
      "mode": "fixed",
      "value": 212.3970094838197
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "percussion_3": {
-    "id": "percussion_3",
-    "set": "4",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "segment",
-      "a": [
-       -10.8011783535406,
-       18.791279236590466
-      ],
-      "b": [
-       3.6387944161231056,
-       18.791279236590466
-      ]
-     },
-     "kind": "line"
-    },
-    "members": [
-     "P1",
-     "P2",
-     "P3",
-     "P4",
-     "P5",
-     "P6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "audience",
-     "value": null
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "woodwinds_3": {
-    "id": "woodwinds_3",
-    "set": "4",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "polyline",
-      "points": [
-       [
-        4.785068877326224,
-        36.048257465712034
-       ],
-       [
-        6.3033752297910794,
-        26.759931615766646
-       ],
-       [
-        -2.984950620154306,
-        25.241625263301792
-       ]
-      ]
-     },
-     "kind": "wedge"
-    },
-    "members": [
-     "W1",
-     "W2",
-     "W3",
-     "W4",
-     "W5",
-     "W6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "fixed",
-     "value": 54.283686900612736
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "guard_4": {
-    "id": "guard_4",
-    "set": "5",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": true,
-      "kind": "circle",
-      "center": [
-       18.631609819034708,
-       16.73528103085163
-      ],
-      "radius": 7.351229207305481,
-      "start_deg": 293.4922600782164,
-      "ccw": true
-     },
-     "kind": "circle"
-    },
-    "members": [
-     "G1",
-     "G2",
-     "G3",
-     "G4",
-     "G5",
-     "G6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "outward",
-     "value": null
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "percussion_4": {
-    "id": "percussion_4",
-    "set": "5",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "arc",
-      "center": [
-       -20.93626331539107,
-       32.66838784614857
-      ],
-      "radius": 4.5,
-      "start_deg": 271.0719012951914,
-      "sweep_deg": 180.0
-     },
-     "kind": "arc"
-    },
-    "members": [
-     "P1",
-     "P2",
-     "P3",
-     "P4",
-     "P5",
-     "P6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "audience",
-     "value": null
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "woodwinds_4": {
-    "id": "woodwinds_4",
-    "set": "5",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": false,
-      "kind": "segment",
-      "a": [
-       -18.797152444817456,
-       24.381969729919803
-      ],
-      "b": [
-       1.446805687638907,
-       24.381969729919803
-      ]
-     },
-     "kind": "line"
-    },
-    "members": [
-     "W1",
-     "W2",
-     "W3",
-     "W4",
-     "W5",
-     "W6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "audience",
-     "value": null
     },
     "locked": false,
     "meta": {}
@@ -4685,90 +4376,6 @@
     "locked": false,
     "meta": {}
    },
-   "guard_5": {
-    "id": "guard_5",
-    "set": "6",
-    "recipe": {
-     "recipe_version": 1,
-     "n": 6,
-     "transform": null,
-     "kind": "block",
-     "origin": [
-      -11.600430546667685,
-      33.22701689472914
-     ],
-     "rows": 1,
-     "cols": 6,
-     "interval": 1.5,
-     "facing": 226.11630775136646,
-     "anchor": "center"
-    },
-    "members": [
-     "G1",
-     "G2",
-     "G3",
-     "G4",
-     "G5",
-     "G6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "fixed",
-     "value": 226.11630775136646
-    },
-    "locked": false,
-    "meta": {}
-   },
-   "percussion_5": {
-    "id": "percussion_5",
-    "set": "6",
-    "recipe": {
-     "recipe_version": 1,
-     "n": null,
-     "transform": null,
-     "curve": {
-      "closed": true,
-      "kind": "circle",
-      "center": [
-       6.226741519011924,
-       23.583929897792494
-      ],
-      "radius": 8.757478963906228,
-      "start_deg": 237.33900237926278,
-      "ccw": true
-     },
-     "kind": "circle"
-    },
-    "members": [
-     "P1",
-     "P2",
-     "P3",
-     "P4",
-     "P5",
-     "P6"
-    ],
-    "spacing": {
-     "mode": "count",
-     "interval": null,
-     "start": 0.0,
-     "end": null,
-     "align": "start",
-     "gaps": []
-    },
-    "facing": {
-     "mode": "outward",
-     "value": null
-    },
-    "locked": false,
-    "meta": {}
-   },
    "brass_6": {
     "id": "brass_6",
     "set": "7",
@@ -4808,6 +4415,134 @@
     "facing": {
      "mode": "audience",
      "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "guard_2": {
+    "id": "guard_2",
+    "set": "2",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       -22.74421081241615,
+       22.90152611765293
+      ],
+      "b": [
+       -6.671438669088898,
+       22.90152611765293
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "G1",
+     "G2",
+     "G3",
+     "G4",
+     "G5",
+     "G6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "guard_4": {
+    "id": "guard_4",
+    "set": "5",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": true,
+      "kind": "circle",
+      "center": [
+       18.631609819034708,
+       16.73528103085163
+      ],
+      "radius": 7.351229207305481,
+      "start_deg": 293.4922600782164,
+      "ccw": true
+     },
+     "kind": "circle"
+    },
+    "members": [
+     "G1",
+     "G2",
+     "G3",
+     "G4",
+     "G5",
+     "G6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "outward",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "guard_5": {
+    "id": "guard_5",
+    "set": "6",
+    "recipe": {
+     "recipe_version": 1,
+     "n": 6,
+     "transform": null,
+     "kind": "block",
+     "origin": [
+      -11.600430546667685,
+      33.22701689472914
+     ],
+     "rows": 1,
+     "cols": 6,
+     "interval": 1.5,
+     "facing": 226.11630775136646,
+     "anchor": "center"
+    },
+    "members": [
+     "G1",
+     "G2",
+     "G3",
+     "G4",
+     "G5",
+     "G6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 226.11630775136646
     },
     "locked": false,
     "meta": {}
@@ -4862,9 +4597,96 @@
     "locked": false,
     "meta": {}
    },
-   "woodwinds_6": {
-    "id": "woodwinds_6",
-    "set": "7",
+   "percussion_3": {
+    "id": "percussion_3",
+    "set": "4",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       -10.8011783535406,
+       18.791279236590466
+      ],
+      "b": [
+       3.6387944161231056,
+       18.791279236590466
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "P1",
+     "P2",
+     "P3",
+     "P4",
+     "P5",
+     "P6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "percussion_4": {
+    "id": "percussion_4",
+    "set": "5",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "arc",
+      "center": [
+       -20.93626331539107,
+       32.66838784614857
+      ],
+      "radius": 4.5,
+      "start_deg": 271.0719012951914,
+      "sweep_deg": 180.0
+     },
+     "kind": "arc"
+    },
+    "members": [
+     "P1",
+     "P2",
+     "P3",
+     "P4",
+     "P5",
+     "P6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "percussion_5": {
+    "id": "percussion_5",
+    "set": "6",
     "recipe": {
      "recipe_version": 1,
      "n": null,
@@ -4873,22 +4695,22 @@
       "closed": true,
       "kind": "circle",
       "center": [
-       21.76855409512408,
-       29.942538256922596
+       6.226741519011924,
+       23.583929897792494
       ],
-      "radius": 5.033103531794598,
-      "start_deg": 276.0692964257359,
+      "radius": 8.757478963906228,
+      "start_deg": 237.33900237926278,
       "ccw": true
      },
      "kind": "circle"
     },
     "members": [
-     "W1",
-     "W2",
-     "W3",
-     "W4",
-     "W5",
-     "W6"
+     "P1",
+     "P2",
+     "P3",
+     "P4",
+     "P5",
+     "P6"
     ],
     "spacing": {
      "mode": "count",
@@ -4966,6 +4788,184 @@
     },
     "facing": {
      "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_2": {
+    "id": "woodwinds_2",
+    "set": "2",
+    "recipe": {
+     "recipe_version": 1,
+     "n": 6,
+     "transform": null,
+     "kind": "block",
+     "origin": [
+      17.824165725122775,
+      23.358699056874414
+     ],
+     "rows": 1,
+     "cols": 6,
+     "interval": 1.5,
+     "facing": 100.2332203562784,
+     "anchor": "center"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4",
+     "W5",
+     "W6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 100.2332203562784
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_3": {
+    "id": "woodwinds_3",
+    "set": "4",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "polyline",
+      "points": [
+       [
+        4.785068877326224,
+        36.048257465712034
+       ],
+       [
+        6.3033752297910794,
+        26.759931615766646
+       ],
+       [
+        -2.984950620154306,
+        25.241625263301792
+       ]
+      ]
+     },
+     "kind": "wedge"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4",
+     "W5",
+     "W6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 54.283686900612736
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_4": {
+    "id": "woodwinds_4",
+    "set": "5",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       -18.797152444817456,
+       24.381969729919803
+      ],
+      "b": [
+       1.446805687638907,
+       24.381969729919803
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4",
+     "W5",
+     "W6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_6": {
+    "id": "woodwinds_6",
+    "set": "7",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": true,
+      "kind": "circle",
+      "center": [
+       21.76855409512408,
+       29.942538256922596
+      ],
+      "radius": 5.033103531794598,
+      "start_deg": 276.0692964257359,
+      "ccw": true
+     },
+     "kind": "circle"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4",
+     "W5",
+     "W6"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "outward",
      "value": null
     },
     "locked": false,

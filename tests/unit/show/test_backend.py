@@ -39,6 +39,7 @@ from e8s.core.errors import (
     StorageError,
     UnknownRefError,
 )
+from e8s.show import document_repository
 from e8s.show.backend import RepositoryBackend
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_repository import FileRepository
@@ -49,7 +50,7 @@ from e8s.show.storage import ROOT_REVISION
 from tests.helpers import context_entries
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 HISTORY = 1_000
 
 type BackendFactory = Callable[[], RepositoryBackend]
@@ -62,8 +63,9 @@ def _revision_id(position: int) -> str:
 def _fill(backend: RepositoryBackend, count: int) -> list[str]:
     ids: list[str] = []
     parent = ROOT_REVISION
-    for position in range(1, count + 1):
-        revision = Revision(id=_revision_id(position), parent=parent, at=AT, changed=("/a",))
+    for _ in range(count):
+        revision_id = document_repository.revision_id(parent, AT, {"/a": None})
+        revision = Revision(id=revision_id, parent=parent, at=AT, changed=("/a",))
         backend.commit(SHOW_ID, revision, {}, {})
         ids.append(revision.id)
         parent = revision.id

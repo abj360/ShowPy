@@ -36,7 +36,7 @@ from tests.helpers import context_entries
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 11, 12, 5, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 
 type RepoFactory = Callable[[], Repository]
 
