@@ -22,6 +22,8 @@ Contains:
     test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back: reports the
         set-aside file, then puts it back and removes it when no slot reaches it
     test_gc_puts_back_a_set_aside_file_a_slot_reaches: restores a set-aside blob a tree names
+    test_regression_a_read_of_a_file_a_stopped_gc_holds_aside_names_fsck_and_gc: hints at
+        fsck and gc, not at a backup restore, when a blob or record is missing
     test_fsck_reports_a_set_aside_name_it_does_not_understand: reports a malformed set-aside name
     test_gc_leaves_a_set_aside_copy_that_differs_from_its_name: reports a set-aside copy whose
         name holds other bytes as needing an operator, and gc skips the show saying why
@@ -39,11 +41,14 @@ import os
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from os import PathLike
 from pathlib import Path
 
 import pytest
 
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import StorageError
 from e8s.show import durable_io, fsck_scan
 from e8s.show import gc as gc_module
 from e8s.show.backend import digest
@@ -340,6 +345,31 @@ def test_gc_puts_back_a_set_aside_file_a_slot_reaches(tmp_path: Path) -> None:
     assert report.removed == ()
     assert fsck(tmp_path).findings == ()
     assert FileBackend(tmp_path).blob(SHOW_ID, digest(b"render 0")) == b"render 0"
+
+
+@pytest.mark.parametrize("kind", ["blob", "record"])
+def test_regression_a_read_of_a_file_a_stopped_gc_holds_aside_names_fsck_and_gc(
+    tmp_path: Path, kind: str
+) -> None:
+    """Restoring a backup could roll back acknowledged commits; one confirmed gc puts it back."""
+    first = _change("", b"render 0")
+    FileBackend(tmp_path).commit(SHOW_ID, *first)
+    if kind == "blob":
+        path = _folder(tmp_path) / "objects" / digest(b"render 0")
+        read: Callable[[], object] = partial(
+            FileBackend(tmp_path).blob, SHOW_ID, digest(b"render 0")
+        )
+    else:
+        path = _folder(tmp_path) / "records" / f"{first[0].id}.json"
+        read = partial(FileBackend(tmp_path).log, SHOW_ID)
+    path.rename(path.with_name(".gc-" + path.name))
+    with pytest.raises(StorageError) as caught:
+        read()
+    assert caught.value.code == ErrorCode.CORRUPT
+    assert "fsck(root)" in caught.value.hint
+    assert "gc(root, at=datetime.now(UTC), confirm=True)" in caught.value.hint
+    assert gc(tmp_path, at=datetime.now(UTC), confirm=True).removed == ()
+    assert FileBackend(tmp_path).log(SHOW_ID) == [first[0]]
 
 
 def test_fsck_reports_a_set_aside_name_it_does_not_understand(tmp_path: Path) -> None:

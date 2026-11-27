@@ -5,6 +5,8 @@ Contains:
     CORRUPT_HINT: tells the caller how to repair a damaged show folder
     FIRST_SEQ: numbers the first slot of every show
     corrupt(): builds the StorageError for a stored file that fails a check
+    MISSING_FILE_HINT: tells the caller how to find and put back a blob or record that is missing
+    missing_file(): builds the StorageError for a blob or record a read needs that is missing
     TORN_SLOT_HINT: tells the caller how to clear a slot its writer left torn
     torn_slot(): builds the StorageError for a slot still empty or cut short after every reread
     parsed_json(): parses a stored JSON file, mapping a parse failure to CORRUPT
@@ -43,6 +45,11 @@ MANIFEST_KEYS = frozenset({"id", "legacy_before"})
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 FIRST_SEQ = 1
+MISSING_FILE_HINT = (
+    "run fsck(root); if it lists a set-aside .gc- copy of this file, "
+    "gc(root, at=datetime.now(UTC), confirm=True) puts it back, otherwise restore the show "
+    "folder from a backup"
+)
 TORN_SLOT_HINT = (
     "read again later; if the slot stays torn, its writer stopped before writing it: run "
     "fsck(root, repair=True, confirm=True, at=datetime.now(UTC)), which removes a torn last "
@@ -66,6 +73,23 @@ def corrupt(show_id: str, path: Path, reason: str) -> StorageError:
         hint=CORRUPT_HINT,
         context=context,
         code=ErrorCode.CORRUPT,
+    )
+
+
+def missing_file(show_id: str, path: Path, reason: str) -> StorageError:
+    """Builds the CORRUPT StorageError for a blob or record a read needs that is missing.
+
+    A gc that stopped part way can hold such a file aside, and one confirmed gc puts it back,
+    while restoring a backup could roll back commits that already returned.
+
+    Args:
+        show_id: Show the file belongs to.
+        path: The missing file.
+        reason: What needs it.
+    """
+    error = corrupt(show_id, path, reason)
+    return StorageError(
+        error.message, hint=MISSING_FILE_HINT, context=error.context, code=error.code
     )
 
 

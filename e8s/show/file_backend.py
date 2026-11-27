@@ -28,6 +28,7 @@ from e8s.show.backend_checks import (
     ReadBudget,
     Record,
     corrupt,
+    missing_file,
     parsed_json,
     parsed_manifest,
     parsed_record,
@@ -312,7 +313,7 @@ class FileBackend:
     ) -> None:
         """Requires the slot's revision to have a record that holds the same revision and seq."""
         if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
-            raise corrupt(show_id, path, "slot names a revision that has no record")
+            raise missing_file(show_id, path, "slot names a revision that has no record")
         require_slot_record(
             show_id, path, seq, revision, self._record(show_id, revision.id, budget)
         )
@@ -344,6 +345,8 @@ class FileBackend:
             objects = self._folder(show_id) / OBJECT_DIR
             if not REVISION_ID_PATTERN.fullmatch(digest):
                 raise corrupt(show_id, objects, f"{digest!r} is not a 64-digit hex id")
+            if lstat_mode(show_id, objects / digest) is None:
+                raise missing_file(show_id, objects / digest, "a tree names this blob")
             return self._verified_blob(show_id, objects / digest)
 
     def _verified_blob(self, show_id: str, path: Path) -> bytes:
