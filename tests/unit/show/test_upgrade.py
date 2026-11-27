@@ -39,7 +39,6 @@ import re
 import shutil
 import sys
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -53,46 +52,31 @@ from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_backend import FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.fsck import fsck
-from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.show_folders import show_folder
 from e8s.show.show_io import load_show_at
 from e8s.show.storage_models import ShowUpgrade, UpgradeReport
 from e8s.show.upgrade import upgrade_repository
 from e8s.show.workspace import open_workspace
-from tests.fixtures.layout1 import write_layout1_root
+from tests.fixtures.upgrade_repos import (
+    AT,
+    FIXTURES,
+    LATEST,
+    SHOW_ID,
+    built,
+    copied,
+    expect_unfinished,
+    fingerprint,
+    refuse_links_from,
+)
 
-type StrPath = str | os.PathLike[str]
-
-FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
 RELEASES = ("v0.1.1", "v0.2.0", "v0.3.0", "v0.4.0")
-LATEST = "v0.4.0"
 LEGACY_SHOW = "legacy-show"
-SHOW_ID = "show_1"
-AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 AFTER = "/renders/after.txt"
 UPGRADE_CALL = re.compile(r"e8s\.upgrade_repository\(.*?\)\)")
 OUTSIDE_DIGEST = "f" * 64
 SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
 HAS_FIFOS = hasattr(os, "mkfifo") and sys.platform != "win32"
-
-
-def _copied(tmp_path: Path, release: str = LATEST) -> Path:
-    source = tmp_path / "old"
-    shutil.copytree(FIXTURES / release / "repo", source)
-    return source
-
-
-def _built(root: Path, revisions: int) -> DocumentRepository:
-    """Writes a layout-1 root holding one show with `revisions` revisions."""
-    memory = InMemoryRepository()
-    head = memory.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT).id
-    for n in range(1, revisions):
-        docs = {f"/renders/{n}.txt": f"render {n}".encode()}
-        at = AT + timedelta(minutes=n)
-        head = memory.transaction(SHOW_ID, docs, expected_revision=head, at=at).id
-    write_layout1_root(memory, root)
-    return memory
 
 
 def _objects(root: Path, show_id: str = LEGACY_SHOW) -> Path:
@@ -103,17 +87,6 @@ def _target_objects(target: Path, show_id: str = LEGACY_SHOW) -> Path:
     return target / "shows" / show_folder(show_id) / "objects"
 
 
-def _fingerprint(root: Path) -> dict[str, tuple[str, int, int]]:
-    """Maps every path under a root, the root too, to its content hash, mtime and mode."""
-    prints: dict[str, tuple[str, int, int]] = {}
-    for path in [root, *sorted(root.rglob("*"))]:
-        info = path.lstat()
-        is_file = path.is_file() and not path.is_symlink()
-        content = hashlib.sha256(path.read_bytes()).hexdigest() if is_file else ""
-        prints[path.relative_to(root).as_posix()] = (content, info.st_mtime_ns, info.st_mode)
-    return prints
-
-
 def _files(root: Path) -> dict[str, bytes]:
     return {
         path.relative_to(root).as_posix(): path.read_bytes() if path.is_file() else b"<folder>"
@@ -121,31 +94,9 @@ def _files(root: Path) -> dict[str, bytes]:
     }
 
 
-def _refuse_links_from(monkeypatch: pytest.MonkeyPatch, source: Path, code: int) -> list[Path]:
-    """Makes every hard link out of `source` fail with `code`, as across two file systems."""
-    real = os.link
-    refused: list[Path] = []
-
-    def link(src: StrPath, dst: StrPath, *, follow_symlinks: bool = True) -> None:
-        if Path(src).is_relative_to(source):
-            refused.append(Path(src))
-            raise OSError(code, os.strerror(code), str(src))
-        real(src, dst, follow_symlinks=follow_symlinks)
-
-    monkeypatch.setattr(os, "link", link)
-    return refused
-
-
 def _head_blob(source: Path) -> str:
     repo = FileRepository(source)
     return min(repo.backend.tree(LEGACY_SHOW, repo.head(LEGACY_SHOW)).values())
-
-
-def _expect_unfinished(target: Path) -> None:
-    assert not (target / "layout.json").exists()
-    with pytest.raises(StorageError) as refused:
-        FileRepository(target)
-    assert refused.value.code == "CORRUPT"
 
 
 def _refused_writes(source: Path, head: str) -> list[Callable[[], object]]:
@@ -161,9 +112,9 @@ def _refused_writes(source: Path, head: str) -> list[Callable[[], object]]:
 
 
 def test_layout1_root_is_read_only(tmp_path: Path) -> None:
-    source = _copied(tmp_path)
+    source = copied(tmp_path)
     expected = json.loads((FIXTURES / LATEST / "expected.json").read_text())
-    before = _fingerprint(source)
+    before = fingerprint(source)
     repo = FileRepository(source)
     assert repo.shows() == [LEGACY_SHOW]
     assert repo.head(LEGACY_SHOW) == expected["head"]
@@ -179,19 +130,19 @@ def test_layout1_root_is_read_only(tmp_path: Path) -> None:
             write()
         assert caught.value.code == "OLD_LAYOUT"
         assert "upgrade_repository(Path(" in caught.value.hint
-    assert _fingerprint(source) == before
+    assert fingerprint(source) == before
     call = UPGRADE_CALL.search(caught.value.hint)
     assert call is not None
     eval(call.group(0), {"e8s": e8s, "Path": Path})
     assert FileRepository(tmp_path / "old-layout2").head(LEGACY_SHOW) == expected["head"]
-    assert _fingerprint(source) == before
+    assert fingerprint(source) == before
 
 
 @pytest.mark.parametrize("release", RELEASES)
 def test_regression_every_released_fixture_upgrades_with_ids_kept(
     tmp_path: Path, release: str
 ) -> None:
-    source, target = _copied(tmp_path, release), tmp_path / "new"
+    source, target = copied(tmp_path, release), tmp_path / "new"
     expected = json.loads((FIXTURES / release / "expected.json").read_text())
     show_id = expected["show_id"]
     old = FileRepository(source)
@@ -226,14 +177,14 @@ def test_regression_every_released_fixture_upgrades_with_ids_kept(
 def test_upgrade_never_touches_the_source(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, links_work: bool
 ) -> None:
-    source = _copied(tmp_path)
+    source = copied(tmp_path)
     (source / LEGACY_SHOW / "trees" / ".tmp-left").write_bytes(b"crashed writer")
     (source / "notes.txt").write_text("mine")
     if not links_work:
-        _refuse_links_from(monkeypatch, source, errno.EXDEV)
-    before = _fingerprint(source)
+        refuse_links_from(monkeypatch, source, errno.EXDEV)
+    before = fingerprint(source)
     report = upgrade_repository(source, tmp_path / "new")
-    assert _fingerprint(source) == before
+    assert fingerprint(source) == before
     linked = report.shows[0].blobs_linked
     assert (linked > 0) is links_work
 
@@ -241,7 +192,7 @@ def test_upgrade_never_touches_the_source(
 def test_interrupted_upgrade_target_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source, target = _copied(tmp_path), tmp_path / "new"
+    source, target = copied(tmp_path), tmp_path / "new"
     real = durable_io.link_file
     linked: list[Path] = []
 
@@ -257,7 +208,7 @@ def test_interrupted_upgrade_target_is_refused(
     assert caught.value.code == "IO"
     monkeypatch.undo()
     assert all(path.exists() for path in linked)
-    _expect_unfinished(target)
+    expect_unfinished(target)
     with pytest.raises(StorageError) as again:
         upgrade_repository(source, target)
     assert again.value.code == "BAD_PATH"
@@ -268,7 +219,7 @@ def test_interrupted_upgrade_target_is_refused(
 
 
 def test_upgrade_links_blobs_on_one_file_system(tmp_path: Path) -> None:
-    source, target = _copied(tmp_path), tmp_path / "new"
+    source, target = copied(tmp_path), tmp_path / "new"
     shown = upgrade_repository(source, target).shows[0]
     blobs = sorted(_target_objects(target).iterdir())
     assert (shown.blobs_linked, shown.blobs_copied) == (len(blobs), 0)
@@ -281,8 +232,8 @@ def test_upgrade_links_blobs_on_one_file_system(tmp_path: Path) -> None:
 def test_upgrade_copies_blobs_where_links_are_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: int
 ) -> None:
-    source, target = _copied(tmp_path), tmp_path / "new"
-    refused = _refuse_links_from(monkeypatch, source, code)
+    source, target = copied(tmp_path), tmp_path / "new"
+    refused = refuse_links_from(monkeypatch, source, code)
     shown = upgrade_repository(source, target).shows[0]
     blobs = sorted(_target_objects(target).iterdir())
     assert len(refused) == 1
@@ -300,17 +251,17 @@ def test_upgrade_copies_blobs_where_links_are_refused(
 def test_upgrade_refuses_a_blob_that_does_not_match_its_digest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, links_work: bool
 ) -> None:
-    source, target = _copied(tmp_path), tmp_path / "new"
+    source, target = copied(tmp_path), tmp_path / "new"
     damaged = _objects(source) / _head_blob(source)
     damaged.write_bytes(damaged.read_bytes() + b" ")
     if not links_work:
-        _refuse_links_from(monkeypatch, source, errno.EXDEV)
+        refuse_links_from(monkeypatch, source, errno.EXDEV)
     with pytest.raises(StorageError) as caught:
         upgrade_repository(source, target)
     assert caught.value.code == "CORRUPT"
     assert caught.value.context["file"] == damaged.name
     assert "do not match their digest" in caught.value.message
-    _expect_unfinished(target)
+    expect_unfinished(target)
     assert list((target / "tmp").iterdir()) == []
 
 
@@ -332,15 +283,15 @@ def _in_use_targets(tmp_path: Path, source: Path) -> dict[str, Path]:
 
 
 def test_upgrade_refuses_a_target_in_use_or_a_source_of_another_layout(tmp_path: Path) -> None:
-    source = _copied(tmp_path)
-    before = _fingerprint(source)
+    source = copied(tmp_path)
+    before = fingerprint(source)
     for refusal, target in _in_use_targets(tmp_path, source).items():
         with pytest.raises(StorageError) as caught:
             upgrade_repository(source, target)
         assert caught.value.code == "BAD_PATH"
         assert refusal in caught.value.message
         assert "pass a folder that does not exist yet" in caught.value.hint
-    assert _fingerprint(source) == before
+    assert fingerprint(source) == before
     layout_2 = tmp_path / "stored"
     for not_layout_1 in (layout_2, tmp_path / "missing"):
         with pytest.raises(StorageError) as caught:
@@ -390,7 +341,7 @@ SPECIAL_ENTRIES = [
 def test_upgrade_refuses_links_and_special_files_in_the_source(
     tmp_path: Path, make: Callable[[Path, Path], str]
 ) -> None:
-    source, target = _copied(tmp_path), tmp_path / "new"
+    source, target = copied(tmp_path), tmp_path / "new"
     outside = tmp_path / "outside" / "file"
     outside.parent.mkdir()
     outside.write_bytes(b"not the repository's")
@@ -405,7 +356,7 @@ def test_upgrade_refuses_links_and_special_files_in_the_source(
 
 
 def test_upgrade_leaves_out_what_no_revision_uses(tmp_path: Path) -> None:
-    source, target = _copied(tmp_path), tmp_path / "new"
+    source, target = copied(tmp_path), tmp_path / "new"
     show = source / LEGACY_SHOW
     unused = hashlib.sha256(b"unused").hexdigest()
     (show / "objects" / unused).write_bytes(b"unused")
@@ -442,30 +393,30 @@ def test_upgrade_keeps_the_read_caps(tmp_path: Path, monkeypatch: pytest.MonkeyP
     cap = 3
     monkeypatch.setattr(layout1, "MAX_REVISIONS", cap)
     monkeypatch.setattr(file_backend, "MAX_REVISIONS", cap)
-    _built(tmp_path / "at_cap", cap)
+    built(tmp_path / "at_cap", cap)
     upgrade_repository(tmp_path / "at_cap", tmp_path / "at_cap_new")
     assert len(FileRepository(tmp_path / "at_cap_new").revisions(SHOW_ID)) == cap
-    _built(tmp_path / "past_cap", cap + 1)
+    built(tmp_path / "past_cap", cap + 1)
     with pytest.raises(StorageError) as caught:
         upgrade_repository(tmp_path / "past_cap", tmp_path / "past_cap_new")
     assert caught.value.code == "TOO_LARGE"
-    _expect_unfinished(tmp_path / "past_cap_new")
+    expect_unfinished(tmp_path / "past_cap_new")
     monkeypatch.setattr(upgrade, "LOG_READ_MAX_BYTES", 100)
     with pytest.raises(StorageError) as caught:
         upgrade_repository(tmp_path / "at_cap", tmp_path / "budget_new")
     assert caught.value.code == "TOO_LARGE"
-    _expect_unfinished(tmp_path / "budget_new")
+    expect_unfinished(tmp_path / "budget_new")
     monkeypatch.setattr(upgrade, "LOG_READ_MAX_BYTES", file_backend.LOG_READ_MAX_BYTES)
     monkeypatch.setattr(upgrade, "BLOB_MAX_BYTES", 8)
     with pytest.raises(StorageError) as caught:
         upgrade_repository(tmp_path / "at_cap", tmp_path / "blob_new")
     assert caught.value.code == "CORRUPT"
     assert "larger than 8 bytes" in caught.value.message
-    _expect_unfinished(tmp_path / "blob_new")
+    expect_unfinished(tmp_path / "blob_new")
 
 
 def test_upgrade_is_deterministic(tmp_path: Path) -> None:
-    source = _copied(tmp_path)
+    source = copied(tmp_path)
     (source / LEGACY_SHOW / "trees" / ".tmp-left").write_bytes(b"crashed writer")
     first = upgrade_repository(source, tmp_path / "first")
     second = upgrade_repository(source, tmp_path / "second")
