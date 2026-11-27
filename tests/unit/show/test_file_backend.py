@@ -42,6 +42,9 @@ Contains:
     test_regression_file_repository_writes_beside_housekeeping_entries: stores shows in a root that
         holds .DS_Store or an unreadable lost+found
     test_regression_repository_backend_is_read_only: refuses to assign a new backend to a repository
+    test_every_read_error_names_the_show: carries the real show ID in every read error
+    test_regression_shows_errors_never_carry_an_empty_show: leaves out the show key when a folder
+        is unreadable before its show is known
     test_regression_fifo_swapped_in_after_lstat_is_refused: refuses a FIFO swapped in for a slot,
         record, manifest or blob, naming that file, with the writer thread joined
 """
@@ -548,6 +551,40 @@ def test_regression_repository_backend_is_read_only(tmp_path: Path) -> None:
     repo = DocumentRepository(FileBackend(tmp_path))
     with pytest.raises(AttributeError):
         object.__setattr__(repo, "backend", FileBackend(tmp_path / "other"))
+
+
+def test_every_read_error_names_the_show(tmp_path: Path) -> None:
+    landed = _landed(FileBackend(tmp_path), 2)
+    _slot(tmp_path, 2).write_bytes(b"{")
+    _record(tmp_path, landed[0].id).write_bytes(b"[]")
+    reads: dict[str, Callable[[], object]] = {
+        "slot": lambda: FileBackend(tmp_path).log(SHOW_ID),
+        "record": lambda: FileBackend(tmp_path).tree(SHOW_ID, landed[0].id),
+        "blob": lambda: FileBackend(tmp_path).blob(SHOW_ID, "../x"),
+        "unknown revision": lambda: FileBackend(tmp_path).tree(SHOW_ID, UNKNOWN_ID),
+    }
+    for name, read in reads.items():
+        with pytest.raises((StorageError, UnknownRefError)) as caught:
+            read()
+        assert caught.value.context["show"] == SHOW_ID, name
+
+
+def test_regression_shows_errors_never_carry_an_empty_show(tmp_path: Path) -> None:
+    _landed(FileBackend(tmp_path), 1)
+    manifest = _folder(tmp_path) / "show.json"
+    manifest.write_bytes(b"{")
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).shows()
+    assert caught.value.code == "CORRUPT"
+    assert caught.value.context.get("show") != ""
+    assert caught.value.context["file"] == "show.json"
+    assert "repository of :" not in caught.value.message
+    manifest.write_bytes(dump_json({"id": SHOW_ID}))
+    (tmp_path / "shows" / "stray").mkdir()
+    with pytest.raises(StorageError) as stray:
+        FileBackend(tmp_path).shows()
+    assert stray.value.context.get("show") != ""
+    assert "repository of :" not in stray.value.message
 
 
 CAN_MAKE_FIFOS = hasattr(os, "mkfifo") and sys.platform != "win32"

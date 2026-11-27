@@ -12,11 +12,11 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from e8s.core.canonical import jcs
-from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import SchemaError, StorageError, UnknownRefError, VersionError
+from e8s.core.errors import SchemaError, UnknownRefError, VersionError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.backend import conflict_error, unknown_revision_error
+from e8s.show.backend_checks import corrupt, require_caller_ids
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
     link_new,
@@ -61,38 +61,6 @@ SLOT_MAX_BYTES = TREE_MAX_BYTES
 # theirs never passed 255 characters. Rounded up.
 MANIFEST_MAX_BYTES = 4096
 LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
-CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
-
-
-def _corrupt(show_id: str, path: Path, reason: str) -> StorageError:
-    return StorageError(
-        f"repository of {show_id} is corrupt: {reason}",
-        hint=CORRUPT_HINT,
-        context={"show": show_id, "path": str(path), "file": path.name},
-        code=ErrorCode.CORRUPT,
-    )
-
-
-def _caller_id(show_id: str, value: str, role: str) -> None:
-    if not REVISION_ID_PATTERN.fullmatch(value):
-        raise StorageError(
-            f"{role} {value!r} is not a 64-digit hex id",
-            hint="revision IDs and blob digests are 64 lowercase hex digits made by "
-            "DocumentRepository.transaction",
-            context={"show": show_id, role: value},
-            code=ErrorCode.BAD_ID,
-        )
-
-
-def _require_caller_ids(
-    show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
-) -> None:
-    """Refuses a commit whose revision, parent, blob or tree IDs are not 64-digit hex."""
-    _caller_id(show_id, revision.id, "revision id")
-    if revision.parent != ROOT_REVISION:
-        _caller_id(show_id, revision.parent, "parent id")
-    for digest in [*blobs, *tree.values()]:
-        _caller_id(show_id, digest, "blob digest")
 
 
 class FileBackend:
@@ -136,20 +104,20 @@ class FileBackend:
 
     def _read(self, show_id: str, path: Path, kind: str, cap: int) -> JsonValue:
         """Reads and parses one stored JSON file, mapping every refusal to CORRUPT."""
-        raw = read_capped(path, kind, cap, lambda source, why: _corrupt(show_id, source, why))
+        raw = read_capped(path, kind, cap, lambda source, why: corrupt(show_id, source, why))
         try:
             return parse_strict_json(raw, document=kind)
         except SchemaError as error:
-            raise _corrupt(show_id, path, f"{kind} is not valid JSON") from error
+            raise corrupt(show_id, path, f"{kind} is not valid JSON") from error
 
     def _revision(self, show_id: str, path: Path, stored: JsonValue) -> Revision:
         try:
             revision = Revision._validated(stored)
         except SchemaError as error:
-            raise _corrupt(show_id, path, "stored revision is malformed") from error
+            raise corrupt(show_id, path, "stored revision is malformed") from error
         ids = [revision.id] if revision.parent == ROOT_REVISION else [revision.id, revision.parent]
         if not all(REVISION_ID_PATTERN.fullmatch(value) for value in ids):
-            raise _corrupt(show_id, path, "stored revision ID is not a 64-digit hex id")
+            raise corrupt(show_id, path, "stored revision ID is not a 64-digit hex id")
         return revision
 
     def _manifest_id(self, show_id: str, folder: Path) -> str:
@@ -157,10 +125,10 @@ class FileBackend:
         path = folder / MANIFEST_FILE
         stored = self._read(show_id, path, "manifest", MANIFEST_MAX_BYTES)
         if not isinstance(stored, dict) or stored.keys() != MANIFEST_KEYS:
-            raise _corrupt(show_id, path, f"manifest must hold exactly {sorted(MANIFEST_KEYS)}")
+            raise corrupt(show_id, path, f"manifest must hold exactly {sorted(MANIFEST_KEYS)}")
         listed = stored["id"]
         if not isinstance(listed, str) or show_folder(listed) != folder.name:
-            raise _corrupt(show_id, path, "manifest names a show stored in another folder")
+            raise corrupt(show_id, path, "manifest names a show stored in another folder")
         return listed
 
     def _check_manifest(self, show_id: str) -> None:
@@ -169,7 +137,7 @@ class FileBackend:
         if show_id in self._manifests or lstat_mode(show_id, folder / MANIFEST_FILE) is None:
             return
         if self._manifest_id(show_id, folder) != show_id:
-            raise _corrupt(show_id, folder / MANIFEST_FILE, "manifest names another show")
+            raise corrupt(show_id, folder / MANIFEST_FILE, "manifest names another show")
         self._manifests.add(show_id)
 
     def shows(self) -> list[str]:
@@ -185,7 +153,7 @@ class FileBackend:
         """Returns the show a folder under shows/ holds, or None before its first slot."""
         folder = self.root / SHOWS_DIR / name
         if not SHOW_FOLDER_PATTERN.fullmatch(name):
-            raise _corrupt("", folder, "entry under shows/ is not a show folder")
+            raise corrupt("", folder, "entry under shows/ is not a show folder")
         if lstat_mode("", folder / MANIFEST_FILE) is None:
             return None
         show_id = self._manifest_id("", folder)
@@ -198,7 +166,7 @@ class FileBackend:
         path = self._slot_path(show_id, seq)
         stored = self._read(show_id, path, "slot", SLOT_MAX_BYTES)
         if not isinstance(stored, dict) or stored.keys() != SLOT_KEYS:
-            raise _corrupt(show_id, path, f"slot must hold exactly {sorted(SLOT_KEYS)}")
+            raise corrupt(show_id, path, f"slot must hold exactly {sorted(SLOT_KEYS)}")
         return self._revision(show_id, path, stored)
 
     def _remember(self, show_id: str, seq: int, revision_id: str) -> None:
@@ -256,7 +224,7 @@ class FileBackend:
         """
         if self._has_slot(show_id, seq + 1) and not self._has_slot(show_id, seq):
             path = self._slot_path(show_id, seq)
-            raise _corrupt(show_id, path, f"slot {path.name} is missing before a later slot")
+            raise corrupt(show_id, path, f"slot {path.name} is missing before a later slot")
 
     def log(self, show_id: str, *, since: str = ROOT_REVISION) -> list[Revision]:
         """Returns the revisions after `since`, oldest first, reading only the later slots.
@@ -290,11 +258,9 @@ class FileBackend:
             revision = self._read_slot(show_id, seq)
             path = self._slot_path(show_id, seq)
             if revision.parent != parent:
-                raise _corrupt(
-                    show_id, path, "slot's parent is not the revision of the slot before"
-                )
+                raise corrupt(show_id, path, "slot's parent is not the revision of the slot before")
             if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
-                raise _corrupt(show_id, path, "slot names a revision that has no record")
+                raise corrupt(show_id, path, "slot names a revision that has no record")
             landed.append(revision)
             parent = revision.id
         return landed
@@ -304,17 +270,17 @@ class FileBackend:
         path = self._record_path(show_id, revision_id)
         stored = self._read(show_id, path, "revision record", TREE_MAX_BYTES)
         if not isinstance(stored, dict) or stored.keys() != RECORD_KEYS:
-            raise _corrupt(show_id, path, f"record must hold exactly {sorted(RECORD_KEYS)}")
+            raise corrupt(show_id, path, f"record must hold exactly {sorted(RECORD_KEYS)}")
         seq, tree = stored["seq"], stored["tree"]
         if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
-            raise _corrupt(show_id, path, "record seq is not a positive integer")
+            raise corrupt(show_id, path, "record seq is not a positive integer")
         if self._revision(show_id, path, stored["revision"]).id != revision_id:
-            raise _corrupt(show_id, path, "record holds another revision than its name")
+            raise corrupt(show_id, path, "record holds another revision than its name")
         if not isinstance(tree, dict) or not all(
             isinstance(value, str) and REVISION_ID_PATTERN.fullmatch(value)
             for value in tree.values()
         ):
-            raise _corrupt(show_id, path, "tree is not a mapping of paths to digests")
+            raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
         return seq, {key: str(value) for key, value in tree.items()}
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
@@ -334,16 +300,16 @@ class FileBackend:
             self._check_manifest(show_id)
             objects = self._folder(show_id) / OBJECT_DIR
             if not REVISION_ID_PATTERN.fullmatch(digest):
-                raise _corrupt(show_id, objects, f"{digest!r} is not a 64-digit hex id")
+                raise corrupt(show_id, objects, f"{digest!r} is not a 64-digit hex id")
             return self._verified_blob(show_id, objects / digest)
 
     def _verified_blob(self, show_id: str, path: Path) -> bytes:
         """Reads a stored object, raising CORRUPT unless its bytes hash to its file name."""
         data = read_capped(
-            path, "blob", BLOB_MAX_BYTES, lambda source, why: _corrupt(show_id, source, why)
+            path, "blob", BLOB_MAX_BYTES, lambda source, why: corrupt(show_id, source, why)
         )
         if blob_digest(data) != path.name:
-            raise _corrupt(show_id, path, "blob bytes do not match their digest")
+            raise corrupt(show_id, path, "blob bytes do not match their digest")
         return data
 
     def commit(
@@ -358,7 +324,7 @@ class FileBackend:
         Raises ConflictError, listing what landed, when the parent is no longer the head.
         """
         with mapped_io(show_id, self._folder(show_id)):
-            _require_caller_ids(show_id, revision, tree, blobs)
+            require_caller_ids(show_id, revision, tree, blobs)
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._prepare(show_id)
@@ -434,10 +400,10 @@ class FileBackend:
         if self._place(show_id, path, record):
             return
         stored = read_capped(
-            path, "revision record", TREE_MAX_BYTES, lambda p, why: _corrupt(show_id, p, why)
+            path, "revision record", TREE_MAX_BYTES, lambda p, why: corrupt(show_id, p, why)
         )
         if stored != record:
-            raise _corrupt(show_id, path, "revision record differs from this commit")
+            raise corrupt(show_id, path, "revision record differs from this commit")
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
