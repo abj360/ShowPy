@@ -8,7 +8,7 @@ Contains:
     SLOT_GAP: codes a run of missing slots before a later slot
     TORN_SLOT: codes a slot that is empty or cut short
     UNREACHABLE: codes a record or blob that no slot reaches
-    STALE_TEMP: codes a temp file a crashed writer left behind
+    STALE_TEMP: codes a temp file a crashed writer left, or a `.gc-` file a stopped gc left
     UNKNOWN_FILE: codes an entry that is not part of a layout-2 repository, or a link
     TORN_FILE: codes a manifest or layout file that a crashed first write left empty or cut short
     FAILING_CODES: lists the codes that fail a check; the others are left for a clean-up
