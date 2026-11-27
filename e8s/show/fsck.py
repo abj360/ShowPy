@@ -8,7 +8,6 @@ Contains:
     fsck(): checks a repository root, or one show in it, and on request repairs torn files
 """
 
-import os
 import stat
 from collections.abc import Iterable
 from datetime import datetime
@@ -20,7 +19,7 @@ from e8s.core.errors import SchemaError, StorageError
 from e8s.show.backend_checks import corrupt
 from e8s.show.commit_writes import STALE_TEMP_AGE
 from e8s.show.durable_io import flush_directory, mapped_io, remove_file
-from e8s.show.durable_reads import lstat_info, read_capped
+from e8s.show.durable_reads import is_same_file, lstat_info, read_capped
 from e8s.show.fsck_findings import FAILING_CODES, Repairable, relative_path
 from e8s.show.fsck_scan import RepositoryScan, scan_repository
 from e8s.show.storage_models import FsckFinding, FsckReport
@@ -60,10 +59,6 @@ def _repair_refused(*, confirm: bool, at: datetime | None) -> StorageError:
     )
 
 
-def _identity(info: os.stat_result) -> tuple[int, int, int, int]:
-    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
-
-
 def _confirm_alone() -> StorageError:
     return StorageError(
         "fsck got confirm=True without repair=True, so it would repair nothing",
@@ -88,7 +83,7 @@ def _is_still_torn(item: Repairable, cutoff: datetime) -> bool:
     if not (item.is_torn(data) and item.is_safe()):
         return False
     after = lstat_info("", item.path)
-    return after is not None and _identity(after) == _identity(info)
+    return after is not None and is_same_file(after, info)
 
 
 def removed_torn_files(root: Path, items: Iterable[Repairable], cutoff: datetime) -> list[str]:
@@ -96,9 +91,10 @@ def removed_torn_files(root: Path, items: Iterable[Repairable], cutoff: datetime
 
     Each file is looked up and read again just before it is removed: it must still be a regular
     file last modified before `cutoff`, still torn, still safe to remove, and still the same file
-    (device, inode, size and modification time) after those checks. A writer that is
-    paused, not crashed, can hold a torn file for a moment, so the cut-off keeps every file
-    younger than STALE_TEMP_AGE.
+    in the same state (device, inode, size, modification and change times) after those checks:
+    a file system may give a freed inode to the file that replaces it. A writer that is paused,
+    not crashed, can hold a torn file for a moment, so the cut-off keeps every file younger than
+    STALE_TEMP_AGE.
 
     Args:
         root: Repository root folder; its own folder is flushed through a link when it is one.
