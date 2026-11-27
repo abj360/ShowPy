@@ -39,6 +39,8 @@ Contains:
         value the head wrote against the base's counts
     test_regression_accept_by_merge_respects_a_pin_added_after_the_base: refuses a merge that
         changes an item pinned on the head
+    test_regression_accept_refuses_an_op_naming_a_spot_the_head_deleted: refuses, as a stale
+        proposal, a placement, form or paths op naming a spot the head deleted since the base
 """
 
 from datetime import UTC, datetime, timedelta
@@ -46,6 +48,8 @@ from pathlib import Path
 
 import pytest
 
+from e8s.cast.spots import delete_spots
+from e8s.choreo.forms import line_form
 from e8s.choreo.models import Placement
 from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.core.error_codes import ErrorCode
@@ -53,7 +57,15 @@ from e8s.core.errors import ConflictError, E8sError, LockedError, SchemaError, U
 from e8s.core.ids import SetId, SpotId, make_tid
 from e8s.show.backend import digest
 from e8s.show.changes import apply_change
-from e8s.show.collab_models import CountsOp, PlacementOp, Proposal, ProposalState
+from e8s.show.collab_models import (
+    ChangeOp,
+    CountsOp,
+    FormOp,
+    PathsOp,
+    PlacementOp,
+    Proposal,
+    ProposalState,
+)
 from e8s.show.events import events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import diff_show
@@ -396,3 +408,33 @@ def test_regression_stored_proposal_is_parsed_as_strict_json(raw: bytes) -> None
         with pytest.raises(SchemaError) as info:
             read()
         assert info.value.code == ErrorCode.STRICT_JSON
+
+
+DELETED_SPOT = "T4"
+DELETED_SPOT_OPS: dict[str, ChangeOp] = {
+    "placement": _move(DELETED_SPOT, -1.0),
+    "form": FormOp(form=line_form("f1", ["T3", DELETED_SPOT], (0.0, 0.0), (4.0, 0.0), set_id="2")),
+    "paths": PathsOp(
+        spec=TransitionSpec(
+            id=make_tid("1", "2"),
+            counts=8.0,
+            rows={SpotId(DELETED_SPOT): PathRow(entity=SpotId(DELETED_SPOT), start=2)},
+        )
+    ),
+}
+
+
+@pytest.mark.parametrize("op", DELETED_SPOT_OPS.values(), ids=DELETED_SPOT_OPS.keys())
+def test_regression_accept_refuses_an_op_naming_a_spot_the_head_deleted(op: ChangeOp) -> None:
+    """Refuses, as a stale proposal, an op naming a spot the head deleted since the base."""
+    repo, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [op], "", "p1", AT + STEP)
+    designer.refresh()
+    save_show(designer, delete_spots(load_show(designer), DELETED_SPOT), AT + 2 * STEP)
+    head = repo.head(SHOW_ID)
+    assert is_stale(designer, "p1")
+    with pytest.raises(ConflictError) as caught:
+        accept(designer, "p1", AT + 3 * STEP)
+    assert caught.value.code == ErrorCode.PROPOSAL_STALE
+    assert DELETED_SPOT in caught.value.message
+    assert repo.head(SHOW_ID) == head
