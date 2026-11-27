@@ -8,6 +8,11 @@ cache entry holds its sources, so no identity it is keyed by can be reused while
 A one-spot edit builds one new set and shares every other object, so only that set's documents
 are encoded again.
 
+A show decoded from storage holds new objects, so seeding stores its stored documents under
+their identities, but only where encoding them gives back exactly the stored bytes. That is
+checked once per content: decoding is a function of the documents' bytes and the inputs a group
+names, so a later decode of the same bytes with the same inputs encodes to them too.
+
 Contains:
     ENCODE_CACHE_BYTES: default bound on the encoded bytes a cache keeps
     DocumentGroup: names the documents a group of sources encodes to, and how to encode them
@@ -15,6 +20,7 @@ Contains:
     encode_groups(): encodes every document of some groups, without a cache
     EncodeCache: bounded, thread-safe LRU of encoded documents keyed by source identity
     EncodeCache.documents(): encodes every stored document of a show, reusing cached groups
+    EncodeCache.seed(): stores the documents of a decoded show, where they provably encode back
 """
 
 import threading
@@ -25,6 +31,8 @@ from typing import NamedTuple
 
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
+from e8s.choreo.path_models import TransitionSpec
+from e8s.core.ids import SetId
 from e8s.core.types import FrozenModel
 from e8s.show.document_dump import dump_dumped_json, dump_show_doc
 from e8s.show.document_paths import (
@@ -62,12 +70,15 @@ class DocumentGroup(NamedTuple):
         sources: Objects the documents are encoded from; a cache entry holds them.
         paths: Stored paths of the documents, in the order `encode` returns them.
         encode: Encodes the documents, one bytes value per path.
+        inputs: Values decoding takes from outside the documents, such as the counts a
+            transition is given from its destination set; part of the content a seed matches.
     """
 
     key: Hashable
     sources: tuple[object, ...]
     paths: tuple[str, ...]
     encode: Callable[[], tuple[bytes, ...]]
+    inputs: tuple[str, ...] = ()
 
 
 def _group(
@@ -155,11 +166,14 @@ def document_groups(show: Show) -> list[DocumentGroup]:
         if current.id in forms:
             found = forms[current.id]
             groups.append(_group((forms_doc(folder),), found, partial(_dump_models, found)))
-    groups.extend(
-        _model_group(paths_doc((keys[spec.id[0]], keys[spec.id[1]])), spec)
-        for spec in show.transitions
-    )
+    groups.extend(_transition_group(spec, keys) for spec in show.transitions)
     return groups
+
+
+def _transition_group(spec: TransitionSpec, keys: Mapping[SetId, str]) -> DocumentGroup:
+    """Groups a transition's paths; decoding gives them the destination set's counts."""
+    group = _model_group(paths_doc((keys[spec.id[0]], keys[spec.id[1]])), spec)
+    return group._replace(inputs=(repr(spec.counts),))
 
 
 def encode_groups(groups: Iterable[DocumentGroup]) -> dict[str, bytes]:
@@ -175,11 +189,21 @@ def encode_groups(groups: Iterable[DocumentGroup]) -> dict[str, bytes]:
 
 
 class _Entry(NamedTuple):
-    """Holds a group's encoded documents and the sources whose identities key them."""
+    """Holds a group's encoded documents and the sources whose identities key them.
+
+    `content` names the stored documents and inputs a seed checked them against, if any.
+    """
 
     sources: tuple[object, ...]
     documents: tuple[bytes, ...]
     size: int
+    content: Hashable = None
+
+
+def _content(group: DocumentGroup, digests: Mapping[str, str]) -> Hashable:
+    """Names a group's stored documents by digest, with its inputs; None when one is missing."""
+    stored = tuple(digests.get(path) for path in group.paths)
+    return None if None in stored else (group.paths, stored, group.inputs)
 
 
 class EncodeCache:
@@ -189,12 +213,15 @@ class EncodeCache:
         max_bytes: Most encoded bytes kept; the least recently used group leaves first, and a
             group larger than this is never kept.
         misses: Documents encoded so far because their group was not cached.
+        checks: Documents encoded so far to check a seed against the stored bytes.
     """
 
     def __init__(self, max_bytes: int = ENCODE_CACHE_BYTES) -> None:
         self.max_bytes = max_bytes
         self.misses = 0
+        self.checks = 0
         self._entries: OrderedDict[Hashable, _Entry] = OrderedDict()
+        self._checked: dict[Hashable, Hashable] = {}
         self._bytes = 0
         self._lock = threading.Lock()
 
@@ -229,6 +256,50 @@ class EncodeCache:
             documents.update(zip(group.paths, self._encoded(group), strict=True))
         return documents
 
+    def seed(self, show: Show, stored: Mapping[str, bytes], digests: Mapping[str, str]) -> None:
+        """Stores a decoded show's stored documents under its sources, where they encode back.
+
+        A group is stored only when its encoding equals the stored bytes: checked by encoding
+        the first time its content is seen, and by content after that. A group with a document
+        missing, or one that encodes otherwise, is left to encode on the next save.
+
+        Args:
+            show: The show decode_show() returned for the current-format documents `stored`.
+            stored: Stored path to the bytes the show was decoded from.
+            digests: Stored path to the blob digest of each of those documents.
+
+        >>> from e8s.examples import two_set_show
+        >>> from e8s.show.documents import decode_show, encode_show
+        >>> from e8s.show.integrity import blob_digest
+        >>> docs = encode_show(two_set_show())
+        >>> cache, show = EncodeCache(), decode_show(docs)
+        >>> cache.seed(show, docs, {p: blob_digest(raw) for p, raw in docs.items()})
+        >>> cache.documents(show) == docs, cache.misses
+        (True, 0)
+        """
+        for group in document_groups(show):
+            content = _content(group, digests)
+            if content is None or self._reused(group, content):
+                continue
+            documents = group.encode()
+            matches = documents == tuple(stored[path] for path in group.paths)
+            with self._lock:
+                self.checks += len(documents)
+                if matches:
+                    self._store(group, documents, content)
+
+    def _reused(self, group: DocumentGroup, content: Hashable) -> bool:
+        """Tells whether a group is cached, storing it from a checked entry of the same content."""
+        with self._lock:
+            if group.key in self._entries:
+                self._entries.move_to_end(group.key)
+                return True
+            checked = self._entries.get(self._checked.get(content))
+            if checked is None:
+                return False
+            self._store(group, checked.documents, content)
+            return True
+
     def _encoded(self, group: DocumentGroup) -> tuple[bytes, ...]:
         """Returns a group's cached documents, encoding and storing them on a miss."""
         with self._lock:
@@ -242,16 +313,26 @@ class EncodeCache:
             self._store(group, documents)
         return documents
 
-    def _store(self, group: DocumentGroup, documents: tuple[bytes, ...]) -> None:
+    def _store(
+        self, group: DocumentGroup, documents: tuple[bytes, ...], content: Hashable = None
+    ) -> None:
         """Stores a group's documents, then evicts least recently used groups over the cap."""
         size = sum(len(raw) for raw in documents)
         if size > self.max_bytes:
             return
         replaced = self._entries.pop(group.key, None)
         if replaced is not None:
-            self._bytes -= replaced.size
-        self._entries[group.key] = _Entry(group.sources, documents, size)
+            self._forget(group.key, replaced)
+        self._entries[group.key] = _Entry(group.sources, documents, size, content)
         self._bytes += size
+        if content is not None:
+            self._checked[content] = group.key
         while self._bytes > self.max_bytes:
-            _, evicted = self._entries.popitem(last=False)
-            self._bytes -= evicted.size
+            key, evicted = self._entries.popitem(last=False)
+            self._forget(key, evicted)
+
+    def _forget(self, key: Hashable, entry: _Entry) -> None:
+        """Takes a removed entry's bytes off the total and drops the check that points at it."""
+        self._bytes -= entry.size
+        if entry.content is not None and self._checked.get(entry.content) == key:
+            del self._checked[entry.content]

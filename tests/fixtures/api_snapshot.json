@@ -1054,6 +1054,7 @@
   "ProposalPreview": {
     "model": {
       "blocked": "tuple[str, ...]",
+      "conflicts": "tuple[e8s.show.change_models.MergeConflict, ...]",
       "counts": "dict[e8s.core.ids.SetId, float]",
       "forms": "tuple[e8s.choreo.form_models.Form, ...]",
       "paths": "tuple[e8s.choreo.path_models.TransitionSpec, ...]",
@@ -1781,7 +1782,7 @@
   "polyline": "(*pts: Point, closed: bool = False) -> e8s.geo.curves.Polyline",
   "polyline_form": "(form_id: str, members: collections.abc.Sequence[str], *pts: Point, closed: bool = False, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "position_at": "(show: e8s.show.models.Show, entity: str, t: Count) -> Points",
-  "preview_proposal": "(show: e8s.show.models.Show, proposal: e8s.show.collab_models.Proposal) -> e8s.show.collab_models.ProposalPreview",
+  "preview_proposal": "(ws: e8s.show.workspace.Workspace, proposal_id: str) -> e8s.show.collab_models.ProposalPreview",
   "proposals": "(ws: e8s.show.workspace.Workspace) -> list[e8s.show.collab_models.Proposal]",
   "propose": "(ws: e8s.show.workspace.Workspace, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str, at: datetime.datetime) -> e8s.show.collab_models.Proposal",
   "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",

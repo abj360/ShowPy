@@ -38,6 +38,7 @@ from e8s.core.ids import (
 from e8s.core.readonly import ReadOnlyMap
 from e8s.core.types import FrozenModel
 from e8s.show.anchors import Anchor
+from e8s.show.change_models import MergeConflict
 from e8s.show.models import Pin
 
 type EventKind = Literal[
@@ -259,6 +260,7 @@ class ProposalPreview(FrozenModel):
         counts: Set ID to new counts.
         forms: Forms that would be added or changed.
         blocked: Pinned or locked items the proposal touches; accepting it would fail.
+        conflicts: Items the head and the proposal changed differently; when set, nothing else is.
     """
 
     proposal_id: str
@@ -267,3 +269,4 @@ class ProposalPreview(FrozenModel):
     counts: dict[SetId, float] = {}
     forms: tuple[Form, ...] = ()
     blocked: tuple[str, ...] = ()
+    conflicts: tuple[MergeConflict, ...] = ()
