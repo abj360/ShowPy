@@ -313,7 +313,7 @@ def test_regression_older_format_tree_with_role_documents_is_refused() -> None:
 
 
 def test_workspace_reads_and_writes_the_cast_document_and_keeps_role_documents_internal() -> None:
-    ws = open_workspace(InMemoryRepository(), "show-1")
+    ws = open_workspace(InMemoryRepository(), "show_1")
     show = two_set_show()
     save_show(ws, show, AT)
     assert ws.ls("/cast") == ["cast.json"]

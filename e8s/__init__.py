@@ -654,6 +654,10 @@ if TYPE_CHECKING:
         decode_event,
         events_since,
     )
+    from e8s.show.file_backend import (
+        SLOT_DIGITS,
+        FileBackend,
+    )
     from e8s.show.file_repository import (
         FileRepository,
     )
@@ -752,6 +756,9 @@ if TYPE_CHECKING:
         set_at_count,
         transition_at_count,
         transitions,
+    )
+    from e8s.show.show_folders import (
+        show_folder,
     )
     from e8s.show.show_io import (
         load_show,
@@ -882,6 +889,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FacingValue": ("e8s.choreo.path_models", "FacingValue"),
     "FigureEightParams": ("e8s.choreo.path_models", "FigureEightParams"),
     "FileAssetStore": ("e8s.show.assets", "FileAssetStore"),
+    "FileBackend": ("e8s.show.file_backend", "FileBackend"),
     "FileRepository": ("e8s.show.file_repository", "FileRepository"),
     "FillRecipe": ("e8s.choreo.recipe_models", "FillRecipe"),
     "Fix": ("e8s.choreo.engine_models", "Fix"),
@@ -996,6 +1004,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "RoseFormParams": ("e8s.choreo.form_models", "RoseFormParams"),
     "Route": ("e8s.choreo.path_models", "Route"),
     "SHEET_ID_PATTERN": ("e8s.core.ids", "SHEET_ID_PATTERN"),
+    "SLOT_DIGITS": ("e8s.show.file_backend", "SLOT_DIGITS"),
     "ScatterRecipe": ("e8s.choreo.recipe_models", "ScatterRecipe"),
     "SchemaError": ("e8s.core.errors", "SchemaError"),
     "Segment": ("e8s.geo.curves", "Segment"),
@@ -1345,6 +1354,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "set_sync": ("e8s.time.timeline", "set_sync"),
     "sheet_templates": ("e8s.sheet.templates", "sheet_templates"),
     "shift": ("e8s.choreo.set_transforms", "shift"),
+    "show_folder": ("e8s.show.show_folders", "show_folder"),
     "similarity_fit": ("e8s.sheet.replace", "similarity_fit"),
     "sine_wave_points": ("e8s.choreo.form_fns", "sine_wave_points"),
     "skew": ("e8s.choreo.set_transforms", "skew"),
@@ -1450,6 +1460,7 @@ __all__ = [
     "MIN_TEMPO",
     "RESERVED_IDS",
     "SHEET_ID_PATTERN",
+    "SLOT_DIGITS",
     "Anchor",
     "ApprovalState",
     "ArcCurve",
@@ -1500,6 +1511,7 @@ __all__ = [
     "FacingValue",
     "FigureEightParams",
     "FileAssetStore",
+    "FileBackend",
     "FileRepository",
     "FillRecipe",
     "Fix",
@@ -1938,6 +1950,7 @@ __all__ = [
     "set_sync",
     "sheet_templates",
     "shift",
+    "show_folder",
     "similarity_fit",
     "sine_wave_points",
     "skew",

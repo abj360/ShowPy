@@ -452,6 +452,7 @@
     }
   },
   "FileAssetStore": "(root: pathlib.Path) -> None",
+  "FileBackend": "(root: pathlib.Path) -> None",
   "FileRepository": "(root: str | pathlib.Path)",
   "FillRecipe": {
     "model": {
@@ -1140,6 +1141,9 @@
   },
   "SHEET_ID_PATTERN": {
     "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.\\\\-]{0,62}[A-Za-z0-9_])?$')"
+  },
+  "SLOT_DIGITS": {
+    "constant": "12"
   },
   "ScatterRecipe": {
     "model": {
@@ -1842,6 +1846,7 @@
   "set_sync": "(tl: e8s.time.models.Timeline, label: str, offset_s: Seconds) -> e8s.time.models.Timeline",
   "sheet_templates": "(surface_type: e8s.sheet.models.SurfaceType | None = None) -> list[e8s.sheet.models.Sheet]",
   "shift": "(obj: T, dx: Meters, dy: Meters, sel: SetSelector = 'all', *, force: bool = False) -> T",
+  "show_folder": "(show_id: str) -> str",
   "similarity_fit": "(src: Points, dst: Points) -> Matrix",
   "sine_wave_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "skew": "(obj: T, deg_x: Degrees = 0.0, deg_y: Degrees = 0.0, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",

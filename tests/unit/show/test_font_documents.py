@@ -43,6 +43,7 @@ from tests.fixtures.generators import seeded_show
 
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 SET_ID = "1"
+SHOW_ID = "show_1"
 TINY_FORM = FormId("tiny")
 MEMBERS = ["T1", "T2", "T3", "T4"]
 
@@ -54,7 +55,7 @@ def _text_show() -> tuple[Show, str, bytes]:
         "tiny", MEMBERS, "I", fonts=[uri, registry.resolve("simplex")], height=2.0,
         at=(0, 5), n=4, set_id=SET_ID, font_registry=registry,
     )  # fmt: skip
-    return two_set_show().replace(forms={"tiny": form}), uri, data
+    return two_set_show().replace(id=SHOW_ID, forms={"tiny": form}), uri, data
 
 
 def _font_path(data: bytes) -> str:
@@ -122,7 +123,7 @@ def test_bundled_fonts_are_not_stored() -> None:
     members = [f"T{i}" for i in range(1, 13)]
     form = text_form("hi", members, "I", fonts=["simplex"], height=2.0, at=(0, 5), n=12,
                      set_id=SET_ID, font_registry=bundled_fonts())  # fmt: skip
-    show = two_set_show().replace(forms={"hi": form})
+    show = two_set_show().replace(id=SHOW_ID, forms={"hi": form})
     ws = open_workspace(InMemoryRepository(), show.id)
     save_show(ws, show, AT)
     assert not [p for p in ws.tree_at(ws.revision) if p.startswith(FONTS_ROOT)]

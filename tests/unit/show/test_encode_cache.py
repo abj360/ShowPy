@@ -38,7 +38,7 @@ from e8s.show.show_io import save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 
-SHOW_ID = "encoded-show"
+SHOW_ID = "encoded_show"
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 STEP = timedelta(seconds=1)
 SEED = 5
