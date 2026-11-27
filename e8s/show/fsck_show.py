@@ -18,6 +18,7 @@ Contains:
     UNKNOWN_FILE: codes an entry that is not part of a layout-2 repository, or a link
     TORN_FILE: codes a manifest or layout file that a crashed first write left empty or cut short
     FAILING_CODES: lists the codes that fail a check; the others are left for a clean-up
+    Repairable: holds a torn file a repair may remove and the checks it must still pass
     ShowScan: holds what checking one show folder found
     finding(): builds a finding whose path is relative to the repository root
     relative_path(): names a path under the root relative to it, with `/` separators
@@ -29,7 +30,7 @@ Contains:
 import os
 import re
 import stat
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import partial
 from pathlib import Path
 from typing import NamedTuple
@@ -146,6 +147,22 @@ def is_torn_manifest(data: bytes, folder_name: str) -> bool:
     )
 
 
+class Repairable(NamedTuple):
+    """Holds a torn file a repair may remove, and the checks it must still pass when removed.
+
+    Attributes:
+        path: The torn file.
+        cap: Largest size the file may have, in bytes.
+        is_torn: Tells whether bytes read from it are still torn.
+        is_safe: Tells whether nothing has come to rely on the file since the check.
+    """
+
+    path: Path
+    cap: int
+    is_torn: Callable[[bytes], bool]
+    is_safe: Callable[[], bool]
+
+
 class ShowScan(NamedTuple):
     """Holds what checking one show folder found.
 
@@ -154,12 +171,15 @@ class ShowScan(NamedTuple):
         show_id: ID its manifest names; empty when the manifest is missing or damaged.
         findings: Problems found; records and blobs are reported unreachable only when every
             slot and record was read.
+        repairable: Torn files a repair may remove: a torn last slot after an intact slot, and a
+            torn manifest of a show with no slot.
         last_seq: Number of the last slot, 0 before the first.
     """
 
     folder: Path
     show_id: str
     findings: list[FsckFinding]
+    repairable: list[Repairable]
     last_seq: int
 
 
@@ -173,7 +193,7 @@ def _applied(
 
 
 class _ShowCheck:
-    """Checks one show folder, collecting its findings."""
+    """Checks one show folder, collecting its findings and the torn files a repair may remove."""
 
     def __init__(self, root: Path, folder: Path) -> None:
         self.root = root
@@ -181,6 +201,7 @@ class _ShowCheck:
         self.show_id = ""
         self.legacy_before = FIRST_SEQ
         self.problems: list[tuple[str, Path, str]] = []
+        self.repairable: list[Repairable] = []
         self.records: set[str] = set()
         self.blobs: set[str] = set()
         self.unreadable: set[str] = set()
@@ -197,6 +218,7 @@ class _ShowCheck:
             self.folder,
             self.show_id,
             findings,
+            self.repairable,
             self.last_seq,
         )
 
@@ -246,11 +268,16 @@ class _ShowCheck:
             self.show_id, self.legacy_before = parsed_manifest("", path, stored)
         except StorageError as error:
             if is_torn_manifest(raw, self.folder.name):
-                self.report(
-                    TORN_FILE, path, "manifest is empty or cut short: a first write stopped"
-                )
+                self._report_torn_manifest(path)
             else:
                 self.report(BAD_RECORD, path, error.message)
+
+    def _report_torn_manifest(self, path: Path) -> None:
+        """Reports a torn manifest, which a repair may remove while the show has no slot."""
+        self.report(TORN_FILE, path, "manifest is empty or cut short: a first write stopped")
+        is_safe = partial(_has_no_slots, self.folder / LOG_DIR)
+        is_torn = partial(is_torn_manifest, folder_name=self.folder.name)
+        self.repairable.append(Repairable(path, MANIFEST_MAX_BYTES, is_torn, is_safe))
 
     def _slot_seqs(self) -> list[int]:
         """Lists the slot numbers in log/, reporting every other entry as unknown."""
@@ -333,6 +360,10 @@ class _ShowCheck:
                 self.report(BAD_RECORD, path, error.message)
             elif is_last and follows_intact:
                 self.report(TORN_SLOT, path, "last slot is empty or cut short: its writer stopped")
+                is_safe = partial(_is_absent, self._slot_path(seq + 1))
+                self.repairable.append(
+                    Repairable(path, SLOT_MAX_BYTES, is_unfinished_line, is_safe)
+                )
             else:
                 self.report(
                     TORN_SLOT,
@@ -400,6 +431,17 @@ class _ShowCheck:
                 self.report(UNREACHABLE, path, "no slot reaches this file")
 
 
+def _is_absent(path: Path) -> bool:
+    return lstat_mode("", path) is None
+
+
+def _has_no_slots(log: Path) -> bool:
+    """Tells whether a log folder is missing or holds no slot."""
+    if lstat_mode("", log) is None:
+        return True
+    return not any(SLOT_NAME.fullmatch(name) for name, _ in listed_entries(log))
+
+
 def scan_show(root: Path, folder: Path) -> ShowScan:
     """Checks one show folder: its manifest, slot chain, records, trees and blobs.
 
@@ -408,7 +450,7 @@ def scan_show(root: Path, folder: Path) -> ShowScan:
         folder: The show folder, already known to be a plain folder under `<root>/shows/`.
 
     Returns:
-        scan: The show's ID, findings and last slot.
+        scan: The show's ID, findings, repairable files and last slot.
     """
     check = _ShowCheck(root, folder)
     check.run()

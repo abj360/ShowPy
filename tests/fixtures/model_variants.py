@@ -289,7 +289,9 @@ def _show() -> dict[str, tuple[Changes, ...]]:
         "MergeResult": ({"show": None, "conflicts": (Example("MergeConflict"),)},),
         "IdChanges": ({"sets": (("1", "a"), ("2", "b")), "spots": (("T1", "T9"),)},),
         "FsckFinding": ({"show": "show_1"},),
-        "FsckReport": ({"findings": (Example("FsckFinding"),), "ok": False},),
+        "FsckReport": (
+            {"findings": (Example("FsckFinding"),), "ok": False, "repaired": ("shows/a/log/1",)},
+        ),
         "GcReport": ({"removed": ("a", "b"), "bytes_freed": 12, "dry_run": True},),
         "UpgradeReport": ({"shows": ("s",), "revisions": 3, "blobs_linked": 2, "blobs_copied": 1},),
         "ConformanceReport": ({"passed": ("a",), "failed": (("b", "no lock"),)},),

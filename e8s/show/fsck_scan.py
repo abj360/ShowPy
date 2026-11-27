@@ -35,6 +35,7 @@ from e8s.show.fsck_show import (
     STALE_TEMP,
     TORN_FILE,
     UNKNOWN_FILE,
+    Repairable,
     ShowScan,
     finding,
     is_plain_folder,
@@ -61,10 +62,12 @@ class RepositoryScan(NamedTuple):
     Attributes:
         findings: Problems found outside the show folders.
         shows: What checking each show folder found.
+        repairable: A torn layout file a repair may remove, while no show folder exists.
     """
 
     findings: list[FsckFinding]
     shows: list[ShowScan]
+    repairable: list[Repairable]
 
 
 def _missing_root(root: Path) -> StorageError:
@@ -84,6 +87,13 @@ def _layout_1(root: Path) -> VersionError:
     )
 
 
+def _is_empty(folder: Path) -> bool:
+    """Tells whether a folder is missing or holds nothing but housekeeping entries."""
+    if lstat_info("", folder) is None:
+        return True
+    return all(name in HOUSEKEEPING_NAMES for name, _ in listed_entries(folder))
+
+
 def _is_torn_layout(root: Path) -> bool:
     """Tells whether the layout file is a shorter start of the one a first commit writes."""
     path = root / LAYOUT_FILE
@@ -94,8 +104,8 @@ def _is_torn_layout(root: Path) -> bool:
     return is_short_of(LAYOUT_BYTES)(raw)
 
 
-def _check_layout(root: Path) -> bool:
-    """Requires a layout-2 root, telling whether its layout file is torn."""
+def _check_layout(root: Path) -> list[Repairable]:
+    """Requires a layout-2 root, returning its layout file when it is torn and repairable."""
     try:
         is_folder = stat.S_ISDIR(root.stat().st_mode)
     except FileNotFoundError as error:
@@ -105,10 +115,12 @@ def _check_layout(root: Path) -> bool:
     except StorageError as error:
         if not (is_folder and error.code == ErrorCode.CORRUPT and _is_torn_layout(root)):
             raise
-        return True
+        is_safe = partial(_is_empty, root / SHOWS_DIR)
+        path, is_torn = root / LAYOUT_FILE, is_short_of(LAYOUT_BYTES)
+        return [Repairable(path, LAYOUT_MAX_BYTES, is_torn, is_safe)]
     if layout != CURRENT_LAYOUT:
         raise _layout_1(root)
-    return False
+    return []
 
 
 class _RootCheck:
@@ -189,15 +201,16 @@ def scan_repository(root: Path, show_id: str | None, at: datetime | None) -> Rep
             running writers and are left out. None reports every temp file.
 
     Returns:
-        scan: Findings outside the show folders and each show folder's scan.
+        scan: Findings outside the show folders, each show folder's scan and a torn layout
+            file a repair may remove.
     """
     with mapped_io(show_id or "", root):
-        is_torn = _check_layout(root)
+        repairable = _check_layout(root)
         check = _RootCheck(root, at)
-        if is_torn:
+        if repairable:
             check.report(TORN_FILE, root / LAYOUT_FILE, "layout file is empty or cut short")
         if show_id is None:
             check.check_root()
         else:
             check.check_one_show(show_id)
-        return RepositoryScan(check.findings, check.shows)
+        return RepositoryScan(check.findings, check.shows, repairable)

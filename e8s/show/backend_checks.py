@@ -45,7 +45,8 @@ SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 FIRST_SEQ = 1
 TORN_SLOT_HINT = (
     "read again later; if the slot stays torn, its writer stopped before writing it: run "
-    "fsck(root, repair=True, confirm=True), which removes a torn last slot"
+    "fsck(root, repair=True, confirm=True, at=datetime.now(UTC)), which removes a torn last "
+    "slot once it is a day old"
 )
 
 

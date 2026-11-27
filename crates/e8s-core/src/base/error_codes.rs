@@ -90,6 +90,8 @@ pub enum ErrorCode {
     NotAMember,
     /// A text-only operation gets a form of another kind.
     NotATextForm,
+    /// A repository repair is asked for without confirm=True or without the caller's time `at`.
+    NotConfirmed,
     /// A similarity fit or a stored show field holds a NaN or infinite number.
     NotFinite,
     /// A placement names a form it is not a member of in that set.
@@ -239,6 +241,7 @@ impl ErrorCode {
             Self::NameTooLong => "NAME_TOO_LONG",
             Self::NotAMember => "NOT_A_MEMBER",
             Self::NotATextForm => "NOT_A_TEXT_FORM",
+            Self::NotConfirmed => "NOT_CONFIRMED",
             Self::NotFinite => "NOT_FINITE",
             Self::NotInForm => "NOT_IN_FORM",
             Self::NotSerializable => "NOT_SERIALIZABLE",

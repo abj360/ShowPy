@@ -41,10 +41,12 @@ class FsckReport(FrozenModel):
     Attributes:
         findings: Problems found, sorted by show, code and path.
         ok: Whether the repository passes; the check decides, as some findings do not fail it.
+        repaired: Paths a repair removed before the check that gave the findings.
     """
 
     findings: tuple[FsckFinding, ...] = ()
     ok: bool
+    repaired: tuple[str, ...] = ()
 
 
 class GcReport(FrozenModel):

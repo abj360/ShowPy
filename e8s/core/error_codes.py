@@ -99,6 +99,8 @@ class ErrorCode(StrEnum):
     """A text form edit removes a spot that is not one of the form's members."""
     NOT_A_TEXT_FORM = "NOT_A_TEXT_FORM"
     """A text-only operation gets a form of another kind."""
+    NOT_CONFIRMED = "NOT_CONFIRMED"
+    """A repository repair is asked for without confirm=True or without the caller's time `at`."""
     NOT_FINITE = "NOT_FINITE"
     """A similarity fit or a stored show field holds a NaN or infinite number."""
     NOT_SERIALIZABLE = "NOT_SERIALIZABLE"
