@@ -195,7 +195,17 @@ class _Target:
             durable_io.flush_directory(self.root / TEMP_DIR)
             durable_io.flush_directory(self.root, follows_links=True)
             self.place("", self.root / LAYOUT_FILE, LAYOUT_BYTES)
-            durable_io.flush_directory(self.root, is_commit_point=True, follows_links=True)
+        try:
+            with mapped_io("", self.root):
+                durable_io.flush_directory(self.root, is_commit_point=True, follows_links=True)
+        except StorageError as error:
+            raise StorageError(
+                f"upgrade target {self.root} holds {LAYOUT_FILE} but its last flush failed, so it "
+                f"may look complete but must not be used: {error.message}",
+                hint="delete the target and run upgrade_repository again",
+                context=error.context,
+                code=error.code,
+            ) from error
 
 
 def _taken(show_id: str, path: Path) -> StorageError:

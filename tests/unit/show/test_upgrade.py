@@ -33,6 +33,8 @@ Contains:
         and the first revision whose tree names it, not IO, and writes no layout file
     test_upgrade_copies_blobs_another_user_owns: copies instead of linking a blob the current user
         does not own, whose shared inode a later commit could not freshen
+    test_regression_a_failed_final_flush_says_the_target_must_not_be_used: names the target as
+        unusable though it holds layout.json, and says to delete it and run again
     test_upgrade_flushes_every_folder_before_the_layout_file: flushes each show's folders,
         assets/, shows/, tmp/ and the root before layout.json is placed, then the root fully
 """
@@ -501,3 +503,23 @@ def test_upgrade_copies_blobs_another_user_owns(
     assert shown.blobs_copied == len(list(_target_objects(target).iterdir()))
     for blob in _target_objects(target).iterdir():
         assert not blob.samefile(_objects(source) / blob.name)
+
+
+def test_regression_a_failed_final_flush_says_the_target_must_not_be_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = copied(tmp_path), tmp_path / "new"
+    real_flush = durable_io.flush_directory
+
+    def flush(path: Path, *, is_commit_point: bool = False, follows_links: bool = False) -> None:
+        if is_commit_point:
+            raise OSError(errno.EIO, os.strerror(errno.EIO), str(path))
+        real_flush(path, is_commit_point=is_commit_point, follows_links=follows_links)
+
+    monkeypatch.setattr(durable_io, "flush_directory", flush)
+    with pytest.raises(StorageError) as caught:
+        upgrade_repository(source, target)
+    assert caught.value.code == "IO"
+    assert "must not be used" in caught.value.message
+    assert "delete the target" in caught.value.hint
+    assert (target / "layout.json").exists()
