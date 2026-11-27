@@ -12,6 +12,7 @@ Contains:
 
 import math
 import re
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -31,6 +32,11 @@ COMMANDS = "MmLlHhVvCcSsQqTtAaZz"
 ARC_FLAG_SLOTS = (3, 4)
 TOKEN_HINT = "use SVG commands M L H V C S Q T A Z and plain ASCII numbers"
 ARC_FLAG_HINT = "write each arc flag as the single digit 0 or 1"
+# Radii that exactly reach the endpoint give one center, the chord midpoint. Radii scaled to fit,
+# or written back from such an arc, land under 4 ulps either side of fitting (worst measured), and
+# the general formula then moves the center by the square root of that rounding error. 16 ulps
+# covers that residue while the snap moves a center by at most sqrt(16 * eps) * r, about 6e-8 r.
+ARC_FIT_TOL = 16 * sys.float_info.epsilon
 
 
 @dataclass(frozen=True)
@@ -358,8 +364,7 @@ def _arc_piece(
     scale = x1**2 / rx**2 + y1**2 / ry**2
     if scale > 1:
         rx, ry = rx * math.sqrt(scale), ry * math.sqrt(scale)
-    numerator = max(rx**2 * ry**2 - rx**2 * y1**2 - ry**2 * x1**2, 0.0)
-    factor = math.sqrt(numerator / (rx**2 * y1**2 + ry**2 * x1**2))
+    factor = 0.0 if scale >= 1 - ARC_FIT_TOL else _center_factor(rx, ry, x1, y1)
     factor = -factor if large == sweep else factor
     cx1, cy1 = factor * rx * y1 / ry, -factor * ry * x1 / rx
     center = (
@@ -373,6 +378,11 @@ def _arc_piece(
     elif sweep and dtheta < 0:
         dtheta += 360.0
     return ArcPiece(p1, p2, center, rx, ry, phi_deg, theta1, dtheta)
+
+
+def _center_factor(rx: float, ry: float, x1: float, y1: float) -> float:
+    numerator = max(rx**2 * ry**2 - rx**2 * y1**2 - ry**2 * x1**2, 0.0)
+    return math.sqrt(numerator / (rx**2 * y1**2 + ry**2 * x1**2))
 
 
 def _angle(u: tuple[float, float], v: tuple[float, float]) -> float:
