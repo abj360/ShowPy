@@ -375,8 +375,6 @@ def _with_path_row(show: Show) -> Show:
     return show.replace(transitions=(STRAIGHT_ROW,))
 
 
-@pytest.mark.defect("UP-9.7-32")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-32")
 def test_regression_counts_only_change_is_not_reported_as_a_paths_edit() -> None:
     """Reports a counts-only retime as set_counts, not edit_paths (audit 9.7 collab)."""
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
@@ -388,8 +386,6 @@ def test_regression_counts_only_change_is_not_reported_as_a_paths_edit() -> None
     assert "edit_paths" not in kinds
 
 
-@pytest.mark.defect("UP-9.7-33")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-33")
 def test_regression_events_since_replay_reproduces_a_form_deletion() -> None:
     """Replays a form deletion so the replayed show equals head (audit 9.7 collab)."""
     with_form = two_set_show().replace(forms={"f1": FORM})
