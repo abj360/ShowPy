@@ -108,7 +108,7 @@ pub enum ErrorCode {
     NOrSpacing,
     /// A write would store a show.json of an older format version than this release writes.
     OldFormat,
-    /// A facing override starts after the last count of the show.
+    /// A facing override starts on or after the last count of the show, so covers no show time.
     PastTheShow,
     /// A path instruction is invalid.
     Path,

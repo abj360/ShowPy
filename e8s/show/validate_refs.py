@@ -345,10 +345,21 @@ def _past_the_show(override: FacingOverride, number: int, total: float) -> Valid
         ERROR,
         ErrorCode.PAST_THE_SHOW,
         f"facing override {number}",
-        f"facing override {number} starts at count {override.start:g}, after the show ends at"
-        f" {total:g}",
-        f"start the override at a count from 0 to {total:g}, or remove it",
+        f"facing override {number} starts at count {override.start:g}, but the show ends at"
+        f" {total:g}, so it covers no show time",
+        f"start the override at a count from 0 to before {total:g}, or remove it",
         _item(OVERRIDES_ITEM, override=number, start=override.start, total=total),
+    )
+
+
+def _before_the_show(override: FacingOverride, number: int) -> ValidationIssue:
+    return make_issue(
+        ERROR,
+        ErrorCode.TIME_RANGE,
+        f"facing override {number}",
+        f"facing override {number} starts at count {override.start:g}, before the show starts",
+        "start the override at count 0 or later",
+        _item(OVERRIDES_ITEM, override=number, start=override.start),
     )
 
 
@@ -364,7 +375,9 @@ def _override_issues(show: Show) -> Iterator[ValidationIssue]:
     total = _show_total(show)
     for number, override in enumerate(show.facing_overrides):
         yield from _override_spots(show, override, number)
-        if total is not None and override.start > total:
+        if override.start < 0:
+            yield _before_the_show(override, number)
+        elif total is not None and override.start >= total:
             yield _past_the_show(override, number, total)
 
 
@@ -373,8 +386,8 @@ def reference_issues(show: Show) -> list[ValidationIssue]:
 
     Covers form members outside the cast, forms of missing sets, sets listing missing forms,
     members whose placements do not point back to their form, pins that name missing items or
-    leave their flags unset, and facing overrides naming unknown spots or starting after the
-    show.
+    leave their flags unset, and facing overrides naming unknown spots or starting before count
+    0 or on or after the show's last count.
 
     >>> from e8s.examples import two_set_show
     >>> reference_issues(two_set_show())

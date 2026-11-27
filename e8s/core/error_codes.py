@@ -118,7 +118,7 @@ class ErrorCode(StrEnum):
     OLD_FORMAT = "OLD_FORMAT"
     """A write would store a show.json of an older format version than this release writes."""
     PAST_THE_SHOW = "PAST_THE_SHOW"
-    """A facing override starts after the last count of the show."""
+    """A facing override starts on or after the last count of the show, so covers no show time."""
     PATH = "PATH"
     """A path instruction is invalid."""
     PINNED_CHANGED = "PINNED_CHANGED"
