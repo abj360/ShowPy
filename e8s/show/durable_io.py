@@ -368,7 +368,8 @@ def create_new(target: Path, data: bytes) -> bool:
     can find the file empty, so readers of such files reread them. A write that fails, or writes
     less than `data`, removes the file it created and raises: only a shorter start was ever in
     place, which no reader accepts. Once every byte is written a reader may already rely on the
-    file, so a failing flush keeps it and raises.
+    file, so a failing flush keeps it and raises; so does an interruption of the write, which may
+    have written every byte.
 
     Args:
         target: New name for the file; a file or link already there is never replaced.
@@ -391,6 +392,9 @@ def create_new(target: Path, data: bytes) -> bool:
     except OSError:
         os.close(descriptor)
         remove_file(target)
+        raise
+    except BaseException:
+        os.close(descriptor)
         raise
     try:
         flush_file(descriptor)
