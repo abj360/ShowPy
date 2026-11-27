@@ -23,12 +23,15 @@ Contains:
         with slots
     test_regression_repair_keeps_a_file_replaced_after_its_check: keeps a torn file another
         writer replaced between the repair's checks and its removal
+    test_regression_repair_keeps_a_file_replaced_with_a_reused_inode: keeps a torn file replaced
+        by one of the same size and modification time that got the freed inode
     test_fsck_repair_keeps_a_torn_file_something_relies_on_after_the_check: keeps a torn slot once
         a later slot exists, and a torn manifest once its show has a slot
     test_repair_rechecks_each_file_just_before_removing_it: keeps a file that finished, grew,
         vanished, is no file or is no longer safe to remove
 """
 
+import os
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -37,8 +40,8 @@ import pytest
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
+from e8s.show import durable_reads, fsck_scan
 from e8s.show import fsck as fsck_module
-from e8s.show import fsck_scan
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.fsck import fsck, removed_torn_files
 from e8s.show.fsck_findings import Repairable
@@ -57,6 +60,7 @@ from tests.fixtures.fsck_repos import (
     show_path,
     slot_path,
     snapshot,
+    with_stat,
 )
 
 pytestmark = pytest.mark.usefixtures("no_reread_pauses")
@@ -275,6 +279,46 @@ def test_regression_repair_keeps_a_file_replaced_after_its_check(tmp_path: Path)
     item = Repairable(torn, 64, is_short_of(b"complete"), replaced)
     assert removed_torn_files(tmp_path, [item], AT - DAY) == []
     assert torn.read_bytes() == b"co"
+
+
+def test_regression_repair_keeps_a_file_replaced_with_a_reused_inode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The new file holds the same torn bytes, as old, and gets the replaced file's inode.
+
+    Only its change time tells it apart.
+    """
+    torn = tmp_path / "torn"
+    torn.write_bytes(b"comp")
+    age_by(torn, 2 * DAY)
+    listed = os.lstat(torn)
+    lookup = durable_reads.lstat_info
+    replaced: list[bool] = []
+
+    def reused_inode(show_id: str, path: Path) -> os.stat_result | None:
+        info = lookup(show_id, path)
+        if info is None or not replaced:
+            return info
+        return with_stat(
+            info,
+            st_dev=listed.st_dev,
+            st_ino=listed.st_ino,
+            st_size=listed.st_size,
+            st_mtime_ns=listed.st_mtime_ns,
+            st_ctime_ns=listed.st_ctime_ns + 1,
+        )
+
+    def replace() -> bool:
+        torn.unlink()
+        torn.write_bytes(b"comp")
+        age_by(torn, 2 * DAY)
+        replaced.append(True)
+        return True
+
+    monkeypatch.setattr(fsck_module, "lstat_info", reused_inode)
+    item = Repairable(torn, 64, is_short_of(b"complete"), replace)
+    assert removed_torn_files(tmp_path, [item], AT - DAY) == []
+    assert torn.read_bytes() == b"comp"
 
 
 def _slot_after(root: Path) -> None:
