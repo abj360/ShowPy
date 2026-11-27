@@ -27,7 +27,6 @@ from e8s.show.backend_checks import (
     Record,
     corrupt,
     parsed_json,
-    parsed_manifest,
     parsed_record,
     parsed_slot,
     require_blob_digest,
@@ -65,6 +64,7 @@ from e8s.show.fsck_findings import (
 from e8s.show.history_models import Revision
 from e8s.show.layout import HOUSEKEEPING_NAMES
 from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
+from e8s.show.manifests import legacy_digest, parsed_manifest
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_json, is_unfinished_line, read_settled
 
@@ -96,6 +96,8 @@ class _ShowCheck:
         self.folder = folder
         self.show_id = ""
         self.legacy_before = FIRST_SEQ
+        self.legacy_digest = ""
+        self.legacy_ids: list[str] = []
         self.problems: list[tuple[str, Path, str]] = []
         self.unreachable: list[Leftover] = []
         self.set_aside: list[Leftover] = []
@@ -132,6 +134,7 @@ class _ShowCheck:
         self._check_legacy_before()
         self._report_gaps(seqs)
         self._check_history(seqs)
+        self._check_legacy_digest()
         self._list_leftovers(RECORD_DIR, RECORD_NAME, self.records)
         self._list_leftovers(OBJECT_DIR, BLOB_NAME, self.blobs)
 
@@ -167,7 +170,7 @@ class _ShowCheck:
             return
         try:
             stored = parsed_json("", path, "manifest", raw)
-            self.show_id, self.legacy_before = parsed_manifest("", path, stored)
+            self.show_id, self.legacy_before, self.legacy_digest = parsed_manifest("", path, stored)
         except StorageError as error:
             if is_torn_manifest(raw, self.folder.name):
                 self._report_torn_manifest(path)
@@ -177,8 +180,8 @@ class _ShowCheck:
     def _check_legacy_before(self) -> None:
         """Reports a `legacy_before` past the slot after the last, which no upgrade writes.
 
-        An upgrade sets it to one more than the number of slots it copies, and slots below it are
-        never removed, so a larger value can only skip the ID check of slots it should cover.
+        An upgrade ends the legacy prefix at a slot it copies, and slots below it are never
+        removed, so a larger value can only skip the ID check of slots it should cover.
         """
         if self.legacy_before > self.last_seq + 1:
             self.is_proven = False
@@ -188,6 +191,16 @@ class _ShowCheck:
                 f"legacy_before {self.legacy_before} is past slot {self.last_seq + 1}, the slot"
                 " after the last, so it would skip the ID check of slots it never covered",
             )
+
+    def _check_legacy_digest(self) -> None:
+        """Reports a manifest whose legacy digest does not name the IDs of the legacy slots read."""
+        count = self.legacy_before - FIRST_SEQ
+        if not self.legacy_digest or len(self.legacy_ids) != count:
+            return
+        if legacy_digest(self.legacy_ids) != self.legacy_digest:
+            self.is_proven = False
+            message = "legacy_digest does not match the revision IDs of the legacy slots"
+            self.report(BAD_RECORD, self.folder / MANIFEST_FILE, message)
 
     def _report_torn_manifest(self, path: Path) -> None:
         """Reports a torn manifest, which a repair may remove while the show has no slot."""
@@ -269,6 +282,8 @@ class _ShowCheck:
                     BAD_RECORD, self._slot_path(seq), "slot's parent is not the slot before"
                 )
             self.records.add(revision.id)
+            if seq < self.legacy_before:
+                self.legacy_ids.append(revision.id)
             parent = revision.id
             record = self._record(seq, revision)
             if (

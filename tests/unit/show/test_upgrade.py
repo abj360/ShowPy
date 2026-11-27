@@ -164,7 +164,15 @@ def test_regression_every_released_fixture_upgrades_with_ids_kept(
         blobs |= set(tree.values())
     folder = target / "shows" / show_folder(show_id)
     manifest = json.loads((folder / "show.json").read_bytes())
-    assert manifest == {"id": show_id, "legacy_before": LEGACY_BEFORE[release]}
+    legacy = [revision.id for revision in history][: LEGACY_BEFORE[release] - 1]
+    assert manifest == {
+        "id": show_id,
+        "legacy_before": LEGACY_BEFORE[release],
+        "legacy_count": len(legacy),
+        "legacy_digest": hashlib.sha256(
+            json.dumps(legacy, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
     shown = report.shows[0]
     assert shown == ShowUpgrade(show=show_id, revisions=len(history), blobs_linked=len(blobs))
     assert report.skipped == ()

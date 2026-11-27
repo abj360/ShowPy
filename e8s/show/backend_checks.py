@@ -12,21 +12,20 @@ Contains:
     parsed_json(): parses a stored JSON file, mapping a parse failure to CORRUPT
     stored_revision(): checks a stored revision and returns it
     parsed_slot(): checks the bytes of a slot and returns its revision, or raises TORN_SLOT
-    parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
-    require_legacy_bound(): raises CORRUPT when `legacy_before` passes the slot after the last
     require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
     recomputes(): tells whether a revision's ID is the current scheme's hash of what it holds
     Record: holds a revision record's slot number, revision and tree
     parsed_record(): checks a parsed revision record against its name and returns it
     require_slot_record(): raises CORRUPT unless a slot's record holds its number and revision
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
+    last_present(): gallops from a slot known present and bisects back to the last present one
     refuse_redirect(): refuses a folder that is a symlink or a junction
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
     require_readable_sizes(): refuses a commit holding a blob larger than reads accept
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
@@ -39,12 +38,10 @@ from e8s.show import document_repository, durable_reads
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import BLOB_MAX_BYTES, REVISION_ID_PATTERN
-from e8s.show.show_folders import show_folder
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_line
 
 CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
-MANIFEST_KEYS = frozenset({"id", "legacy_before"})
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 FIRST_SEQ = 1
@@ -162,45 +159,6 @@ def parsed_slot(show_id: str, path: Path, raw: bytes) -> Revision:
     if not isinstance(stored, dict) or stored.keys() != SLOT_KEYS:
         raise corrupt(show_id, path, f"slot must hold exactly {sorted(SLOT_KEYS)}")
     return stored_revision(show_id, path, stored)
-
-
-def parsed_manifest(show_id: str, path: Path, stored: JsonValue) -> tuple[str, int]:
-    """Checks a parsed manifest and returns the show ID it names and its `legacy_before` slot.
-
-    Args:
-        show_id: Show being read, named in errors; empty when it is not known yet.
-        path: The manifest file, whose folder must be the one its show ID encodes.
-        stored: Parsed JSON of the manifest.
-
-    Returns:
-        manifest: The listed show ID and the first slot whose revision ID is recomputable.
-    """
-    if not isinstance(stored, dict) or not {"id"} <= stored.keys() <= MANIFEST_KEYS:
-        raise corrupt(show_id, path, "manifest must hold id and may hold legacy_before")
-    listed, legacy_before = stored["id"], stored.get("legacy_before", FIRST_SEQ)
-    if not isinstance(listed, str) or show_folder(listed) != path.parent.name:
-        raise corrupt(show_id, path, "manifest names a show stored in another folder")
-    if not isinstance(legacy_before, int) or isinstance(legacy_before, bool) or legacy_before < 1:
-        raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
-    return listed, legacy_before
-
-
-def require_legacy_bound(show_id: str, path: Path, legacy_before: int, last: int) -> None:
-    """Raises CORRUPT when a manifest's `legacy_before` passes the slot after the last.
-
-    An upgrade writes `legacy_before` as one past its last slot and later slots only follow it,
-    so a larger value names slots that do not exist yet, whose records would then be read
-    without their IDs checked.
-
-    Args:
-        show_id: Show the manifest belongs to, named in the error.
-        path: The manifest file.
-        legacy_before: First slot whose revision ID must be recomputable from its record.
-        last: Number of the show's last slot; 0 before the first.
-    """
-    if legacy_before > last + 1:
-        reason = f"legacy_before {legacy_before} is past slot {last + 1}, the slot after the last"
-        raise corrupt(show_id, path, reason)
 
 
 def require_blob_digest(show_id: str, path: Path, data: bytes) -> None:
@@ -368,3 +326,31 @@ def require_readable_sizes(
         context={"show": show_id, "paths": paths, "cap": BLOB_MAX_BYTES},
         code=ErrorCode.TOO_LARGE,
     )
+
+
+def last_present(is_present: Callable[[int], bool], seq: int) -> int:
+    """Gallops from slot `seq + 1`, known present, and bisects back to the last present slot.
+
+    Slots are created in order, so at most 2 log2(n) + 2 lookups find the last of n slots.
+
+    Args:
+        is_present: Looks one slot number up.
+        seq: Slot before the first one known present.
+
+    Returns:
+        last: The number of the last present slot.
+
+    >>> last_present(lambda seq: seq <= 5, 0)
+    5
+    """
+    present, step = seq + 1, 2
+    while is_present(seq + step):
+        present, step = seq + step, step * 2
+    absent = seq + step
+    while absent - present > 1:
+        middle = (present + absent) // 2
+        if is_present(middle):
+            present = middle
+        else:
+            absent = middle
+    return present
