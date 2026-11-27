@@ -27,6 +27,8 @@ Contains:
         10,000-character scheme name
     test_regression_insert_subset_drops_the_pin_of_the_transition_it_splits: drops a transition
         pin whose sets are no longer consecutive, keeps other pins, and validates clean
+    test_regression_set_counts_keeps_a_stale_transition_pin_without_force: keeps a transition pin
+        that was already stale before the edit, for validate_show to report, and needs no force
 """
 
 import sys
@@ -569,3 +571,13 @@ def test_regression_insert_subset_drops_the_pin_of_the_transition_it_splits() ->
     split, _ = insert_subset(pinned, "1", 3.0, force=True)
     assert [(p.target, p.id) for p in split.pins] == [("entity", "T1")]
     assert validate_show(split).ok
+
+
+def test_regression_set_counts_keeps_a_stale_transition_pin_without_force() -> None:
+    """Keeps a transition pin already stale before an edit; validate_show reports it."""
+    stale = Pin(target="transition", id="1→3")
+    show = add_set(two_set_show(), "3", 4.0)
+    show = show.replace(pins=(*show.pins, stale))
+    retimed = set_counts(show, "2", 6.0)
+    assert stale in retimed.pins
+    assert "UNKNOWN_PIN" in {i.code for i in validate_show(retimed).issues}
