@@ -520,3 +520,53 @@ deriving events from the item values of the changed documents alone, without ass
 show. That needs a document-level item reader, which belongs with the item table. It is
 follow-up work, to start once the item reader of the Phase 3 diff and merge work (lane C) is on
 `main`.
+
+### Addendum 2026-11-27: `events_since` reads only the documents each revision changed
+
+Decision 10 now ships for the revisions an editing session makes. A revision that changed set,
+role, forms, paths, sheet or timeline documents, and kept every set's ID, is read part by part
+through the workspace's decode cache. Each changed document is decoded and checked as a
+whole-show decode checks it. The items the revision changed are listed from those documents
+alone (`tree_changes`, which a property test holds equal to `changes()` of the two whole shows),
+and the events come from those items. The payloads read only the sets, paths and forms the events
+name. The one wider read is the stored paths into a set whose counts changed, since they take the
+new counts. No show is assembled or validated for such a revision.
+
+A revision that changed show.json, the cast document or a set's ID is still compared as two
+whole shows, and so is a tree of an older format or of layout 1. Those changes reach items stored
+in other documents: the set order, the pins, the transitions and forms that name a set. A
+revision whose parent holds no show is decoded whole once, as before. A parity property test
+compares `events_since` with a frozen copy of the whole-show derivation over random edits of
+every kind, renumbers, pins, removed sets and cast edits included.
+
+Limitation: a revision read part by part does not rerun the `Show` model's cross-document rules.
+None can break from the documents such a revision changes. Form keys follow form IDs, set IDs and
+keys are unchanged, and the set count and extensions live in show.json. The tree-wide path checks
+of a whole-show decode do run on every such revision. A future `Show` rule that reads a set,
+forms, paths, sheet or timeline document together with another document must also be checked by
+the part reader, or such revisions must be read whole.
+
+Measured on 2026-11-27 on an Apple M4, Python 3.14.8, with other lanes running (load average 4 to
+8). The probe is the one of the previous addendum: `seeded_show(11, 300, 60)`, 200 one-spot
+revisions moving one spot in one set to two alternating positions, minimum of 3 rounds, base
+revision's show already decoded. The last two rows give every revision new bytes, so each one
+misses the decode cache once.
+
+| Operation                                        | Before (686d2abc) | After  | Budget |
+| ------------------------------------------------ | ----------------- | ------ | ------ |
+| `events_since`, 200 revisions, memory            | 1.81 s            | 0.11 s | < 1 s  |
+| `events_since`, 200 revisions, files             | 1.29 s            | 0.35 s | < 1 s  |
+| `events_since`, 200 revisions, new bytes, memory | 1.18 s            | 0.40 s | < 1 s  |
+| `events_since`, 200 revisions, new bytes, files  | 2.43 s            | 0.62 s | < 1 s  |
+| Shows assembled and validated, 200 revisions     | 200               | 0      |        |
+
+The new-bytes Before figures were measured in review, on the same probe. The table gives the
+fastest round. Repeated calls in one process cost more. Over six new-bytes calls in memory with a
+collection forced before each, the calls after the first took 0.36 to 0.38 s. Without forced
+collections, three of six calls took 0.68 to 0.69 s: the garbage collector's full pass over the
+cached decodes ran inside them. The review measured about 0.75 s with collections and up to about
+1.0 s on repeated calls without them. The margin to the 1 s budget is thin there. Profiled, about
+two thirds of that case is decoding the changed set: a set decodes from set.json and its three role
+documents together, so the unchanged facing and labels documents are parsed again. About a fifth
+is comparing the set's 300 placements. Caching each role document's parsed rows by digest would
+remove the first part.

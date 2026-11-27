@@ -5,7 +5,9 @@ test_events.py --- tests that canvas events derive from changed documents and re
 
 Contains:
     test_events_since_decodes_no_whole_show: decodes one document per changed document, never the
-        unchanged rest of each show
+        unchanged rest of each show, and assembles no show
+    test_events_since_assembles_no_show_for_set_form_and_path_edits: derives form, path, count
+        and move events without assembling or validating a show
     test_events_since_decodes_no_revision_without_show_documents: skips the show decode of a
         revision that changed no show document
     test_every_event_kind_round_trips_through_json: rebuilds each event kind from its JSON
@@ -27,6 +29,7 @@ Contains:
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from hypothesis import example, given, settings
@@ -96,7 +99,31 @@ def _save_edit(designer: Workspace, *ops: PlacementOp | FormOp | PathsOp | Count
     return save_show(designer, edited, AT + STEP).id
 
 
-def test_events_since_decodes_no_whole_show() -> None:
+def _whole_reads(monkeypatch: pytest.MonkeyPatch, ws: Workspace) -> tuple[list[str], list[str]]:
+    """Records each revision `ws.show_at` is asked for and each Show built, validated or not."""
+    requested: list[str] = []
+    assembled: list[str] = []
+    show_at, validate, construct = ws.show_at, Show.model_validate, Show.model_construct
+
+    def recording_show_at(revision: str) -> Show | None:
+        requested.append(revision)
+        return show_at(revision)
+
+    def recording_validate(data: object, **kwargs: Any) -> Show:
+        assembled.append("model_validate")
+        return validate(data, **kwargs)
+
+    def recording_construct(*args: Any, **kwargs: Any) -> Show:
+        assembled.append("model_construct")
+        return construct(*args, **kwargs)
+
+    monkeypatch.setattr(ws, "show_at", recording_show_at)
+    monkeypatch.setattr(Show, "model_validate", recording_validate)
+    monkeypatch.setattr(Show, "model_construct", recording_construct)
+    return requested, assembled
+
+
+def test_events_since_decodes_no_whole_show(monkeypatch: pytest.MonkeyPatch) -> None:
     _, agent, designer = open_session(_wide_show(), AT)
     base = designer.revision
     edited = [
@@ -104,11 +131,40 @@ def test_events_since_decodes_no_whole_show() -> None:
     ]
     agent.show_at(base)
     before = agent._decode_cache.misses
+    requested, assembled = _whole_reads(monkeypatch, agent)
     events = events_since(agent, base)
     changed = [path for r in agent.repo.revisions(agent.show_id)[1:] for path in r.changed]
     assert [(e.kind, e.revision) for e in events] == [("move", r) for r in edited]
     assert changed == [f"/sets/{set_id}/drill.json" for set_id in "2593"]
     assert agent._decode_cache.misses - before == len(changed)
+    assert set(requested) <= {base}
+    assert assembled == []
+
+
+def test_events_since_assembles_no_show_for_set_form_and_path_edits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, agent, designer = open_session(_wide_show(), AT)
+    base = designer.revision
+    base_show = load_show(designer)
+    row = PathRow(entity=SpotId("T2"), start=1)
+    spec = TransitionSpec(id=make_tid("2", "3"), counts=4.0, rows={SpotId("T2"): row})
+    _save_edit(designer, FormOp(form=FORM))
+    _save_edit(designer, PathsOp(spec=spec))
+    _save_edit(designer, CountsOp(set_id=SetId("5"), counts=6.0))
+    _save_edit(designer, _move("T3", -4.0, "4"))
+    agent.show_at(base)
+    requested, assembled = _whole_reads(monkeypatch, agent)
+    events = events_since(agent, base)
+    assert [e.kind for e in events] == ["edit_form", "edit_paths", "set_counts", "move"]
+    assert set(requested) <= {base}
+    assert assembled == []
+    monkeypatch.undo()
+    replayed = base_show
+    for event in events:
+        replayed = apply_event(replayed, event, force=True)
+    head = load_show(designer)
+    assert replayed.replace(revision=head.revision) == head
 
 
 def test_events_since_decodes_no_revision_without_show_documents(
