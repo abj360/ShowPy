@@ -17,6 +17,8 @@ Contains:
         chain while its own record and ID hold
     test_regression_fsck_reports_an_unchanged_entry_injected_into_a_tree: reports a record whose
         tree gained a path its revision did not change, which reads still accept
+    test_regression_fsck_reports_a_legacy_before_past_the_head: reports a manifest whose
+        legacy_before would skip the ID check of every slot, which hid a swapped record
     test_fsck_reports_slot_gap: reports one missing slot below the head
     test_regression_fsck_reports_a_two_slot_gap_below_the_head: reports a run of two deleted slots
         as one gap naming both, and two runs as two gaps
@@ -56,6 +58,7 @@ from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.fsck import fsck
 from e8s.show.fsck_findings import is_torn_manifest
+from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder
@@ -268,6 +271,26 @@ def test_regression_fsck_reports_an_unchanged_entry_injected_into_a_tree(tmp_pat
     ]
     assert "previous tree" in report.findings[0].message
     assert not report.ok
+
+
+@pytest.mark.parametrize("legacy_before", [10**9, 50])
+def test_regression_fsck_reports_a_legacy_before_past_the_head(
+    tmp_path: Path, legacy_before: int
+) -> None:
+    """A swapped record whose ID no longer verifies passes when legacy_before skips the check."""
+    landed = landed_revisions(tmp_path, 3)
+    path = record_path(tmp_path, landed[2])
+    stored = json.loads(path.read_bytes())
+    stored["tree"]["/render.txt"] = digest(b"render 1")
+    path.write_bytes(dump_json(stored))
+    manifest = show_path(tmp_path) / "show.json"
+    manifest.write_bytes(dump_json({"id": SHOW_ID, "legacy_before": legacy_before}))
+    report = fsck(tmp_path)
+    assert ("BAD_RECORD", relative(tmp_path, manifest)) in _codes(tmp_path)
+    assert "legacy_before" in next(f.message for f in report.findings if f.path.endswith("json"))
+    assert not any(f.code == "UNREACHABLE" for f in report.findings)
+    assert not report.ok
+    assert gc(tmp_path, at=AT + 3 * DAY, confirm=True).removed == ()
 
 
 def test_fsck_reports_slot_gap(tmp_path: Path) -> None:

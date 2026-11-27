@@ -120,6 +120,7 @@ class _ShowCheck:
         seqs = self._slot_seqs() if LOG_DIR not in self.unreadable else []
         self.last_seq = seqs[-1] if seqs else 0
         self._check_manifest(is_present=MANIFEST_FILE in entries, has_slots=bool(seqs))
+        self._check_legacy_before()
         self._report_gaps(seqs)
         self._check_chain(seqs)
         self._list_leftovers(RECORD_DIR, RECORD_NAME, self.records)
@@ -163,6 +164,21 @@ class _ShowCheck:
                 self._report_torn_manifest(path)
             else:
                 self.report(BAD_RECORD, path, error.message)
+
+    def _check_legacy_before(self) -> None:
+        """Reports a `legacy_before` past the slot after the last, which no upgrade writes.
+
+        An upgrade sets it to one more than the number of slots it copies, and slots below it are
+        never removed, so a larger value can only skip the ID check of slots it should cover.
+        """
+        if self.legacy_before > self.last_seq + 1:
+            self.is_proven = False
+            self.report(
+                BAD_RECORD,
+                self.folder / MANIFEST_FILE,
+                f"legacy_before {self.legacy_before} is past slot {self.last_seq + 1}, the slot"
+                " after the last, so it would skip the ID check of slots it never covered",
+            )
 
     def _report_torn_manifest(self, path: Path) -> None:
         """Reports a torn manifest, which a repair may remove while the show has no slot."""
