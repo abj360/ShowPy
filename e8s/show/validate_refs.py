@@ -350,7 +350,7 @@ def _past_the_show(override: FacingOverride, number: int, total: float) -> Valid
 def _show_total(show: Show) -> float | None:
     try:
         total = index(show).total_counts
-    except (E8sError, ValueError, OverflowError):
+    except E8sError:
         return None
     return total if math.isfinite(total) else None
 
