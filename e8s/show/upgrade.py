@@ -313,13 +313,16 @@ def _require_unchanged(source: Path, listing: SourceListing, heads: dict[str, st
 def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     """Copies every show of a layout-1 root, with its whole history, into a new layout-2 root.
 
-    Every revision keeps its ID, parent, time and tree. Blobs are hard-linked where the two
-    roots share a file system and copied a piece at a time otherwise; each is hashed on the way.
-    The source is only read: nothing is written, renamed or removed under it, and a symlink or
-    special file in it refuses the upgrade before anything is written. The caps every read keeps
-    apply. `layout.json` is written last, after everything else is flushed, so an interrupted
-    upgrade leaves a target that readers refuse; delete it and run the upgrade again. The host
-    swaps the folders afterwards, so rolling back is keeping the source.
+    Every revision keeps its ID, parent, time and tree. Blobs and assets are hard-linked where
+    the two roots share a file system and the current user owns them, and copied a piece at a
+    time otherwise; each is hashed on the way. A linked file is one inode under two names:
+    linking changes the change time and link count of the source file, and a later commit in
+    the new root that reuses the blob sets its modification time, which the source then shows
+    too; its bytes never change. The upgrade itself writes, renames or removes nothing under the
+    source, and a symlink or special file in it refuses the upgrade before anything is written.
+    The caps every read keeps apply. `layout.json` is written last, after everything else is
+    flushed, so an interrupted upgrade leaves a target that readers refuse; delete it and run the
+    upgrade again. The host swaps the folders afterwards, so rolling back is keeping the source.
 
     No writer may run on the source while it is upgraded. Just before `layout.json` is placed,
     the source is listed again and every show's head read again; a show, head or asset that
@@ -331,8 +334,9 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
             not be inside the source.
 
     Returns:
-        report: For each show, the revisions copied, the blobs linked and copied and the files
-            left out; and the root entries left out, each with a reason.
+        report: For each show, the revisions copied, the blobs linked and copied, the files
+            left out and the revision fields dropped; the assets linked and copied; and the root
+            entries left out, each with a reason.
 
     >>> import json, tempfile
     >>> from datetime import UTC, datetime
