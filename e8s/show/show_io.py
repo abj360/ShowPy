@@ -14,11 +14,13 @@ from e8s.core.errors import StorageError
 from e8s.geo.fonts import FontRegistry
 from e8s.show.backend import SHORT_ID
 from e8s.show.document_repository import encode_cache_of
+from e8s.show.documents import is_older_tree
 from e8s.show.files import (
     show_changes,
 )
 from e8s.show.font_documents import font_changes
 from e8s.show.history_models import Revision
+from e8s.show.integrity import LazyBlobs
 from e8s.show.models import Show
 from e8s.show.workspace import Workspace
 
@@ -29,7 +31,9 @@ def load_show(ws: Workspace) -> Show:
     A revision stored in an older format is migrated in memory and the show comes back in the
     current format, without the migration report; the next save normalizes the stored documents.
     migrate_documents() returns that report, with every renamed ID and dropped stored field, and
-    the repository history keeps the older revision's bytes.
+    the repository history keeps the older revision's bytes. Through a DocumentRepository, a
+    show in the current format seeds its encode cache, so saving it after a small edit encodes
+    only the documents whose sources the edit replaced.
 
     >>> from datetime import UTC, datetime
     >>> from e8s.examples import two_set_show
@@ -64,7 +68,21 @@ def load_show_at(ws: Workspace, revision: str) -> Show:
             hint="save a show first with save_show()",
             context={"show": ws.show_id},
         )
+    _seed_encode_cache(ws, show)
     return show
+
+
+def _seed_encode_cache(ws: Workspace, show: Show) -> None:
+    """Seeds the repository's encode cache with a show decoded from current-format documents.
+
+    A show migrated from an older format was not decoded from the stored bytes, so it is left
+    out.
+    """
+    cache = encode_cache_of(ws.repo)
+    tree = ws.tree_at(ws.revision)
+    if cache is None or not isinstance(tree, LazyBlobs) or is_older_tree(tree):
+        return
+    cache.seed(show, tree, tree.digests)
 
 
 def save_show(

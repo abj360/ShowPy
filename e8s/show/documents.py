@@ -24,7 +24,6 @@ Contains:
     migrated_view(): returns stored documents as the migration would store them
 """
 
-import json
 from collections.abc import Collection, Iterator, Mapping
 
 from e8s.core.errors import StorageError
@@ -54,6 +53,7 @@ from e8s.show.document_paths import script_doc as script_doc
 from e8s.show.document_paths import set_doc as set_doc
 from e8s.show.document_paths import split_path as split_path
 from e8s.show.document_reading import read_migrated, read_show
+from e8s.show.document_sources import load_object, raw_source
 from e8s.show.encode_cache import EncodeCache, document_groups, encode_groups
 from e8s.show.migrate import (
     CURRENT_VERSION,
@@ -188,7 +188,7 @@ def _migrated_parts(
 ) -> tuple[dict[str, bytes], dict[str, str], MigrationReport]:
     """Migrates an older tree's show documents, notes and canvas files; maps renamed set folders."""
     show, report, beside = read_migrated(docs)
-    order = without_header(json.loads(docs[SHOW_DOC])).get(SET_ORDER_FIELD, [])
+    order = without_header(load_object(raw_source(docs), SHOW_DOC)).get(SET_ORDER_FIELD, [])
     stored_keys = [key for key in order if isinstance(key, str)] if isinstance(order, list) else []
     folders = {
         old: new

@@ -45,6 +45,7 @@ from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from e8s.core.util import content_hash
 from e8s.geo.curves import Segment
 from e8s.show.change_models import ItemKind
+from e8s.show.document_repository import DocumentRepository
 from e8s.show.history import (
     changelog,
     diff_paths,
@@ -192,7 +193,9 @@ def test_revert_reads_no_render_blobs() -> None:
         return real_blob(show_id, digest)
 
     repo.backend.blob = counting_blob  # type: ignore[method-assign]
-    revert(ws, first, AT + 3 * STEP)
+    # The session above decoded every document, so only a fresh repository counts what revert reads.
+    cold = open_workspace(DocumentRepository(repo.backend), ws.show_id)
+    revert(cold, first, AT + 3 * STEP)
     assert reads
     assert render_digest not in reads
 
