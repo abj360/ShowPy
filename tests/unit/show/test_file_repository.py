@@ -114,7 +114,7 @@ from typing import Any, NoReturn
 
 import pytest
 
-import e8s.show.durable_io as durable_io
+import e8s.show.durable_reads as durable_reads
 import e8s.show.layout1 as layout1
 from e8s.core.canonical import MAX_NESTING
 from e8s.core.errors import ConflictError, StorageError, bounded_repr
@@ -1000,7 +1000,7 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
     repo, rev, base = _saved(tmp_path)
     content = b"x"
     target = base / "objects" / digest(content)
-    real_lstat_mode = durable_io.lstat_mode
+    real_lstat_mode = durable_reads.lstat_mode
 
     def racing_lstat_mode(show_id: str, path: Path) -> int | None:
         mode = real_lstat_mode(show_id, path)

@@ -25,7 +25,7 @@ from pathlib import Path
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError, VersionError
-from e8s.show import durable_io
+from e8s.show import durable_io, durable_reads
 from e8s.show.backend_checks import corrupt, require_blob_digest
 from e8s.show.document_dump import dump_json
 from e8s.show.layout import (
@@ -189,7 +189,7 @@ def place_or_check(
         try:
             check()
         except StorageError:
-            if durable_io.lstat_mode(show_id, target) is not None:
+            if durable_reads.lstat_mode(show_id, target) is not None:
                 raise
             continue
         return False
@@ -199,7 +199,7 @@ def place_or_check(
 def _read_stored(show_id: str, target: Path, kind: str, cap: int, data: bytes) -> bytes:
     """Reads a stored file, rereading it while it is a shorter start of `data`."""
     fail = partial(corrupt, show_id)
-    read = partial(durable_io.read_capped, target, kind, cap, fail, allows_growth=True)
+    read = partial(durable_reads.read_capped, target, kind, cap, fail, allows_growth=True)
     return read_settled(read, is_short_of(data))
 
 
@@ -223,7 +223,7 @@ def store_blobs(
     """
     for digest, data in blobs.items():
         target = objects / digest
-        is_taken = durable_io.lstat_mode(show_id, target) is not None
+        is_taken = durable_reads.lstat_mode(show_id, target) is not None
         check = partial(_check_blob, show_id, target, data)
         place_or_check(placer, show_id, target, data, check, is_known_taken=is_taken)
 

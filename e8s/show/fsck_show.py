@@ -49,7 +49,7 @@ from e8s.show.backend_checks import (
     require_blob_digest,
     require_slot_record,
 )
-from e8s.show.durable_io import is_redirect, listed_entries, lstat_mode, read_capped
+from e8s.show.durable_reads import is_redirect, listed_entries, lstat_mode, read_capped
 from e8s.show.file_backend import (
     LOG_DIR,
     MANIFEST_FILE,

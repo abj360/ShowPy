@@ -10,7 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 from e8s.show.commit_writes import STALE_TEMP_AGE
-from e8s.show.durable_io import lstat_info, mapped_io, remove_file
+from e8s.show.durable_io import mapped_io, remove_file
+from e8s.show.durable_reads import lstat_info
 from e8s.show.file_backend import LOG_DIR, SLOT_DIGITS
 from e8s.show.fsck import require_zoned
 from e8s.show.fsck_scan import scan_repository

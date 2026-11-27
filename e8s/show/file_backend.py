@@ -49,12 +49,8 @@ from e8s.show.commit_writes import (
     write_layout_file,
 )
 from e8s.show.document_dump import dump_json
-from e8s.show.durable_io import (
-    lstat_mode,
-    mapped_io,
-    read_capped,
-    remove_stale_temps,
-)
+from e8s.show.durable_io import mapped_io, remove_stale_temps
+from e8s.show.durable_reads import lstat_mode, read_capped
 from e8s.show.history_models import Revision
 from e8s.show.layout import (
     HOUSEKEEPING_NAMES,

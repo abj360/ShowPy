@@ -30,7 +30,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show import document_repository, durable_io
+from e8s.show import document_repository, durable_reads
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import REVISION_ID_PATTERN
@@ -276,7 +276,7 @@ def require_caller_ids(
 
 def refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:
     """Raises CORRUPT when `path`, with stat mode `mode`, is a symlink or a junction."""
-    if durable_io.is_redirect(path, mode):
+    if durable_reads.is_redirect(path, mode):
         raise corrupt(show_id, path, "folder is a symbolic link or junction")
 
 
@@ -288,6 +288,6 @@ def require_plain_folders(show_id: str, *folders: Path) -> None:
         folders: Folders a read or write passes through; a missing one is fine.
     """
     for path in folders:
-        mode = durable_io.lstat_mode(show_id, path)
+        mode = durable_reads.lstat_mode(show_id, path)
         if mode is not None:
             refuse_redirect(path, mode, show_id)
