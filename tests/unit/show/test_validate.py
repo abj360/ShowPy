@@ -73,7 +73,8 @@ Contains:
     test_bad_transition_pin_issue_names_the_raw_pin_id: names an unparsable transition pin by its
         raw ID
     test_pin_mismatch_names_every_unflagged_item_of_each_pin: names, per pin, its unflagged
-        placements in show order, then its unlocked forms
+        placements in show order, then its unlocked forms; skips a set named like the pinned spot
+        and a stale form of a pinned set
     test_regression_entity_pin_check_visits_only_unflagged_placements: checks each entity pin
         against its unflagged placements alone
     test_regression_validate_show_reports_a_facing_override_selector_that_does_not_resolve: reports
@@ -663,7 +664,11 @@ def _mismatch_messages(show: Show) -> dict[tuple[str, str], str]:
 
 
 def test_pin_mismatch_names_every_unflagged_item_of_each_pin() -> None:
-    """Names, per pin, its unflagged placements in show order, then its unlocked forms."""
+    """Names, per pin, its unflagged placements in show order, then its unlocked forms.
+
+    An entity pin skips the other spots of a set whose ID equals the spot's, and a set pin skips a
+    stale form, one stamped with the set that the set no longer lists.
+    """
     row = line_form("row", ["T1", "T2"], (0, 12), (2, 12), set_id=SET_TWO)
     pins = (
         Pin(target="entity", id="T1"),
@@ -676,6 +681,21 @@ def test_pin_mismatch_names_every_unflagged_item_of_each_pin() -> None:
         ("set", SET_TWO): "the set pin on 2 leaves 5 locked item(s) unflagged:"
         " 2 T1, 2 T2, 2 T3, 2 T4, row",
         ("form", "row"): "the form pin on row leaves 1 locked item(s) unflagged: row",
+    }
+    base = two_set_show()
+    named_like_a_spot = base.sets[1]._copied(update={"id": "T1", "key": "T1"})
+    collided = base.replace(sets=(base.sets[0], named_like_a_spot), pins=pins[:1])
+    assert _mismatch_messages(collided) == {
+        ("entity", "T1"): "the entity pin on T1 leaves 2 locked item(s) unflagged: 1 T1, T1 T1",
+    }
+    stale = row.replace(id=FormId("stale"))
+    listing = base.sets[1].replace(forms=("row",))
+    with_stale = base.replace(
+        sets=(base.sets[0], listing), forms={"row": row, "stale": stale}, pins=pins[1:2]
+    )
+    assert _mismatch_messages(with_stale) == {
+        ("set", SET_TWO): "the set pin on 2 leaves 5 locked item(s) unflagged:"
+        " 2 T1, 2 T2, 2 T3, 2 T4, row",
     }
 
 
