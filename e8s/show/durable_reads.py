@@ -240,6 +240,11 @@ def is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
 
     Python documents st_ino as unique only when non-zero; where a file system reports 0, the
     device, size and times must still all match, and a result with 0 never matches one without.
+
+    It answers whether a name still holds the file an earlier lookup saw, never whether two files
+    hold the same bytes: a reused inode and a coarse clock (Windows) let two files written
+    moments apart match in every field. Ask has_same_bytes() about content, and never remove a
+    file on this answer alone: a file a writer places is fresh, so an age check must hold too.
     """
     return file_identity(first) == file_identity(second)
 

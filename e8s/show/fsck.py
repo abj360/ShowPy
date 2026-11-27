@@ -72,6 +72,9 @@ def _is_still_torn(item: Repairable, cutoff: datetime) -> bool:
     """Tells whether a file is still the same regular, torn file older than the cut-off, and safe.
 
     The file is looked up again after its checks: one replaced or changed meanwhile is kept.
+    The bytes read between the two lookups decide that it is torn; the lookups decide only that
+    the name held one file throughout, which a writer's file, being fresh, never fakes. Reading
+    again before the removal would not close the gap, since a removal goes by name.
     """
     info = lstat_info("", item.path)
     if info is None or not stat.S_ISREG(info.st_mode) or info.st_mtime >= cutoff.timestamp():
