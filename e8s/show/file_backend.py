@@ -15,8 +15,9 @@ from e8s.core.canonical import jcs
 from e8s.core.errors import SchemaError, UnknownRefError, VersionError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
+from e8s.show import document_repository
 from e8s.show.backend import conflict_error, unknown_revision_error
-from e8s.show.backend_checks import corrupt, require_caller_ids
+from e8s.show.backend_checks import Record, corrupt, require_caller_ids
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
     link_new,
@@ -54,7 +55,8 @@ OBJECT_DIR = "objects"
 MANIFEST_FILE = "show.json"
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
-MANIFEST_KEYS = frozenset({"id"})
+MANIFEST_KEYS = frozenset({"id", "legacy_before"})
+FIRST_SEQ = 1
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
 # A manifest holds one show ID; stored layout-1 IDs have no length rule, but a folder name of
@@ -90,7 +92,7 @@ class FileBackend:
     def __init__(self, root: Path) -> None:
         self.root = root
         self._seen: dict[str, tuple[int, str]] = {}
-        self._manifests: set[str] = set()
+        self._manifests: dict[str, int] = {}
         self._has_layout = False
 
     def _folder(self, show_id: str) -> Path:
@@ -120,25 +122,32 @@ class FileBackend:
             raise corrupt(show_id, path, "stored revision ID is not a 64-digit hex id")
         return revision
 
-    def _manifest_id(self, show_id: str, folder: Path) -> str:
-        """Reads the show ID a folder's manifest holds; the folder name must encode it."""
+    def _manifest(self, show_id: str, folder: Path) -> tuple[str, int]:
+        """Reads a manifest: the show ID its folder must encode and its `legacy_before` slot."""
         path = folder / MANIFEST_FILE
         stored = self._read(show_id, path, "manifest", MANIFEST_MAX_BYTES)
-        if not isinstance(stored, dict) or stored.keys() != MANIFEST_KEYS:
-            raise corrupt(show_id, path, f"manifest must hold exactly {sorted(MANIFEST_KEYS)}")
-        listed = stored["id"]
+        if not isinstance(stored, dict) or not {"id"} <= stored.keys() <= MANIFEST_KEYS:
+            raise corrupt(show_id, path, "manifest must hold id and may hold legacy_before")
+        listed, legacy_before = stored["id"], stored.get("legacy_before", FIRST_SEQ)
         if not isinstance(listed, str) or show_folder(listed) != folder.name:
             raise corrupt(show_id, path, "manifest names a show stored in another folder")
-        return listed
+        if (
+            not isinstance(legacy_before, int)
+            or isinstance(legacy_before, bool)
+            or legacy_before < 1
+        ):
+            raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
+        return listed, legacy_before
 
     def _check_manifest(self, show_id: str) -> None:
         """Checks once per backend that the show's manifest, when present, names this show."""
         folder = self._folder(show_id)
         if show_id in self._manifests or lstat_mode(show_id, folder / MANIFEST_FILE) is None:
             return
-        if self._manifest_id(show_id, folder) != show_id:
+        listed, legacy_before = self._manifest(show_id, folder)
+        if listed != show_id:
             raise corrupt(show_id, folder / MANIFEST_FILE, "manifest names another show")
-        self._manifests.add(show_id)
+        self._manifests[show_id] = legacy_before
 
     def shows(self) -> list[str]:
         """Returns the IDs of shows with at least one slot, read from their manifests."""
@@ -156,7 +165,7 @@ class FileBackend:
             raise corrupt("", folder, "entry under shows/ is not a show folder")
         if lstat_mode("", folder / MANIFEST_FILE) is None:
             return None
-        show_id = self._manifest_id("", folder)
+        show_id, _ = self._manifest("", folder)
         return show_id if self._has_slot(show_id, 1) else None
 
     def _has_slot(self, show_id: str, seq: int) -> bool:
@@ -230,7 +239,7 @@ class FileBackend:
         """Returns the revisions after `since`, oldest first, reading only the later slots.
 
         A revision no slot holds, such as the record of a commit that lost its race, raises
-        UnknownRefError.
+        UnknownRefError. Every slot read is checked against its record.
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
@@ -246,27 +255,36 @@ class FileBackend:
             show_id, self._record_path(show_id, revision_id)
         )
         if is_known:
-            seq, _ = self._record(show_id, revision_id)
+            seq = self._record(show_id, revision_id).seq
             if seq <= last and self._read_slot(show_id, seq).id == revision_id:
                 return seq
         raise unknown_revision_error(show_id, revision_id, [])
 
     def _slots_after(self, show_id: str, first: int, last: int, parent: str) -> list[Revision]:
-        """Reads slots `first + 1` to `last`, checking each names the one before and a record."""
+        """Reads slots `first + 1` to `last`, checking each against its parent and its record."""
         landed: list[Revision] = []
         for seq in range(first + 1, last + 1):
             revision = self._read_slot(show_id, seq)
             path = self._slot_path(show_id, seq)
             if revision.parent != parent:
                 raise corrupt(show_id, path, "slot's parent is not the revision of the slot before")
-            if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
-                raise corrupt(show_id, path, "slot names a revision that has no record")
+            self._check_slot_record(show_id, path, seq, revision)
             landed.append(revision)
             parent = revision.id
         return landed
 
-    def _record(self, show_id: str, revision_id: str) -> tuple[int, dict[str, str]]:
-        """Reads a revision record: its slot number and its tree, checking it names itself."""
+    def _check_slot_record(self, show_id: str, path: Path, seq: int, revision: Revision) -> None:
+        """Requires the slot's revision to have a record that holds the same revision and seq."""
+        if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
+            raise corrupt(show_id, path, "slot names a revision that has no record")
+        stored = self._record(show_id, revision.id)
+        if stored.seq != seq:
+            raise corrupt(show_id, path, f"record of this slot holds seq {stored.seq}, not {seq}")
+        if stored.revision != revision:
+            raise corrupt(show_id, path, "slot differs from the revision in its record")
+
+    def _record(self, show_id: str, revision_id: str) -> Record:
+        """Reads a revision record, checking it names itself and that its ID is verified."""
         path = self._record_path(show_id, revision_id)
         stored = self._read(show_id, path, "revision record", TREE_MAX_BYTES)
         if not isinstance(stored, dict) or stored.keys() != RECORD_KEYS:
@@ -274,14 +292,27 @@ class FileBackend:
         seq, tree = stored["seq"], stored["tree"]
         if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
             raise corrupt(show_id, path, "record seq is not a positive integer")
-        if self._revision(show_id, path, stored["revision"]).id != revision_id:
+        revision = self._revision(show_id, path, stored["revision"])
+        if revision.id != revision_id:
             raise corrupt(show_id, path, "record holds another revision than its name")
         if not isinstance(tree, dict) or not all(
             isinstance(value, str) and REVISION_ID_PATTERN.fullmatch(value)
             for value in tree.values()
         ):
             raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
-        return seq, {key: str(value) for key, value in tree.items()}
+        checked = {key: str(value) for key, value in tree.items()}
+        self._require_scheme_id(show_id, path, seq, revision, checked)
+        return Record(seq, revision, checked)
+
+    def _require_scheme_id(
+        self, show_id: str, path: Path, seq: int, revision: Revision, tree: Mapping[str, str]
+    ) -> None:
+        """Requires the ID to be recomputable from the record, except before `legacy_before`."""
+        if seq < self._manifests.get(show_id, FIRST_SEQ):
+            return
+        changes = {changed: tree.get(changed) for changed in revision.changed}
+        if document_repository.revision_id(revision.parent, revision.at, changes) != revision.id:
+            raise corrupt(show_id, path, "record does not hash to its name")
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         """Returns path to blob digest at a landed revision, read from its record."""
@@ -289,9 +320,11 @@ class FileBackend:
             self._check_manifest(show_id)
             path = self._record_path(show_id, revision_id)
             if REVISION_ID_PATTERN.fullmatch(revision_id) and lstat_mode(show_id, path):
-                seq, tree = self._record(show_id, revision_id)
-                if self._has_slot(show_id, seq) and self._read_slot(show_id, seq).id == revision_id:
-                    return tree
+                stored = self._record(show_id, revision_id)
+                if self._has_slot(show_id, stored.seq) and (
+                    self._read_slot(show_id, stored.seq).id == revision_id
+                ):
+                    return stored.tree
             raise unknown_revision_error(show_id, revision_id, [])
 
     def blob(self, show_id: str, digest: str) -> bytes:
@@ -354,7 +387,7 @@ class FileBackend:
         for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
             make_folder(folder / name)
         if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
-            self._manifests.add(show_id)
+            self._manifests[show_id] = FIRST_SEQ
         else:
             self._check_manifest(show_id)
 

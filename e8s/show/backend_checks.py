@@ -4,11 +4,13 @@ backend_checks.py --- the corruption error and the read checks the layout-2 file
 Contains:
     CORRUPT_HINT: tells the caller how to repair a damaged show folder
     corrupt(): builds the StorageError for a stored file that fails a check
+    Record: holds a revision record's slot number, revision and tree
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
 """
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import NamedTuple
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
@@ -37,6 +39,14 @@ def corrupt(show_id: str, path: Path, reason: str) -> StorageError:
         context=context,
         code=ErrorCode.CORRUPT,
     )
+
+
+class Record(NamedTuple):
+    """Holds a revision record: its slot number, its revision and its tree."""
+
+    seq: int
+    revision: Revision
+    tree: dict[str, str]
 
 
 def _caller_id(show_id: str, value: str, role: str) -> None:

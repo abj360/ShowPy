@@ -42,6 +42,18 @@ Contains:
     test_regression_file_repository_writes_beside_housekeeping_entries: stores shows in a root that
         holds .DS_Store or an unreadable lost+found
     test_regression_repository_backend_is_read_only: refuses to assign a new backend to a repository
+    test_regression_record_with_a_wrong_id_is_corrupt: refuses a record whose digests do not hash to
+        its revision ID, in log and in tree
+    test_regression_slot_that_differs_from_its_record_is_corrupt: refuses a slot whose revision is
+        not the one in its record
+    test_regression_log_checks_each_record_seq_against_its_slot: refuses a record whose seq is not
+        its slot's number
+    test_legacy_ids_accepted_only_before_legacy_before: accepts old-scheme IDs only in slots
+        before the manifest's legacy_before
+    test_current_ids_are_required_when_the_manifest_has_no_legacy_before: refuses an old-scheme ID
+        when the manifest names no legacy slots
+    test_manifest_legacy_before_must_be_a_positive_integer: refuses a manifest whose legacy_before
+        is not a positive integer
     test_every_read_error_names_the_show: carries the real show ID in every read error
     test_regression_shows_errors_never_carry_an_empty_show: leaves out the show key when a folder
         is unreadable before its show is known
@@ -68,7 +80,7 @@ from e8s.core.util import content_hash
 from e8s.show import file_backend
 from e8s.show.backend import digest
 from e8s.show.document_dump import dump_json
-from e8s.show.document_repository import DocumentRepository
+from e8s.show.document_repository import DocumentRepository, revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
@@ -94,9 +106,15 @@ UNKNOWN_ID = "f" * 64
 def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
     data = f"render {n}".encode()
     revision = Revision(
-        id=content_hash({"parent": parent, "n": n}), parent=parent, at=AT, changed=(RENDER,)
+        id=revision_id(parent, AT, {RENDER: digest(data)}), parent=parent, at=AT, changed=(RENDER,)
     )
     return revision, {RENDER: digest(data)}, {digest(data): data}
+
+
+def _legacy_change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
+    """Builds a revision whose ID is an old-scheme name, which no recomputation reproduces."""
+    revision, tree, blobs = _change(parent, n)
+    return revision.replace(id=content_hash({"legacy": n})), tree, blobs
 
 
 def _landed(backend: FileBackend, count: int, parent: str = "", start: int = 0) -> list[Revision]:
@@ -311,11 +329,11 @@ def test_unlanded_or_unknown_revision_is_an_unknown_ref(tmp_path: Path) -> None:
     with pytest.raises(ConflictError):
         backend.commit(SHOW_ID, loser, tree, blobs)
     assert _record(tmp_path, loser.id).exists()
-    for revision_id in (loser.id, UNKNOWN_ID, "../escape"):
+    for unknown in (loser.id, UNKNOWN_ID, "../escape"):
         with pytest.raises(UnknownRefError):
-            backend.log(SHOW_ID, since=revision_id)
+            backend.log(SHOW_ID, since=unknown)
         with pytest.raises(UnknownRefError):
-            backend.tree(SHOW_ID, revision_id)
+            backend.tree(SHOW_ID, unknown)
     assert backend.tree(SHOW_ID, landed[0].id) == {RENDER: digest(b"render 0")}
 
 
@@ -551,6 +569,91 @@ def test_regression_repository_backend_is_read_only(tmp_path: Path) -> None:
     repo = DocumentRepository(FileBackend(tmp_path))
     with pytest.raises(AttributeError):
         object.__setattr__(repo, "backend", FileBackend(tmp_path / "other"))
+
+
+def _set_manifest(root: Path, **extra: object) -> None:
+    (_folder(root) / "show.json").write_bytes(dump_json({"id": SHOW_ID, **extra}))
+
+
+def _mixed_history(root: Path, legacy: int, total: int) -> list[Revision]:
+    """Lands `legacy` old-scheme revisions, then current-scheme ones, `total` in all."""
+    backend = FileBackend(root)
+    landed: list[Revision] = []
+    for n in range(total):
+        parent = landed[-1].id if landed else ""
+        make = _legacy_change if n < legacy else _change
+        revision, tree, blobs = make(parent, n)
+        backend.commit(SHOW_ID, revision, tree, blobs)
+        landed.append(revision)
+    return landed
+
+
+def test_regression_record_with_a_wrong_id_is_corrupt(tmp_path: Path) -> None:
+    """Refuses a record whose digests no longer hash to the revision ID it is named by."""
+    landed = _landed(FileBackend(tmp_path), 2)
+    _rewrite_record(tmp_path, landed[1], tree={RENDER: "a" * 64})
+    for read in (
+        lambda: FileBackend(tmp_path).log(SHOW_ID),
+        lambda: FileBackend(tmp_path).tree(SHOW_ID, landed[1].id),
+    ):
+        with pytest.raises(StorageError) as caught:
+            read()
+        assert caught.value.code == "CORRUPT"
+        assert caught.value.context["file"] == f"{landed[1].id}.json"
+        assert "does not hash to its name" in caught.value.message
+
+
+def test_regression_slot_that_differs_from_its_record_is_corrupt(tmp_path: Path) -> None:
+    landed = _landed(FileBackend(tmp_path), 2)
+    later = landed[1].replace(at=AT.replace(hour=13))
+    _rewrite_slot(tmp_path, later.to_json())
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "CORRUPT"
+    assert caught.value.context["file"] == f"{2:0{SLOT_DIGITS}d}"
+
+
+def test_regression_log_checks_each_record_seq_against_its_slot(tmp_path: Path) -> None:
+    landed = _landed(FileBackend(tmp_path), 3)
+    _rewrite_record(tmp_path, landed[1], seq=3)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "CORRUPT"
+    assert caught.value.context["file"] == f"{2:0{SLOT_DIGITS}d}"
+    assert "seq" in caught.value.message
+
+
+def test_legacy_ids_accepted_only_before_legacy_before(tmp_path: Path) -> None:
+    landed = _mixed_history(tmp_path, legacy=2, total=4)
+    _set_manifest(tmp_path, legacy_before=3)
+    backend = FileBackend(tmp_path)
+    assert backend.log(SHOW_ID) == landed
+    assert backend.tree(SHOW_ID, landed[0].id) == {RENDER: digest(b"render 0")}
+    for legacy_before, bad_slot in ((2, 2), (1, 1)):
+        _set_manifest(tmp_path, legacy_before=legacy_before)
+        with pytest.raises(StorageError) as caught:
+            FileBackend(tmp_path).log(SHOW_ID)
+        assert caught.value.code == "CORRUPT"
+        assert caught.value.context["file"] == f"{landed[bad_slot - 1].id}.json"
+
+
+def test_current_ids_are_required_when_the_manifest_has_no_legacy_before(tmp_path: Path) -> None:
+    _mixed_history(tmp_path, legacy=1, total=2)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "CORRUPT"
+
+
+@pytest.mark.parametrize("legacy_before", [0, -1, True, "2", 1.5, None])
+def test_manifest_legacy_before_must_be_a_positive_integer(
+    tmp_path: Path, legacy_before: object
+) -> None:
+    _landed(FileBackend(tmp_path), 1)
+    _set_manifest(tmp_path, legacy_before=legacy_before)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "CORRUPT"
+    assert caught.value.context["file"] == "show.json"
 
 
 def test_every_read_error_names_the_show(tmp_path: Path) -> None:
