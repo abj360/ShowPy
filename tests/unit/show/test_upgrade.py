@@ -31,6 +31,8 @@ Contains:
     test_upgrade_is_deterministic: gives byte-identical targets and equal reports for one source
     test_regression_a_missing_blob_is_corrupt_naming_its_revision: raises CORRUPT naming the blob
         and the first revision whose tree names it, not IO, and writes no layout file
+    test_upgrade_copies_blobs_another_user_owns: copies instead of linking a blob the current user
+        does not own, whose shared inode a later commit could not freshen
     test_upgrade_flushes_every_folder_before_the_layout_file: flushes each show's folders,
         assets/, shows/, tmp/ and the root before layout.json is placed, then the root fully
 """
@@ -485,3 +487,17 @@ def test_regression_a_missing_blob_is_corrupt_naming_its_revision(tmp_path: Path
     assert caught.value.context["file"] == missing
     assert first in caught.value.message
     expect_unfinished(target)
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid"), reason="no POSIX owners")
+def test_upgrade_copies_blobs_another_user_owns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = copied(tmp_path), tmp_path / "new"
+    owner = (_objects(source) / _head_blob(source)).stat().st_uid
+    monkeypatch.setattr(os, "geteuid", lambda: owner + 1)
+    shown = upgrade_repository(source, target).shows[0]
+    assert shown.blobs_linked == 0
+    assert shown.blobs_copied == len(list(_target_objects(target).iterdir()))
+    for blob in _target_objects(target).iterdir():
+        assert not blob.samefile(_objects(source) / blob.name)

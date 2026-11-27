@@ -22,6 +22,7 @@ Contains:
     file_pieces(): yields the bytes of an open file a piece at a time, up to a size
     stat_info(): returns the stat result of a path, following links, or None when it is absent
     lies_within(): tells whether a path is a folder or lies under it, by file identity
+    is_own_file(): tells whether the current user owns a file, which it may then retime
 """
 
 import errno
@@ -437,3 +438,17 @@ def lies_within(path: Path, folder: Path) -> bool:
         if info is not None and _identity(info, candidate) == wanted:
             return True
     return False
+
+
+def is_own_file(info: os.stat_result) -> bool:
+    """Tells whether the current user owns a file; True where the system has no POSIX owners.
+
+    Only a file's owner may set its times, so a hard link to another user's file could never
+    be freshened by a later commit that reuses it.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     is_own_file(Path(folder).stat())
+    True
+    """
+    return not hasattr(os, "geteuid") or info.st_uid == os.geteuid()

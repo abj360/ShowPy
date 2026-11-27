@@ -21,6 +21,7 @@ from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import (
     file_pieces,
+    is_own_file,
     lies_within,
     listed_entries,
     lstat_info,
@@ -128,9 +129,12 @@ class _Target:
         """Links a blob into place, or copies it where links are refused; True when linked.
 
         Both ways the bytes under the new name are hashed before the upgrade goes on, so a blob
-        whose bytes do not match its name stops the upgrade before the layout file exists.
+        whose bytes do not match its name stops the upgrade before the layout file exists. A
+        blob another user owns is copied: a linked file shares its inode with the source, and a
+        later commit that reuses the blob sets its modification time, which only the owner may.
         """
-        if self.links_blobs:
+        info = lstat_info(show_id, source)
+        if self.links_blobs and info is not None and is_own_file(info):
             with mapped_io(show_id, target, is_link=True):
                 is_linked = durable_io.link_file(source, target)
             if is_linked:
