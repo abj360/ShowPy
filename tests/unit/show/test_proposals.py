@@ -40,7 +40,8 @@ Contains:
     test_regression_accept_by_merge_respects_a_pin_added_after_the_base: refuses a merge that
         changes an item pinned on the head
     test_regression_accept_refuses_an_op_naming_a_spot_the_head_deleted: refuses, as a stale
-        proposal, a placement, form or paths op naming a spot the head deleted since the base
+        proposal, a placement, form, paths or row-facing op naming a spot the head deleted since
+        the base
     test_regression_accept_refuses_a_proposal_naming_a_spot_never_in_the_cast: refuses a form op
         whose member was never in the cast, with is_stale and preview agreeing
 """
@@ -53,7 +54,7 @@ import pytest
 from e8s.cast.spots import delete_spots
 from e8s.choreo.forms import line_form
 from e8s.choreo.models import Placement
-from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.choreo.path_models import EntityFacing, FacingMode, PathRow, TransitionSpec
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, E8sError, LockedError, SchemaError, UnknownRefError
 from e8s.core.ids import SetId, SpotId, make_tid
@@ -422,6 +423,19 @@ DELETED_SPOT_OPS: dict[str, ChangeOp] = {
             id=make_tid("1", "2"),
             counts=8.0,
             rows={SpotId(DELETED_SPOT): PathRow(entity=SpotId(DELETED_SPOT), start=2)},
+        )
+    ),
+    "paths-facing": PathsOp(
+        spec=TransitionSpec(
+            id=make_tid("1", "2"),
+            counts=8.0,
+            rows={
+                SpotId("T1"): PathRow(
+                    entity=SpotId("T1"),
+                    facing_mode=FacingMode.TOWARD_ENTITY,
+                    facing_value=EntityFacing(entity=SpotId(DELETED_SPOT)),
+                )
+            },
         )
     ),
 }
