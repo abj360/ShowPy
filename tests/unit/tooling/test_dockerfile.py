@@ -15,6 +15,8 @@ Contains:
         lacks a file that tests/unit/tooling/test_noxfile.py reads, such as the CI workflow
     test_docker_image_holds_every_path_the_nightly_core_tests_read: the same for the fuzz crate
         and the nightly core workflow that tests/unit/tooling/test_nightly_core.py reads
+    test_docker_image_holds_every_path_the_nightly_failure_tests_read: the same for the nightly,
+        nightly core and nightly alert workflows that test_nightly_failures.py reads
     test_regression_missing_dockerfile_fails_in_a_source_checkout: a moved or renamed Dockerfile
         fails the check instead of skipping it
     test_docker_path_check_flags_a_missing_and_an_ignored_path: proves the check can fail
@@ -38,6 +40,12 @@ LIBRARY_ROOT = REPO_ROOT / "e8s"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_noxfile.py"
 NIGHTLY_CORE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly_core.py"
+NIGHTLY_FAILURE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly_failures.py"
+NIGHTLY_WORKFLOWS = {
+    ".github/workflows/nightly.yml",
+    ".github/workflows/nightly-core.yml",
+    ".github/workflows/nightly-alert.yml",
+}
 RUNTIME_STAGE = "runtime"
 BUILDER_STAGE = "builder"
 LOCKED_BUILD_ENV = "MATURIN_PEP517_ARGS=--locked"
@@ -79,10 +87,11 @@ def copied_paths(dockerfile: str, stage: str = RUNTIME_STAGE) -> list[str]:
 
     Returns:
         sources: Each COPY source of that stage, relative to the build context, without `./`.
+            A line ending in a backslash continues on the next.
     """
     sources: list[str] = []
     current = ""
-    for line in dockerfile.splitlines():
+    for line in dockerfile.replace("\\\n", " ").splitlines():
         words = line.split()
         if not words or words[0].startswith("#"):
             continue
@@ -214,6 +223,13 @@ def test_docker_image_holds_every_path_the_nightly_core_tests_read() -> None:
     assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
 
 
+def test_docker_image_holds_every_path_the_nightly_failure_tests_read() -> None:
+    read = read_paths(NIGHTLY_FAILURE_TESTS.read_text(encoding="utf-8"))
+    assert set(read) == NIGHTLY_WORKFLOWS
+    missing = missing_image_paths(DOCKERFILE, DOCKERIGNORE, NIGHTLY_FAILURE_TESTS)
+    assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
+
+
 def test_regression_missing_dockerfile_fails_in_a_source_checkout() -> None:
     moved = REPO_ROOT / "docker" / "Dockerfile.moved"
     assert LIBRARY_ROOT.is_dir()
@@ -230,9 +246,10 @@ def test_docker_path_check_flags_a_missing_and_an_ignored_path() -> None:
         "COPY --from=builder /dist /dist\n"
         "COPY noxfile.py ./\n"
         "COPY docs ./docs\n"
+        "COPY a.yml \\\n    b.yml ./\n"
     )
     copied = copied_paths(dockerfile)
-    assert copied == ["noxfile.py", "docs"]
+    assert copied == ["noxfile.py", "docs", "a.yml", "b.yml"]
     assert is_in_image("noxfile.py", copied, [])
     assert not is_in_image("e8s/core/types.py", copied, [])
     assert not is_in_image("docs/a.md", copied, ["docs/"])
