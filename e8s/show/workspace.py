@@ -309,9 +309,10 @@ class Workspace:
         """
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
-        changes = staged_changes(path, raw, self._show(), self._tree())
+        base = self._revision if expected_revision is None else expected_revision
+        changes = staged_changes(path, raw, self.show_at(base), self.tree_at(base))
         return self._commit_normalizing(
-            changes, at=at, expected_revision=expected_revision, is_complete=is_show_doc(path)
+            changes, at=at, expected_revision=base, is_complete=is_show_doc(path)
         )
 
 
