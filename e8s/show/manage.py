@@ -29,6 +29,7 @@ from e8s.core.errors import (
 from e8s.core.ids import (
     SetId,
     SpotId,
+    TransitionId,
     format_ref,
     format_tid,
     parse_ref,
@@ -95,20 +96,30 @@ def _carried(show: Show, previous: Set | None, entity: SpotId) -> Placement:
     return source.replace(form=None, order=None, pinned=pinned)
 
 
+def _pins_a_vanished_pair(record: Pin, pairs: set[TransitionId]) -> bool:
+    if record.target != "transition":
+        return False
+    try:
+        return parse_tid(record.id) not in pairs
+    except SchemaError:
+        return False
+
+
 def _sync_transitions(show: Show) -> Show:
     pairs = set(show.transition_ids())
     counts = {s.id: s.counts for s in show.sets}
     kept = tuple(
         spec.replace(counts=counts[spec.id[1]]) for spec in show.transitions if spec.id in pairs
     )
-    return show.replace(transitions=kept)
+    pins = tuple(p for p in show.pins if not _pins_a_vanished_pair(p, pairs))
+    return show.replace(transitions=kept, pins=pins)
 
 
 def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: object) -> Show:
     """Replaces a show's sets, keeping transitions in step and refusing pinned or locked edits.
 
-    Transitions between sets that are no longer consecutive are dropped, and each kept one takes
-    the counts of the set it leads into.
+    Transitions between sets that are no longer consecutive are dropped with their transition
+    pins, and each kept one takes the counts of the set it leads into.
 
     Args:
         show: Show to edit.
@@ -323,13 +334,6 @@ def insert_subset(
     return replace_sets(show, sets, force=force), new_id
 
 
-def _names_set(tid_text: str, set_id: str) -> bool:
-    try:
-        return set_id in parse_tid(tid_text)
-    except SchemaError:
-        return False
-
-
 def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
     dropped_forms = {f for f, form in show.forms.items() if form.set == set_id}
 
@@ -337,7 +341,6 @@ def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
         return not (
             (pin.target == "set" and pin.id == set_id)
             or (pin.target == "form" and pin.id in dropped_forms)
-            or (pin.target == "transition" and _names_set(pin.id, set_id))
         )
 
     return tuple(filter(kept, show.pins))
