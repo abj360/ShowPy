@@ -4,6 +4,9 @@
 test_upgrade.py --- tests upgrade_repository, which copies a layout-1 root into a new layout-2 root
 
 Contains:
+    test_layout1_root_is_read_only: reads every revision, tree and blob of the v0.4.0 fixture as
+        v0.4.0 stored them, refuses every write with OLD_LAYOUT whose hint runs as given, and
+        changes nothing under the root
     test_regression_every_released_fixture_upgrades_with_ids_kept: keeps every revision's ID,
         parent, time and tree and every revision's show for the v0.1.1 to v0.4.0 fixtures, after
         which fsck is clean and a write lands
@@ -32,6 +35,7 @@ import errno
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from collections.abc import Callable
@@ -40,13 +44,17 @@ from pathlib import Path
 
 import pytest
 
-from e8s.core.errors import StorageError
+import e8s
+from e8s.core.errors import StorageError, VersionError
 from e8s.examples import two_set_show
 from e8s.show import durable_io, file_backend, layout1, upgrade
+from e8s.show.backend import digest
 from e8s.show.document_repository import DocumentRepository
+from e8s.show.file_backend import FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.fsck import fsck
 from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.models import Show
 from e8s.show.show_folders import show_folder
 from e8s.show.show_io import load_show_at
 from e8s.show.storage_models import ShowUpgrade, UpgradeReport
@@ -63,6 +71,7 @@ LEGACY_SHOW = "legacy-show"
 SHOW_ID = "show_1"
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 AFTER = "/renders/after.txt"
+UPGRADE_CALL = re.compile(r"e8s\.upgrade_repository\(.*?\)\)")
 OUTSIDE_DIGEST = "f" * 64
 SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
 HAS_FIFOS = hasattr(os, "mkfifo") and sys.platform != "win32"
@@ -137,6 +146,45 @@ def _expect_unfinished(target: Path) -> None:
     with pytest.raises(StorageError) as refused:
         FileRepository(target)
     assert refused.value.code == "CORRUPT"
+
+
+def _refused_writes(source: Path, head: str) -> list[Callable[[], object]]:
+    repo = FileRepository(source)
+    return [
+        lambda: repo.transaction(LEGACY_SHOW, {AFTER: b"x"}, expected_revision=head, at=AT),
+        lambda: repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT),
+        lambda: repo.put_show(LEGACY_SHOW, two_set_show(), expected_revision=head, at=AT),
+        lambda: DocumentRepository(FileBackend(source)).put_show(
+            SHOW_ID, two_set_show(), expected_revision="", at=AT
+        ),
+    ]
+
+
+def test_layout1_root_is_read_only(tmp_path: Path) -> None:
+    source = _copied(tmp_path)
+    expected = json.loads((FIXTURES / LATEST / "expected.json").read_text())
+    before = _fingerprint(source)
+    repo = FileRepository(source)
+    assert repo.shows() == [LEGACY_SHOW]
+    assert repo.head(LEGACY_SHOW) == expected["head"]
+    revisions = repo.revisions(LEGACY_SHOW)
+    assert [revision.id for revision in revisions] == expected["revisions"]
+    for revision in revisions:
+        oracle = Show.model_validate(expected["shows"][revision.id])
+        assert repo.get_show(LEGACY_SHOW, revision.id) == oracle
+        for blob in repo.backend.tree(LEGACY_SHOW, revision.id).values():
+            assert digest(repo.backend.blob(LEGACY_SHOW, blob)) == blob
+    for write in _refused_writes(source, expected["head"]):
+        with pytest.raises(VersionError) as caught:
+            write()
+        assert caught.value.code == "OLD_LAYOUT"
+        assert "upgrade_repository(Path(" in caught.value.hint
+    assert _fingerprint(source) == before
+    call = UPGRADE_CALL.search(caught.value.hint)
+    assert call is not None
+    eval(call.group(0), {"e8s": e8s, "Path": Path})
+    assert FileRepository(tmp_path / "old-layout2").head(LEGACY_SHOW) == expected["head"]
+    assert _fingerprint(source) == before
 
 
 @pytest.mark.parametrize("release", RELEASES)

@@ -22,6 +22,7 @@ Contains:
     refuse_redirect(): refuses a folder that is a symlink or a junction
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
+    require_readable_sizes(): refuses a commit holding a blob larger than reads accept
 """
 
 from collections.abc import Mapping
@@ -36,7 +37,7 @@ from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_reads
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.layout1 import REVISION_ID_PATTERN
+from e8s.show.layout1 import BLOB_MAX_BYTES, REVISION_ID_PATTERN
 from e8s.show.show_folders import show_folder
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_line
@@ -334,3 +335,25 @@ def require_plain_folders(show_id: str, *folders: Path) -> None:
         mode = durable_reads.lstat_mode(show_id, path)
         if mode is not None:
             refuse_redirect(path, mode, show_id)
+
+
+def require_readable_sizes(
+    show_id: str, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+) -> None:
+    """Refuses blobs over BLOB_MAX_BYTES before any write, since reads would refuse them.
+
+    Args:
+        show_id: Show the commit belongs to, named in the error.
+        tree: The commit's tree, which names the paths of the oversized blobs.
+        blobs: The commit's blob bytes by digest.
+    """
+    oversized = {d for d, data in blobs.items() if len(data) > BLOB_MAX_BYTES}
+    if not oversized:
+        return
+    paths = sorted(p for p, d in tree.items() if d in oversized)
+    raise StorageError(
+        f"files of {show_id} over the {BLOB_MAX_BYTES}-byte cap: {', '.join(paths)}",
+        hint="keep each file under the cap; store larger media outside the repository",
+        context={"show": show_id, "paths": paths, "cap": BLOB_MAX_BYTES},
+        code=ErrorCode.TOO_LARGE,
+    )

@@ -47,8 +47,8 @@ Contains:
     test_regression_malformed_records_are_corrupt: maps malformed, directory-shaped and deeply
         nested tree files to CORRUPT
     test_regression_trailing_newline_in_id_is_refused: refuses an ID followed by a newline
-    test_regression_link_failures_carry_no_hardlinks_code: maps os.link refusals on a layout-1 root
-        to NO_HARDLINKS with show, path and errno context
+    test_regression_link_failures_carry_no_hardlinks_code: never leaks an os.link refusal: a
+        layout-1 root refuses the write with OLD_LAYOUT, its upgrade creates files in place
     test_regression_temp_file_failure_is_io_not_no_hardlinks: keeps a failing temp write out of
         NO_HARDLINKS
     test_regression_long_names_are_name_too_long: maps ENAMETOOLONG on writes and reads
@@ -114,19 +114,24 @@ from typing import Any, NoReturn
 
 import pytest
 
+import e8s.show.backend_checks as backend_checks
+import e8s.show.durable_io as durable_io
 import e8s.show.durable_reads as durable_reads
 import e8s.show.layout1 as layout1
 from e8s.core.canonical import MAX_NESTING
-from e8s.core.errors import ConflictError, StorageError, bounded_repr
+from e8s.core.errors import ConflictError, StorageError, VersionError, bounded_repr
 from e8s.show.backend import digest
 from e8s.show.commit_writes import STALE_TEMP_AGE
-from e8s.show.document_repository import DocumentRepository, revision_id
+from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_MAX_BYTES, TREE_MAX_BYTES
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.show_folders import show_folder
+from e8s.show.upgrade import upgrade_repository
 from e8s.show.workspace import open_workspace
+from tests.fixtures.layout1 import write_layout1_root
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
 
@@ -140,13 +145,34 @@ RACERS = 8
 LOSER_ID = "0" * 64
 TRAVERSAL_ID = "../../../escaped"
 RENDER_COMMITS = 5
+SECOND_SLOT = "000000000002"
 
 
 def _saved(tmp_path: Path) -> tuple[FileRepository, str, Path]:
     """Saves the two-set show into a layout-1 root, which FileRepository keeps in layout 1."""
-    legacy = DocumentRepository(layout1._FileBackend(tmp_path / "repo"))
-    rev = legacy.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    memory = InMemoryRepository()
+    rev = memory.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    write_layout1_root(memory, tmp_path / "repo")
     return FileRepository(tmp_path / "repo"), rev.id, tmp_path / "repo" / SHOW_ID
+
+
+def _layout1_history(root: Path, renders: int) -> tuple[FileRepository, list[str]]:
+    """Writes a layout-1 root whose show has the two-set show and `renders` render commits."""
+    memory = InMemoryRepository()
+    heads = [memory.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT).id]
+    for n in range(renders):
+        docs = {f"/renders/{n}.txt": str(n).encode()}
+        heads.append(memory.transaction(SHOW_ID, docs, expected_revision=heads[-1], at=AT).id)
+    write_layout1_root(memory, root)
+    return FileRepository(root), heads
+
+
+def _upgraded(tmp_path: Path) -> tuple[FileRepository, str, Path]:
+    """Saves the two-set show into a layout-1 root and upgrades it, since only layout 2 writes."""
+    _, rev, _ = _saved(tmp_path)
+    upgrade_repository(tmp_path / "repo", tmp_path / "new")
+    folder = tmp_path / "new" / "shows" / show_folder(SHOW_ID)
+    return FileRepository(tmp_path / "new"), rev, folder
 
 
 def _second_revision(repo: FileRepository, parent: str) -> str:
@@ -499,21 +525,23 @@ def _commit_error(tmp_path: Path) -> StorageError:
 def test_regression_link_failures_carry_no_hardlinks_code(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: OSError
 ) -> None:
-    """Maps os.link refusals on a layout-1 root to NO_HARDLINKS with show, path and errno."""
+    """Never leaks an os.link refusal: a layout-1 root refuses the write with OLD_LAYOUT before
+    any link, and its upgrade, which writes layout 2, creates files in place instead."""
     repo, rev, _ = _saved(tmp_path)
+    upgraded, _, _ = _upgraded(tmp_path)
 
-    def refuse(*_args: object) -> None:
+    def refuse(*_args: object, **_kwargs: object) -> None:
         raise error
 
     monkeypatch.setattr(os, "link", refuse)
-    with pytest.raises(StorageError) as raised:
+    with pytest.raises(VersionError) as raised:
         _second_revision(repo, rev)
     caught = raised.value
-    assert caught.code == "NO_HARDLINKS"
-    assert set(caught.context) == {"show", "path", "errno"}
+    assert caught.code == "OLD_LAYOUT"
     assert caught.context["show"] == SHOW_ID
-    assert caught.context["errno"] == error.errno
     assert caught.hint
+    landed = _second_revision(upgraded, rev)
+    assert upgraded.head(SHOW_ID) == landed
 
 
 def test_regression_temp_file_failure_is_io_not_no_hardlinks(
@@ -533,8 +561,9 @@ def test_regression_temp_file_failure_is_io_not_no_hardlinks(
 def test_regression_long_names_are_name_too_long(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Maps ENAMETOOLONG on writes and reads."""
+    """Maps ENAMETOOLONG on writes, which need layout 2, and on layout-1 reads."""
     repo, _, _ = _saved(tmp_path)
+    upgraded, _, _ = _upgraded(tmp_path)
 
     def link_too_long(_source: Path, target: Path) -> NoReturn:
         raise OSError(errno.ENAMETOOLONG, "File name too long", str(target))
@@ -542,7 +571,7 @@ def test_regression_long_names_are_name_too_long(
     with monkeypatch.context() as patched:
         patched.setattr(os, "link", link_too_long)
         with pytest.raises(StorageError) as written:
-            repo.put_show("a" * 64, two_set_show(), expected_revision="", at=AT)
+            upgraded.put_show("a" * 64, two_set_show(), expected_revision="", at=AT)
 
     def too_long(_self: Path, **_kwargs: object) -> os.stat_result:
         raise OSError(errno.ENAMETOOLONG, "File name too long")
@@ -594,16 +623,17 @@ def test_regression_permission_denied_read_is_io(
 
 
 def test_regression_losing_commit_race_is_a_conflict(tmp_path: Path) -> None:
-    """Keeps a lost os.link race a ConflictError, never IO or NO_HARDLINKS."""
-    repo, rev, _ = _saved(tmp_path)
+    """Keeps a lost race on a slot a ConflictError, never IO or NO_HARDLINKS, once upgraded."""
+    repo, rev, _ = _upgraded(tmp_path)
     repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=rev, at=AT)
     with pytest.raises(ConflictError):
         repo.transaction(SHOW_ID, {"/renders/b.txt": b"b"}, expected_revision=rev, at=AT)
 
 
 def test_regression_threaded_commit_race_has_one_winner(tmp_path: Path) -> None:
-    """Lands exactly one of several threads racing on one parent; the rest get ConflictError."""
-    repo, rev, _ = _saved(tmp_path)
+    """Lands exactly one of several threads racing on one parent of an upgraded root; the rest
+    get ConflictError."""
+    repo, rev, _ = _upgraded(tmp_path)
     outcomes: list[object] = []
 
     def attempt(index: int) -> None:
@@ -734,8 +764,8 @@ def _all_files(root: Path) -> set[Path]:
 
 
 def test_regression_backend_refuses_a_traversal_revision_id(tmp_path: Path) -> None:
-    """Refuses a revision ID that would put its tree file outside the root, writing nothing."""
-    repo, rev, base = _saved(tmp_path)
+    """Refuses a revision ID that would put its record outside an upgraded root, writing nothing."""
+    repo, rev, base = _upgraded(tmp_path)
     before = _all_files(tmp_path)
     raw = b"escaped"
     escaped = Revision(id=TRAVERSAL_ID, parent=rev, at=AT, changed=("/renders/b.txt",))
@@ -745,13 +775,13 @@ def test_regression_backend_refuses_a_traversal_revision_id(tmp_path: Path) -> N
     assert caught.value.code == "BAD_ID"
     assert "64 lowercase hex digits" in caught.value.hint
     assert _all_files(tmp_path) == before
-    assert not (base / "trees" / f"{TRAVERSAL_ID}.json").resolve().exists()
+    assert not (base / "records" / f"{TRAVERSAL_ID}.json").resolve().exists()
     assert repo.head(SHOW_ID) == rev
 
 
 def test_regression_backend_refuses_a_malformed_parent_id(tmp_path: Path) -> None:
     """Blames the caller, not the repository, for a malformed parent ID passed to commit."""
-    repo, rev, _ = _saved(tmp_path)
+    repo, rev, _ = _upgraded(tmp_path)
     child = Revision(id=HEX_ID, parent=TRAVERSAL_ID, at=AT, changed=())
     with pytest.raises(StorageError) as caught:
         repo.backend.commit(SHOW_ID, child, repo.backend.tree(SHOW_ID, rev), {})
@@ -760,7 +790,7 @@ def test_regression_backend_refuses_a_malformed_parent_id(tmp_path: Path) -> Non
 
 def test_regression_backend_refuses_a_malformed_blob_digest(tmp_path: Path) -> None:
     """Blames the caller for a malformed blob digest passed to commit, writing nothing."""
-    repo, rev, _ = _saved(tmp_path)
+    repo, rev, _ = _upgraded(tmp_path)
     before = _all_files(tmp_path)
     child = Revision(id=HEX_ID, parent=rev, at=AT, changed=("/renders/b.txt",))
     tree = {**repo.backend.tree(SHOW_ID, rev), "/renders/b.txt": TRAVERSAL_ID}
@@ -786,8 +816,8 @@ def test_regression_oversized_blob_is_refused_before_it_is_written(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Refuses a blob over the read cap at commit; a blob at the cap lands and reads back."""
-    monkeypatch.setattr(layout1, "BLOB_MAX_BYTES", SMALL_BLOB_CAP)
-    repo, rev, _ = _saved(tmp_path)
+    monkeypatch.setattr(backend_checks, "BLOB_MAX_BYTES", SMALL_BLOB_CAP)
+    repo, rev, _ = _upgraded(tmp_path)
     before = _all_files(tmp_path)
     with pytest.raises(StorageError) as caught:
         repo.transaction(
@@ -997,7 +1027,7 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Commits when a racing writer lands the same blob first and the OS refuses to replace it."""
-    repo, rev, base = _saved(tmp_path)
+    repo, rev, base = _upgraded(tmp_path)
     content = b"x"
     target = base / "objects" / digest(content)
     real_lstat_mode = durable_reads.lstat_mode
@@ -1008,7 +1038,7 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
             target.write_bytes(content)
         return mode
 
-    monkeypatch.setattr(layout1, "lstat_mode", racing_lstat_mode)
+    monkeypatch.setattr(durable_reads, "lstat_mode", racing_lstat_mode)
     _refuse_replacing_existing(monkeypatch)
     landed = repo.transaction(SHOW_ID, {"/renders/a.txt": content}, expected_revision=rev, at=AT)
     assert repo.head(SHOW_ID) == landed.id
@@ -1019,11 +1049,11 @@ def test_regression_tree_record_landed_by_an_identical_commit_is_kept(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Commits when an identical commit wrote the same tree record first; replacing it fails."""
-    twin_repo, twin_rev, twin_base = _saved(tmp_path / "twin")
+    twin_repo, twin_rev, twin_base = _upgraded(tmp_path / "twin")
     twin = _second_revision(twin_repo, twin_rev)
-    repo, rev, base = _saved(tmp_path)
+    repo, rev, base = _upgraded(tmp_path)
     assert rev == twin_rev
-    shutil.copy(twin_base / "trees" / f"{twin}.json", base / "trees" / f"{twin}.json")
+    shutil.copy(twin_base / "records" / f"{twin}.json", base / "records" / f"{twin}.json")
     _refuse_replacing_existing(monkeypatch)
     assert _second_revision(repo, rev) == twin
     assert repo.head(SHOW_ID) == twin
@@ -1060,40 +1090,41 @@ PLANTED_RECORDS: dict[str, Callable[[Path, bytes], None]] = {
     ],
 )
 def test_regression_planted_tree_record_blocks_the_commit(tmp_path: Path, kind: str) -> None:
-    """Refuses a commit whose record name holds something else, before linking next/."""
-    twin_repo, twin_rev, twin_base = _saved(tmp_path / "twin")
+    """Refuses a commit whose record name holds something else, before claiming its slot."""
+    twin_repo, twin_rev, twin_base = _upgraded(tmp_path / "twin")
     twin = _second_revision(twin_repo, twin_rev)
-    repo, rev, base = _saved(tmp_path)
-    record = base / "trees" / f"{twin}.json"
-    PLANTED_RECORDS[kind](record, (twin_base / "trees" / f"{twin}.json").read_bytes())
+    repo, rev, base = _upgraded(tmp_path)
+    record = base / "records" / f"{twin}.json"
+    PLANTED_RECORDS[kind](record, (twin_base / "records" / f"{twin}.json").read_bytes())
     _assert_corrupt(lambda: _second_revision(repo, rev))
-    assert not (base / "next" / rev).exists()
+    assert not (base / "log" / SECOND_SLOT).exists()
 
 
 def test_regression_failed_temp_write_leaves_no_temp_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Removes the temp file when syncing it to disk fails."""
-    repo, rev, base = _saved(tmp_path)
+    """Removes the temp file when syncing it to disk fails, on an upgraded root."""
+    repo, rev, base = _upgraded(tmp_path)
 
     def fail_sync(_fd: int) -> NoReturn:
         raise OSError(errno.EIO, "Input/output error")
 
+    def fail_fcntl_sync(descriptor: int, _command: int) -> NoReturn:
+        fail_sync(descriptor)
+
     monkeypatch.setattr(os, "fsync", fail_sync)
+    monkeypatch.setattr(durable_io, "fcntl_flush", fail_fcntl_sync)
     with pytest.raises(StorageError) as caught:
         _second_revision(repo, rev)
     assert caught.value.code == "IO"
-    assert not list(base.rglob(".tmp-*"))
+    assert not list(base.parent.parent.rglob(".tmp-*"))
 
 
 def test_regression_tree_at_walks_the_log_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    repo, head, _ = _saved(tmp_path)
-    for n in range(RENDER_COMMITS):
-        head = repo.transaction(
-            SHOW_ID, {f"/renders/{n}.txt": str(n).encode()}, expected_revision=head, at=AT
-        ).id
+    repo, heads = _layout1_history(tmp_path / "repo", RENDER_COMMITS)
+    head = heads[-1]
     backend: Any = repo.backend
     parse: Callable[[str, str, Path], dict[str, object]] = backend._record
     parsed: list[str] = []
@@ -1111,28 +1142,28 @@ def test_regression_tree_at_walks_the_log_once(
 
 
 def test_regression_commit_refuses_to_land_over_a_damaged_existing_blob(tmp_path: Path) -> None:
-    repo, head, base = _saved(tmp_path)
+    repo, head, base = _upgraded(tmp_path)
     (base / "objects" / digest(b"x")).write_bytes(b"garbage")
-    records = sorted((base / "trees").iterdir())
+    records = sorted((base / "records").iterdir())
     with pytest.raises(StorageError) as caught:
         repo.transaction(SHOW_ID, {"/renders/a.txt": b"x"}, expected_revision=head, at=AT)
     assert caught.value.code == "CORRUPT"
     assert repo.head(SHOW_ID) == head
-    assert sorted((base / "trees").iterdir()) == records
+    assert sorted((base / "records").iterdir()) == records
 
 
 @NO_SYMLINKS
 def test_regression_commit_refuses_a_symlink_at_a_blob_target(tmp_path: Path) -> None:
-    repo, head, base = _saved(tmp_path)
+    repo, head, base = _upgraded(tmp_path)
     outside = tmp_path / "outside.txt"
     outside.write_bytes(b"x")
     (base / "objects" / digest(b"x")).symlink_to(outside)
-    records = sorted((base / "trees").iterdir())
+    records = sorted((base / "records").iterdir())
     _assert_corrupt(
         lambda: repo.transaction(SHOW_ID, {"/renders/a.txt": b"x"}, expected_revision=head, at=AT)
     )
     assert repo.head(SHOW_ID) == head
-    assert sorted((base / "trees").iterdir()) == records
+    assert sorted((base / "records").iterdir()) == records
     assert outside.read_bytes() == b"x"
 
 
@@ -1141,10 +1172,9 @@ def test_regression_layout_1_log_longer_than_max_revisions_is_refused(
 ) -> None:
     """Refuses to walk a next/ chain longer than the cap instead of reading it all."""
     monkeypatch.setattr(layout1, "MAX_REVISIONS", 2)
-    repo, rev, _ = _saved(tmp_path)
-    second = _second_revision(repo, rev)
-    assert [r.id for r in repo.revisions(SHOW_ID)] == [rev, second]
-    repo.transaction(SHOW_ID, {"/renders/b.txt": b"x"}, expected_revision=second, at=AT)
+    at_cap, heads = _layout1_history(tmp_path / "at_cap", 1)
+    assert [r.id for r in at_cap.revisions(SHOW_ID)] == heads
+    repo, _ = _layout1_history(tmp_path / "past_cap", 2)
     with pytest.raises(StorageError) as caught:
         repo.revisions(SHOW_ID)
     assert caught.value.code == "TOO_LARGE"

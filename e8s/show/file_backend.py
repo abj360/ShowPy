@@ -38,6 +38,7 @@ from e8s.show.backend_checks import (
     require_caller_ids,
     require_legacy_bound,
     require_plain_folders,
+    require_readable_sizes,
     require_slot_record,
 )
 from e8s.show.commit_writes import (
@@ -59,12 +60,7 @@ from e8s.show.layout import (
     HOUSEKEEPING_NAMES,
     TEMP_DIR,
 )
-from e8s.show.layout1 import (
-    BLOB_MAX_BYTES,
-    REVISION_ID_PATTERN,
-    TREE_MAX_BYTES,
-    _require_readable_sizes,
-)
+from e8s.show.layout1 import BLOB_MAX_BYTES, REVISION_ID_PATTERN, TREE_MAX_BYTES
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_json, is_unfinished_line, read_settled
@@ -402,7 +398,7 @@ class FileBackend:
             self._require_plain_folders(show_id)
             self._check_manifest(show_id)
             require_caller_ids(show_id, revision, tree, blobs)
-            _require_readable_sizes(show_id, tree, blobs)
+            require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._require_legacy_bound(show_id, seq - 1)
             self._prepare(show_id)

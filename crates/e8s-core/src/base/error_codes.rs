@@ -104,6 +104,8 @@ pub enum ErrorCode {
     NOrSpacing,
     /// A write would store a show.json of an older format version than this release writes.
     OldFormat,
+    /// A write targets a layout-1 repository, which this release only reads until it is upgraded.
+    OldLayout,
     /// A path instruction is invalid.
     Path,
     /// An edit changes a pinned placement.
@@ -248,6 +250,7 @@ impl ErrorCode {
             Self::NoHardlinks => "NO_HARDLINKS",
             Self::NOrSpacing => "N_OR_SPACING",
             Self::OldFormat => "OLD_FORMAT",
+            Self::OldLayout => "OLD_LAYOUT",
             Self::Path => "PATH",
             Self::PinnedChanged => "PINNED_CHANGED",
             Self::ProposalClosed => "PROPOSAL_CLOSED",

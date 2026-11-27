@@ -44,7 +44,6 @@ import itertools
 import json
 import math
 import os
-import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -104,6 +103,7 @@ from e8s.show.migrations.v1_to_v2_ids import KEEPS_LEGACY_IDS
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
+from tests.fixtures.layout1 import upgraded_copy
 from tests.helpers import json_doc
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
@@ -238,10 +238,10 @@ def test_require_current_version_refuses_an_older_show_json() -> None:
 
 
 def _fixture(tag: str, tmp_path: Path) -> tuple[FileRepository, dict[str, Any]]:
-    """Copies a read-only fixture repository and loads its expected.json."""
-    shutil.copytree(FIXTURES / tag / "repo", tmp_path / "repo")
+    """Copies a read-only fixture repository, upgrades the copy and loads its expected.json."""
+    repo = upgraded_copy(FIXTURES / tag / "repo", tmp_path)
     expected: dict[str, Any] = json.loads((FIXTURES / tag / "expected.json").read_text())
-    return FileRepository(tmp_path / "repo"), expected
+    return FileRepository(repo), expected
 
 
 def _head(tag: str, tmp_path: Path) -> dict[str, bytes]:

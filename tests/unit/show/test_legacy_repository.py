@@ -70,6 +70,7 @@ from e8s.show.migrate import FIRST_VERSION
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import Workspace, open_workspace
+from tests.fixtures.layout1 import upgraded_copy
 from tests.fixtures.legacy_v020 import (
     NEGATIVE_ZERO,
     V020_FIXTURE,
@@ -107,8 +108,7 @@ def test_v020_revision_records_carry_legacy_keys() -> None:
 
 def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
     expected = v020_expected()
-    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
-    repo = FileRepository(tmp_path / "repo")
+    repo = FileRepository(upgraded_copy(FIXTURE / "repo", tmp_path))
     show_id = expected["show_id"]
     head_show = repo.get_show(show_id)
     revision = repo.put_show(

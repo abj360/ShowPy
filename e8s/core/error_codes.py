@@ -113,6 +113,8 @@ class ErrorCode(StrEnum):
     """A text form request gives both or neither of `n` and `spacing`."""
     OLD_FORMAT = "OLD_FORMAT"
     """A write would store a show.json of an older format version than this release writes."""
+    OLD_LAYOUT = "OLD_LAYOUT"
+    """A write targets a layout-1 repository, which this release only reads until it is upgraded."""
     PATH = "PATH"
     """A path instruction is invalid."""
     PINNED_CHANGED = "PINNED_CHANGED"

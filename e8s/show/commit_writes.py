@@ -24,7 +24,7 @@ from functools import partial
 from pathlib import Path
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import StorageError, VersionError
+from e8s.core.errors import StorageError
 from e8s.show import durable_io, durable_reads
 from e8s.show.backend_checks import corrupt, require_blob_digest
 from e8s.show.document_dump import dump_json
@@ -36,7 +36,7 @@ from e8s.show.layout import (
     read_layout,
     read_layout_file,
 )
-from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
+from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES, old_layout_error
 from e8s.show.torn_reads import is_short_of, read_settled
 
 STALE_TEMP_AGE = timedelta(hours=24)
@@ -291,11 +291,7 @@ def write_layout_file(root: Path, show_id: str, placer: FilePlacer) -> None:
         placer: Places new files; its temp folder is `tmp/` under `root`.
     """
     if read_layout(root) != CURRENT_LAYOUT:
-        raise VersionError(
-            f"repository at {root} is layout 1, which this backend does not write",
-            hint="open it with FileRepository, which reads layout 1",
-            context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(root)},
-        )
+        raise old_layout_error(root, show_id)
     durable_io.make_folder(root / TEMP_DIR)
     check = partial(read_layout_file, root)
     place_or_check(placer, show_id, root / LAYOUT_FILE, LAYOUT_BYTES, check)

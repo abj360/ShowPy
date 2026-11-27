@@ -79,7 +79,10 @@ def _missing_root(root: Path) -> StorageError:
 def _layout_1(root: Path) -> VersionError:
     return VersionError(
         f"repository at {root} is layout 1, which fsck and gc do not check",
-        hint="open it with FileRepository, which reads layout 1; fsck and gc check layout 2 only",
+        hint=(
+            "open it with FileRepository, which reads layout 1, or copy it into layout 2 with "
+            "upgrade_repository(source, target); fsck and gc check layout 2 only"
+        ),
         context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(root)},
     )
 

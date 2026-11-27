@@ -30,7 +30,7 @@ from e8s.show.file_backend import (
 )
 from e8s.show.history_models import Revision
 from e8s.show.layout import HOUSEKEEPING_NAMES, LAYOUT_FILE, LEGACY_LAYOUT, TEMP_DIR, read_layout
-from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_DIR, ROOT_LINK, TREE_DIR, _FileBackend
+from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_DIR, ROOT_LINK, TREE_DIR, Layout1Reader
 from e8s.show.show_folders import show_folder
 from e8s.show.storage_models import ShowUpgrade, UpgradeReport
 from e8s.show.upgrade_source import SourceShow, left_out, list_source
@@ -193,7 +193,7 @@ def _require_digest(show_id: str, source: Path, found: str) -> None:
         raise corrupt(show_id, source, "blob bytes do not match their digest")
 
 
-def _upgrade_show(reader: _FileBackend, target: _Target, listed: SourceShow) -> ShowUpgrade:
+def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) -> ShowUpgrade:
     """Copies one show's history slot by slot, its blobs first, and reports what it moved."""
     show_id = listed.show_id
     revisions = reader.log(show_id)
@@ -273,7 +273,7 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     _require_layout_1(source)
     _require_free_target(source, target)
     shows, skipped = list_source(source)
-    reader = _FileBackend(source)
+    reader = Layout1Reader(source)
     writer = _Target(target)
     upgraded = tuple(_upgrade_show(reader, writer, show) for show in shows)
     writer.finish()

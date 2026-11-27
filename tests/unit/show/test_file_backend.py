@@ -98,8 +98,9 @@ from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
 from e8s.show.layout import read_layout
-from e8s.show.layout1 import _FileBackend
+from e8s.show.layout1 import Layout1Reader
 from e8s.show.show_folders import show_folder
+from tests.fixtures.layout1 import stored_layout1
 from tests.fixtures.slot_race import RACE_SHOW_ID, race_once_per_trial
 from tests.helpers import context_entries
 
@@ -369,11 +370,11 @@ def test_commit_on_an_unlanded_parent_is_a_conflict(tmp_path: Path) -> None:
 
 
 def test_backend_refuses_to_write_a_layout_1_root(tmp_path: Path) -> None:
-    legacy = DocumentRepository(_FileBackend(tmp_path))
-    legacy.transaction("old", {RENDER: b"x"}, expected_revision="", at=AT)
+    stored_layout1(tmp_path, "old", {RENDER: b"x"}, at=AT)
     revision, tree, blobs = _change("", 0)
     with pytest.raises(VersionError) as caught:
         FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert caught.value.code == "OLD_LAYOUT"
     assert caught.value.context["layout"] == 1
     assert not (tmp_path / "layout.json").exists()
     assert not (tmp_path / "shows").exists()
@@ -556,11 +557,9 @@ def test_file_repository_writes_layout_2_and_keeps_layout_1_roots(tmp_path: Path
     assert read_layout(tmp_path / "new") == 2
     assert _slot(tmp_path / "new", 1).exists()
     assert FileRepository(tmp_path / "new").revisions(SHOW_ID) == [landed]
-    DocumentRepository(_FileBackend(tmp_path / "old")).transaction(
-        SHOW_ID, {RENDER: b"x"}, expected_revision="", at=AT
-    )
+    stored_layout1(tmp_path / "old", SHOW_ID, {RENDER: b"x"}, at=AT)
     legacy = FileRepository(tmp_path / "old")
-    assert isinstance(legacy.backend, _FileBackend)
+    assert isinstance(legacy.backend, Layout1Reader)
     assert legacy.head(SHOW_ID) == landed.id
 
 
