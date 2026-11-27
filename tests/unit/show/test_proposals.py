@@ -46,6 +46,8 @@ Contains:
         whose member was never in the cast, with is_stale and preview agreeing
     test_regression_new_form_under_a_pinned_set_is_locked: refuses, unless forced, a form op that
         adds a form to a pinned set, in apply_change and accept
+    test_regression_forced_change_keeps_the_flags_its_pins_imply: sets the flag of a form,
+        placement or path row a forced op leaves unflagged under a pin, so no PIN_MISMATCH
 """
 
 from datetime import UTC, datetime, timedelta
@@ -77,6 +79,7 @@ from e8s.show.history import diff_show
 from e8s.show.history_models import Revision
 from e8s.show.manage import add_set
 from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.models import Show
 from e8s.show.pinning import pin
 from e8s.show.proposals import (
     accept,
@@ -89,6 +92,7 @@ from e8s.show.proposals import (
     withdraw,
 )
 from e8s.show.show_io import load_show, save_show
+from e8s.show.validate import validate_show
 from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import SHOW_ID, open_session
@@ -489,3 +493,26 @@ def test_regression_new_form_under_a_pinned_set_is_locked() -> None:
     with pytest.raises(LockedError):
         accept(designer, "p1", AT + 2 * STEP)
     assert repo.head(SHOW_ID) == head
+
+
+def _forced_ops(show: Show) -> dict[str, tuple[Show, ChangeOp]]:
+    form = line_form("f9", ["T1", "T2"], (0.0, 0.0), (4.0, 0.0), set_id="2")
+    row = PathRow(entity=SpotId("T1"), start=1.0)
+    spec = show.transition(("1", "2")).replace(rows={SpotId("T1"): row})
+    return {
+        "form": (pin(show, "set", "2"), FormOp(form=form)),
+        "placement": (
+            pin(show, "entity", "T1"),
+            PlacementOp(set_id=SetId("2"), placement=Placement(entity=SpotId("T1"), x=-2.0, y=9.0)),
+        ),
+        "path row": (pin(show, "transition", "1→2"), PathsOp(spec=spec)),
+    }
+
+
+@pytest.mark.parametrize("kind", ["form", "placement", "path row"])
+def test_regression_forced_change_keeps_the_flags_its_pins_imply(kind: str) -> None:
+    """Sets the flag a pin implies on what a forced op adds or replaces; no PIN_MISMATCH."""
+    pinned, op = _forced_ops(two_set_show())[kind]
+    edited = apply_change(pinned, [op], force=True)
+    assert "PIN_MISMATCH" not in {i.code for i in validate_show(edited).issues}
+    assert edited.pins == pinned.pins
