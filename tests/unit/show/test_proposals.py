@@ -44,6 +44,8 @@ Contains:
         the base
     test_regression_accept_refuses_a_proposal_naming_a_spot_never_in_the_cast: refuses a form op
         whose member was never in the cast, with is_stale and preview agreeing
+    test_regression_new_form_under_a_pinned_set_is_locked: refuses, unless forced, a form op that
+        adds a form to a pinned set, in apply_change and accept
 """
 
 from datetime import UTC, datetime, timedelta
@@ -469,4 +471,21 @@ def test_regression_accept_refuses_a_proposal_naming_a_spot_never_in_the_cast() 
     with pytest.raises(ConflictError) as caught:
         accept(designer, "p1", AT + 2 * STEP)
     assert GHOST_SPOT in caught.value.message
+    assert repo.head(SHOW_ID) == head
+
+
+def test_regression_new_form_under_a_pinned_set_is_locked() -> None:
+    """Refuses a form op adding a form to a pinned set unless forced, in apply_change and accept."""
+    pinned = pin(two_set_show(), "set", "2")
+    add_form = FormOp(form=line_form("f9", ["T1", "T2"], (0.0, 0.0), (4.0, 0.0), set_id="2"))
+    with pytest.raises(LockedError) as caught:
+        apply_change(pinned, [add_form])
+    assert "forms of set 2" in caught.value.message
+    assert "f9" in apply_change(pinned, [add_form], force=True).set("2").forms
+    repo, agent, designer = open_session(pinned, AT)
+    propose(agent, [add_form], "", "p1", AT + STEP)
+    designer.refresh()
+    head = repo.head(SHOW_ID)
+    with pytest.raises(LockedError):
+        accept(designer, "p1", AT + 2 * STEP)
     assert repo.head(SHOW_ID) == head
