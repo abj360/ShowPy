@@ -22,7 +22,7 @@ from e8s.core.errors import ConflictError, SchemaError, StorageError, UnknownRef
 from e8s.core.ids import SetId, TransitionId
 from e8s.core.strict_json import parse_strict_json
 from e8s.core.util import close_matches
-from e8s.show.change_models import MergeConflict, MergeResult
+from e8s.show.change_models import ItemKey, ItemKind, MergeConflict, MergeResult
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import ChangeOp, CountsOp, Proposal, ProposalPreview
 from e8s.show.document_paths import SEGMENT_PATTERN
@@ -32,6 +32,7 @@ from e8s.show.history_models import Revision
 from e8s.show.item_table import set_keys_by_id, transition_key
 from e8s.show.items import changes
 from e8s.show.locks import locked_changes, require_unlocked
+from e8s.show.manage import late_routes, late_rows
 from e8s.show.merge import merge
 from e8s.show.models import Show
 from e8s.show.show_io import load_show
@@ -210,17 +211,48 @@ def _rescale_conflicts(
     ]
 
 
+def _overrun_conflicts(head: Show, merged: Show) -> list[MergeConflict]:
+    """Lists rows and routes the merge leaves running past the counts it gives their transition.
+
+    The proposal's change was checked against the base only, so a row or route the head added
+    is not covered by the check `set_counts` makes.
+    """
+    keys = set_keys_by_id(merged)
+    now = {(c.key.kind, c.key.path): c for c in changes(head, merged).changes}
+    conflicts: list[MergeConflict] = []
+    for tid in merged.transition_ids():
+        counts = merged.set(tid[1]).counts
+        if counts == head.set(tid[1]).counts:
+            continue
+        spec = merged.transition(tid)
+        folder = transition_key(keys, tid)
+        late: list[tuple[ItemKind, str]] = []
+        late.extend(("path_row", name) for name in late_rows(spec, counts))
+        late.extend(("route", name) for name in late_routes(spec, counts))
+        for kind, name in late:
+            change = now.get((kind, (folder, name)))
+            conflicts.append(
+                MergeConflict(
+                    key=ItemKey(kind=kind, path=(folder, name)),
+                    ours=None if change is None else change.before,
+                    theirs=None if change is None else change.after,
+                    reason=f"it runs past the {counts} counts the merge gives its transition",
+                )
+            )
+    return conflicts
+
+
 def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResult:
     base = _base_show(ws, proposal, head)
     theirs = apply_change(base, proposal.change, force=True)
     result = merge(base, head, theirs)
-    rows = _rescale_conflicts(base, head, theirs, proposal.change)
-    if not rows:
-        return result
-    known = {c.key.sort_key() for c in result.conflicts}
-    return MergeResult(
-        conflicts=(*result.conflicts, *(c for c in rows if c.key.sort_key() not in known))
-    )
+    conflicts = [*result.conflicts]
+    known = {c.key.sort_key() for c in conflicts}
+    found = _rescale_conflicts(base, head, theirs, proposal.change)
+    if result.show is not None and not found:
+        found = _overrun_conflicts(head, result.show)
+    conflicts += [c for c in found if c.key.sort_key() not in known]
+    return MergeResult(conflicts=tuple(conflicts)) if conflicts else result
 
 
 def _show_at_head(ws: Workspace, head_revision: str) -> Show:
