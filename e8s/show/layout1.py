@@ -32,7 +32,8 @@ from e8s.show.backend import (
     unknown_revision_error,
 )
 from e8s.show.documents import dump_json
-from e8s.show.durable_io import lstat_mode, mapped_io, read_capped
+from e8s.show.durable_io import mapped_io
+from e8s.show.durable_reads import lstat_mode, read_capped
 from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.storage import ROOT_REVISION

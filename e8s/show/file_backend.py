@@ -10,14 +10,13 @@ Contains:
 """
 
 from collections.abc import Mapping
-from datetime import datetime
 from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
 from e8s.core.errors import ConflictError, UnknownRefError
 from e8s.core.json_types import JsonValue
-from e8s.show import document_repository, durable_io
+from e8s.show import durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
     conflict_error,
@@ -29,15 +28,16 @@ from e8s.show.backend_checks import (
     ReadBudget,
     Record,
     corrupt,
-    hashed_time,
+    missing_file,
     parsed_json,
     parsed_manifest,
+    parsed_record,
     parsed_slot,
     refuse_redirect,
     require_blob_digest,
     require_caller_ids,
     require_plain_folders,
-    stored_revision,
+    require_slot_record,
 )
 from e8s.show.commit_writes import (
     STALE_TEMP_AGE,
@@ -50,12 +50,9 @@ from e8s.show.commit_writes import (
     write_layout_file,
 )
 from e8s.show.document_dump import dump_json
-from e8s.show.durable_io import (
-    lstat_mode,
-    mapped_io,
-    read_capped,
-    remove_stale_temps,
-)
+from e8s.show.durable_io import mapped_io, remove_stale_temps
+from e8s.show.durable_reads import lstat_mode, read_capped
+from e8s.show.fsck_findings import SET_ASIDE_PREFIX
 from e8s.show.history_models import Revision
 from e8s.show.layout import (
     HOUSEKEEPING_NAMES,
@@ -77,7 +74,6 @@ LOG_DIR = "log"
 RECORD_DIR = "records"
 OBJECT_DIR = "objects"
 MANIFEST_FILE = "show.json"
-RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
 # A log call reads every slot after `since` and its record. The bytes it reads are capped at the
@@ -290,14 +286,28 @@ class FileBackend:
 
     def _landed_seq(self, show_id: str, revision_id: str, last: int) -> int:
         """Returns the slot number of a landed revision, read from its record and its slot."""
-        is_known = REVISION_ID_PATTERN.fullmatch(revision_id) and lstat_mode(
-            show_id, self._record_path(show_id, revision_id)
-        )
-        if is_known:
+        if self._has_record(show_id, revision_id):
             seq = self._record(show_id, revision_id).seq
             if seq <= last and self._read_slot(show_id, seq).id == revision_id:
                 return seq
         raise unknown_revision_error(show_id, revision_id, [])
+
+    def _has_record(self, show_id: str, revision_id: str) -> bool:
+        """Tells whether a revision ID is well formed and has a record, raising when it is lost.
+
+        A record a stopped gc holds aside, and a missing record the head slot names, are damage
+        fsck reports, never an unknown revision; one confirmed gc puts a set-aside record back.
+        """
+        if not REVISION_ID_PATTERN.fullmatch(revision_id):
+            return False
+        path = self._record_path(show_id, revision_id)
+        if lstat_mode(show_id, path) is not None:
+            return True
+        if lstat_mode(show_id, path.with_name(SET_ASIDE_PREFIX + path.name)) is not None:
+            raise missing_file(show_id, path, "the revision's record is set aside")
+        if self._head(show_id)[1] == revision_id:
+            raise missing_file(show_id, path, "the head slot names a revision that has no record")
+        return False
 
     def _slots_after(self, show_id: str, first: int, last: int, parent: str) -> list[Revision]:
         """Reads slots `first + 1` to `last`, checking each against its parent and its record."""
@@ -318,60 +328,23 @@ class FileBackend:
     ) -> None:
         """Requires the slot's revision to have a record that holds the same revision and seq."""
         if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
-            raise corrupt(show_id, path, "slot names a revision that has no record")
-        stored = self._record(show_id, revision.id, budget)
-        if stored.seq != seq:
-            raise corrupt(show_id, path, f"record of this slot holds seq {stored.seq}, not {seq}")
-        if stored.revision != revision:
-            raise corrupt(show_id, path, "slot differs from the revision in its record")
+            raise missing_file(show_id, path, "slot names a revision that has no record")
+        require_slot_record(
+            show_id, path, seq, revision, self._record(show_id, revision.id, budget)
+        )
 
     def _record(self, show_id: str, revision_id: str, budget: ReadBudget | None = None) -> Record:
         """Reads a revision record, checking it names itself and that its ID is verified."""
         path = self._record_path(show_id, revision_id)
         stored = self._read(show_id, path, "revision record", TREE_MAX_BYTES, budget)
-        if not isinstance(stored, dict) or stored.keys() != RECORD_KEYS:
-            raise corrupt(show_id, path, f"record must hold exactly {sorted(RECORD_KEYS)}")
-        seq, tree = stored["seq"], stored["tree"]
-        if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
-            raise corrupt(show_id, path, "record seq is not a positive integer")
-        revision = stored_revision(show_id, path, stored["revision"])
-        if revision.id != revision_id:
-            raise corrupt(show_id, path, "record holds another revision than its name")
-        if not isinstance(tree, dict) or not all(
-            isinstance(value, str) and REVISION_ID_PATTERN.fullmatch(value)
-            for value in tree.values()
-        ):
-            raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
-        checked = {key: str(value) for key, value in tree.items()}
-        hashed_at = hashed_time(revision, stored["revision"])
-        self._require_scheme_id(show_id, path, seq, revision, checked, hashed_at)
-        return Record(seq, revision, checked)
-
-    def _require_scheme_id(
-        self,
-        show_id: str,
-        path: Path,
-        seq: int,
-        revision: Revision,
-        tree: Mapping[str, str],
-        hashed_at: datetime,
-    ) -> None:
-        """Requires the ID to be recomputable from the record, except before `legacy_before`.
-
-        `hashed_at` is the revision's time exactly as stored, which its ID hashes.
-        """
-        if seq < self._manifests.get(show_id, FIRST_SEQ):
-            return
-        changes = {changed: tree.get(changed) for changed in revision.changed}
-        if document_repository.revision_id(revision.parent, hashed_at, changes) != revision.id:
-            raise corrupt(show_id, path, "record does not hash to its name")
+        legacy_before = self._manifests.get(show_id, FIRST_SEQ)
+        return parsed_record(show_id, path, stored, revision_id, legacy_before)
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         """Returns path to blob digest at a landed revision, read from its record."""
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
-            path = self._record_path(show_id, revision_id)
-            if REVISION_ID_PATTERN.fullmatch(revision_id) and lstat_mode(show_id, path):
+            if self._has_record(show_id, revision_id):
                 stored = self._record(show_id, revision_id)
                 if self._has_slot(show_id, stored.seq) and (
                     self._read_slot(show_id, stored.seq).id == revision_id
@@ -386,6 +359,8 @@ class FileBackend:
             objects = self._folder(show_id) / OBJECT_DIR
             if not REVISION_ID_PATTERN.fullmatch(digest):
                 raise corrupt(show_id, objects, f"{digest!r} is not a 64-digit hex id")
+            if lstat_mode(show_id, objects / digest) is None:
+                raise missing_file(show_id, objects / digest, "a tree names this blob")
             return self._verified_blob(show_id, objects / digest)
 
     def _verified_blob(self, show_id: str, path: Path) -> bytes:

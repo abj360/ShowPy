@@ -664,6 +664,12 @@ if TYPE_CHECKING:
     from e8s.show.font_documents import (
         load_fonts,
     )
+    from e8s.show.fsck import (
+        fsck,
+    )
+    from e8s.show.gc import (
+        gc,
+    )
     from e8s.show.history import (
         changelog,
         diff_paths,
@@ -1208,7 +1214,9 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "format_tid": ("e8s.core.ids", "format_tid"),
     "frames": ("e8s.choreo.read", "frames"),
     "from_json": ("e8s.time.timeline", "from_json"),
+    "fsck": ("e8s.show.fsck", "fsck"),
     "gate": ("e8s.choreo.form_ops", "gate"),
+    "gc": ("e8s.show.gc", "gc"),
     "generated_form": ("e8s.choreo.forms", "generated_form"),
     "get_proposal": ("e8s.show.proposals", "get_proposal"),
     "get_sheet": ("e8s.sheet.templates", "get_sheet"),
@@ -1805,7 +1813,9 @@ __all__ = [
     "format_tid",
     "frames",
     "from_json",
+    "fsck",
     "gate",
+    "gc",
     "generated_form",
     "get_proposal",
     "get_sheet",

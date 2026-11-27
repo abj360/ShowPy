@@ -22,7 +22,8 @@ from e8s.core.errors import (
     UnknownRefError,
 )
 from e8s.core.util import ASSET_PREFIX, asset_uri
-from e8s.show.durable_io import NO_HARDLINK_ERRNOS, read_capped
+from e8s.show.durable_io import NO_HARDLINK_ERRNOS
+from e8s.show.durable_reads import read_capped
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import BLOB_MAX_BYTES, TEMP_PREFIX
 
