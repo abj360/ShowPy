@@ -7,6 +7,7 @@ Contains:
 """
 
 import hashlib
+import stat
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -18,7 +19,13 @@ from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt
 from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import mapped_io
-from e8s.show.durable_reads import file_pieces, listed_entries, lstat_info, opened_capped
+from e8s.show.durable_reads import (
+    file_pieces,
+    lies_within,
+    listed_entries,
+    opened_capped,
+    stat_info,
+)
 from e8s.show.file_backend import (
     LOG_DIR,
     LOG_READ_MAX_BYTES,
@@ -56,15 +63,18 @@ def _require_layout_1(source: Path) -> None:
 
 
 def _require_free_target(source: Path, target: Path) -> None:
-    """Refuses a target inside the source, one that is no folder, and one that holds anything."""
-    resolved = target.resolve()
-    if resolved == source.resolve() or source.resolve() in resolved.parents:
-        raise _bad_folder(f"upgrade target {target} is inside the source", TARGET_HINT, target)
-    info = lstat_info("", target)
-    if info is None:
-        return
+    """Refuses a target inside the source, one that is no folder, and one that holds anything.
+
+    The source and the target are compared as files, not as names, so a target that reaches the
+    source through another case, another Unicode normalization, a symlink or `..` is refused.
+    """
     with mapped_io("", target):
-        if not target.is_dir():
+        if lies_within(target, source):
+            raise _bad_folder(f"upgrade target {target} is inside the source", TARGET_HINT, target)
+        info = stat_info(target)
+        if info is None:
+            return
+        if not stat.S_ISDIR(info.st_mode):
             raise _bad_folder(f"upgrade target {target} is not a folder", TARGET_HINT, target)
         names = [name for name, _ in listed_entries(target, follows_links=True)]
     stored = [name for name in names if name not in HOUSEKEEPING_NAMES]

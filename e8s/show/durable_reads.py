@@ -20,6 +20,8 @@ Contains:
     COMPARE_PIECE_BYTES: sets how many bytes of each file one step of a comparison reads
     has_same_bytes(): tells whether two regular files hold the same bytes, reading in pieces
     file_pieces(): yields the bytes of an open file a piece at a time, up to a size
+    stat_info(): returns the stat result of a path, following links, or None when it is absent
+    lies_within(): tells whether a path is a folder or lies under it, by file identity
 """
 
 import errno
@@ -380,3 +382,58 @@ def file_pieces(handle: BinaryIO, size: int) -> Iterator[bytes]:
             return
         left -= len(piece)
         yield piece
+
+
+def stat_info(path: Path) -> os.stat_result | None:
+    """Returns the stat result of `path`, following links, or None when it or a parent is absent.
+
+    Args:
+        path: Path to look up; a parent that is a file counts as absent.
+    """
+    try:
+        return path.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+
+
+def _identity(info: os.stat_result, path: Path) -> tuple[int, int] | str:
+    """Names the file a stat result is of: its device and inode, else its resolved path.
+
+    A file system that reports inode 0 proves nothing by it, so the resolved, case-folded path
+    names the file there instead.
+    """
+    if info.st_ino == 0:
+        return os.path.normcase(str(path.resolve()))
+    return (info.st_dev, info.st_ino)
+
+
+def lies_within(path: Path, folder: Path) -> bool:
+    """Tells whether `path` is `folder` or lies under it, comparing files, never spellings.
+
+    A name in another case, another Unicode normalization, through a symlink or through `..`
+    still names the same folder, so each existing ancestor of `path`, `path` itself included, is
+    compared with `folder` by device and inode.
+
+    Args:
+        path: Path that may not exist yet.
+        folder: Existing folder.
+
+    Returns:
+        is_within: True when an existing ancestor of `path`, or `path` itself, is `folder`.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as root:
+    ...     inside = lies_within(Path(root) / "a" / "b", Path(root))
+    ...     inside, lies_within(Path(root), Path(root) / "a")
+    (True, False)
+    """
+    folder_info = stat_info(folder)
+    if folder_info is None:
+        return False
+    wanted = _identity(folder_info, folder)
+    absolute = path.absolute()
+    for candidate in (absolute, *absolute.parents):
+        info = stat_info(candidate)
+        if info is not None and _identity(info, candidate) == wanted:
+            return True
+    return False
