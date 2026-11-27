@@ -14,7 +14,7 @@ from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
-from e8s.core.errors import SchemaError, UnknownRefError
+from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_io
@@ -33,8 +33,10 @@ from e8s.show.backend_checks import (
     require_plain_folders,
 )
 from e8s.show.commit_writes import (
+    STALE_TEMP_AGE,
     flush_directories,
     place_file,
+    remove_lost_record,
     store_blobs,
     store_record,
     write_layout_file,
@@ -44,6 +46,7 @@ from e8s.show.durable_io import (
     lstat_mode,
     mapped_io,
     read_capped,
+    remove_stale_temps,
 )
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
@@ -412,11 +415,18 @@ class FileBackend:
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._prepare(show_id)
+            remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
             self._store_blobs(show_id, blobs)
-            self._store_record(show_id, revision, seq, tree)
+            is_record_new = self._store_record(show_id, revision, seq, tree)
             folder = self._folder(show_id)
             flush_directories(folder / OBJECT_DIR, folder / RECORD_DIR)
-            self._claim_slot(show_id, revision, seq)
+            try:
+                self._claim_slot(show_id, revision, seq)
+            except ConflictError:
+                if is_record_new:
+                    winner = self._read_slot(show_id, seq).id
+                    remove_lost_record(self._record_path(show_id, revision.id), winner, revision.id)
+                raise
             self._remember(show_id, seq, revision.id)
 
     def _parent_seq(self, show_id: str, parent: str) -> int:
@@ -471,10 +481,12 @@ class FileBackend:
 
     def _store_record(
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
-    ) -> None:
+    ) -> bool:
         """Places the revision record, or checks the one an identical commit placed first."""
         record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
-        store_record(self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record)
+        return store_record(
+            self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record
+        )
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
