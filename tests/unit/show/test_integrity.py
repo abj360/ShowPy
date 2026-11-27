@@ -60,6 +60,8 @@ Contains:
     test_regression_cf_characters_in_paths_are_refused: refuses invisible format characters
     test_regression_odd_transition_folder_is_refused: refuses a new transition folder that does
         not name two set keys, and keeps a stored one
+    test_regression_windows_device_names_in_paths_are_refused: refuses a path segment Windows
+        opens as a device, and keeps look-alikes and stored set folders
     test_one_spot_commit_decodes_only_changed_documents: loads only the edited set's documents
         and decodes one cache entry on a warm one-spot commit
     test_commit_check_still_refuses_every_invalid_tree: refuses each broken tree with a warm
@@ -125,6 +127,7 @@ AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "integrity"
 LONG_PATH_CHARS = 10_000
 MAX_MESSAGE_CHARS = 400
+CON_SET_DOC = "/sets/con/set.json"
 SHOW_LAYER = Path(__file__).parents[3] / "e8s" / "show"
 DOCTEST_PROMPT = ">>>"
 LOOSE_JSON_CALLS = (
@@ -698,3 +701,16 @@ def test_commit_check_validates_the_whole_show_model(monkeypatch: pytest.MonkeyP
     assert len(assembled) == 1
     _validate(after, {**after, "/renders/a.txt": b"x"}, cache)
     assert len(assembled) == 1
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/exports/CON.txt", "/exports/nul", "/renders/a/com1.png", "/exports/Lpt9/x.pdf", "/time/aux"],
+)
+def test_regression_windows_device_names_in_paths_are_refused(path: str) -> None:
+    with pytest.raises(StorageError) as caught:
+        require_known_path(path)
+    assert caught.value.code == ErrorCode.BAD_PATH
+    assert "device" in caught.value.hint
+    for allowed in ("/exports/console.txt", "/exports/com10.txt", "/exports/x.con", CON_SET_DOC):
+        require_known_path(allowed)

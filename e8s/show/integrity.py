@@ -6,7 +6,7 @@ Contains:
     RESERVED_ROOTS: the path prefixes kept for documents a later format defines, refused today
     require_structured_files(): checks changed text files decode as their readers decode them
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths, paths
-        under RESERVED_ROOTS and any name under `/cast/` but cast.json
+        under RESERVED_ROOTS, Windows device names and any name under `/cast/` but cast.json
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.digests: returns the content digest of each path's blob
@@ -27,7 +27,7 @@ from types import MappingProxyType
 from e8s.core.error_codes import ErrorCode
 from e8s.core.error_context import bounded_repr
 from e8s.core.errors import SchemaError, StorageError
-from e8s.core.ids import check_id
+from e8s.core.ids import WINDOWS_DEVICE_NAMES, check_id, is_device_name
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_paths import CAST_DOC
 from e8s.show.documents import (
@@ -92,6 +92,23 @@ def _reserved_path(path: str, root: str) -> StorageError:
     )
 
 
+def _named_segments(root: str, segments: list[str]) -> list[str]:
+    """Returns the segments a path names freely; a set or transition folder is its set keys'."""
+    if root in (f"/{SETS_ROOT}/", f"/{TRANSITIONS_ROOT}/"):
+        return segments[1:]
+    return segments
+
+
+def _device_path(path: str, device: str) -> StorageError:
+    return StorageError(
+        f"path {bounded_repr(path)} names {bounded_repr(device)}, a Windows device name",
+        hint=f"rename that part: {', '.join(sorted(WINDOWS_DEVICE_NAMES))}, alone or before a"
+        " dot, open a device on Windows instead of a file",
+        context={"path": path, "segment": device},
+        code=ErrorCode.BAD_PATH,
+    )
+
+
 def _is_forbidden(char: str) -> bool:
     return char == FORBIDDEN_CHARACTER or unicodedata.category(char) in (
         CONTROL_CATEGORY,
@@ -100,7 +117,10 @@ def _is_forbidden(char: str) -> bool:
 
 
 def require_known_path(path: str) -> None:
-    """Refuses a path outside KNOWN_ROOTS, or one that only looks inside a root.
+    """Refuses a path outside KNOWN_ROOTS, one that only looks inside a root, or a device name.
+
+    A segment Windows opens as a device (`con`, `NUL.txt`, `com1.png`) is refused anywhere but
+    as a set or transition folder, whose set keys are checked, stored ones kept, on their own.
 
     Args:
         path: Absolute document path.
@@ -118,8 +138,12 @@ def require_known_path(path: str) -> None:
     root = next((r for r in KNOWN_ROOTS if path.startswith(r)), None)
     if root is None or any(_is_forbidden(c) for c in path):
         raise _bad_path(path)
-    if any(segment in DOT_SEGMENTS for segment in path[len(root) :].split("/")):
+    segments = path[len(root) :].split("/")
+    if any(segment in DOT_SEGMENTS for segment in segments):
         raise _bad_path(path)
+    device = next((s for s in _named_segments(root, segments) if is_device_name(s)), None)
+    if device is not None:
+        raise _device_path(path, device)
     if root == CAST_ROOT and path != CAST_DOC:
         raise StorageError(
             f"{bounded_repr(path)} is not a cast document: {CAST_ROOT} holds only {CAST_DOC}",
