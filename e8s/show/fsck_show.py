@@ -25,6 +25,7 @@ from e8s.show.backend_checks import (
     FIRST_SEQ,
     ReadBudget,
     Record,
+    applied_tree,
     corrupt,
     parsed_json,
     parsed_record,
@@ -77,15 +78,6 @@ CONFLICTING_COPY = (
     "cannot tell which to keep: keep the blob whose bytes hash to its name, or the record that "
     "holds the revision its slot names, and remove the other by hand"
 )
-
-
-def _applied(
-    previous: Mapping[str, str], revision: Revision, tree: Mapping[str, str]
-) -> dict[str, str]:
-    """Returns the previous tree with each changed path set as the new tree has it."""
-    applied = {path: digest for path, digest in previous.items() if path not in revision.changed}
-    applied.update({path: tree[path] for path in revision.changed if path in tree})
-    return applied
 
 
 class _ShowCheck:
@@ -289,7 +281,7 @@ class _ShowCheck:
             if (
                 record is not None
                 and tree is not None
-                and record.tree != _applied(tree, revision, record.tree)
+                and record.tree != applied_tree(tree, revision, record.tree)
             ):
                 self.report(
                     BAD_RECORD,
