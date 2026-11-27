@@ -24,6 +24,12 @@ Contains:
         the rescale keeps its counts
     test_rescale_and_merge_report_a_row_both_flag_once: lists a row the merge and the rescale rule
         both flag one time
+    test_regression_paths_proposal_conflicts_with_a_head_shrink_of_the_set: refuses proposed
+        rows that no longer fit counts the head shortened
+    test_regression_paths_proposal_route_conflicts_with_a_head_rescale_shrink: refuses a proposed
+        route that no longer fits counts the head rescaled
+    test_regression_paths_proposal_conflicts_with_its_own_row_past_the_counts: refuses a proposed
+        row that never fit its transition
 """
 
 from collections.abc import Callable, Mapping
@@ -36,7 +42,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError
 from e8s.core.ids import RouteId, SetId, SpotId, make_tid
 from e8s.geo.curves import Segment
-from e8s.show.collab_models import ChangeOp, CountsOp
+from e8s.show.collab_models import ChangeOp, CountsOp, PathsOp
 from e8s.show.manage import add_set, set_counts
 from e8s.show.models import Show
 from e8s.show.proposals import accept, is_stale, preview_proposal, propose
@@ -212,3 +218,38 @@ def test_rescale_and_merge_report_a_row_both_flag_once() -> None:
     designer = _head_edits(base, rescale, lambda head: _edit_row(head, 3.0))
     conflicts = preview_proposal(designer, "p1").conflicts
     assert [(c.key.kind, c.key.path) for c in conflicts] == [("path_row", ("1-2", "T1"))]
+
+
+def test_regression_paths_proposal_conflicts_with_a_head_shrink_of_the_set() -> None:
+    """Refuses rows made against the longer counts once the head shortened the set."""
+    base = two_set_show()
+    late = PathRow(entity=SpotId("T1"), start=6.0)
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base, rows={SpotId("T1"): late})),
+        lambda head: set_counts(head, "2", SHORTER),
+    )
+    _assert_refused_everywhere(designer, "path_row", "T1")
+
+
+def test_regression_paths_proposal_route_conflicts_with_a_head_rescale_shrink() -> None:
+    """Refuses a route made against the longer counts once the head rescaled the set down."""
+    base = two_set_show()
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base, routes={RouteId("r1"): _route(7.0)})),
+        lambda head: set_counts(head, "2", SHORTER, rescale=True),
+    )
+    _assert_refused_everywhere(designer, "route", "r1")
+
+
+def test_regression_paths_proposal_conflicts_with_its_own_row_past_the_counts() -> None:
+    """Refuses a proposed row whose window never fit the transition it was stored on."""
+    base = two_set_show()
+    late = PathRow(entity=SpotId("T1"), start=base.set("2").counts + 1.0)
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base, rows={SpotId("T1"): late})),
+        lambda head: head,
+    )
+    _assert_refused_everywhere(designer, "path_row", "T1")

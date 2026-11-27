@@ -254,17 +254,18 @@ def _rescale_conflicts(
 def _overrun_conflicts(head: Show, merged: Show) -> list[MergeConflict]:
     """Lists rows and routes the merge leaves running past the counts it gives their transition.
 
-    The proposal's change was checked against the base only, so a row or route the head added
-    is not covered by the check `set_counts` makes.
+    The proposal's change was checked against the base only, so a row or route one side added
+    is not covered by the check `set_counts` makes against the counts the other side set. A
+    transition the merge leaves as the head holds it is not checked again.
     """
     keys = set_keys_by_id(merged)
     now = {(c.key.kind, c.key.path): c for c in changes(head, merged).changes}
     conflicts: list[MergeConflict] = []
     for tid in merged.transition_ids():
         counts = merged.set(tid[1]).counts
-        if counts == head.set(tid[1]).counts:
-            continue
         spec = merged.transition(tid)
+        if counts == head.set(tid[1]).counts and spec == head.transition(tid):
+            continue
         folder = transition_key(keys, tid)
         late: list[tuple[ItemKind, str]] = []
         late.extend(("path_row", name) for name in late_rows(spec, counts))
