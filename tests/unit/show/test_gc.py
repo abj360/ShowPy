@@ -20,6 +20,8 @@ Contains:
     test_gc_keeps_a_file_that_changed_after_the_check: keeps a file a writer touched or replaced
     test_regression_gc_never_trusts_an_inode_of_zero: tells a replaced or retimed file from the
         listed one by size and time where the file system reports inode 0
+    test_gc_never_takes_a_file_with_inode_0_for_another_unless_all_else_matches: keeps a file
+        when only one of listing and lookup reports inode 0, or both do and device or ctime differ
     test_regression_gc_keeps_a_file_replaced_with_a_reused_inode: keeps a file replaced by one
         the file system gave the freed inode, which differs in size, mtime or ctime only
     test_regression_gc_keeps_a_file_replaced_with_a_reused_inode_as_it_moves: keeps such a file
@@ -320,6 +322,45 @@ def test_regression_gc_never_trusts_an_inode_of_zero(
     assert gc_module._is_unchanged(stray, listed, cutoff) is True
     change(stray)
     assert gc_module._is_unchanged(stray, listed, cutoff) is False
+
+
+def _with_other_ctime(info: os.stat_result) -> os.stat_result:
+    return with_stat(with_zero_inode(info), st_ctime_ns=info.st_ctime_ns + 1)
+
+
+def _with_other_device(info: os.stat_result) -> os.stat_result:
+    return with_stat(with_zero_inode(info), st_dev=info.st_dev + 1)
+
+
+@pytest.mark.parametrize(
+    ("listing", "lookup"),
+    [
+        (with_zero_inode, lambda info: info),
+        (lambda info: info, with_zero_inode),
+        (with_zero_inode, _with_other_ctime),
+        (with_zero_inode, _with_other_device),
+    ],
+    ids=["listing_zero", "lookup_zero", "both_zero_other_ctime", "both_zero_other_device"],
+)
+def test_gc_never_takes_a_file_with_inode_0_for_another_unless_all_else_matches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    listing: Callable[[os.stat_result], os.stat_result],
+    lookup: Callable[[os.stat_result], os.stat_result],
+) -> None:
+    """An inode of 0 on one side only never matches; on both, device, size and times must."""
+    stray = tmp_path / "stray"
+    stray.write_bytes(b"{}")
+    _age(stray, OLD)
+    listed = Leftover(stray, listing(os.lstat(stray)))
+    real = durable_reads.lstat_info
+
+    def looked_up(show_id: str, path: Path) -> os.stat_result | None:
+        info = real(show_id, path)
+        return None if info is None else lookup(info)
+
+    monkeypatch.setattr(gc_module, "lstat_info", looked_up)
+    assert gc_module._is_unchanged(stray, listed, AT - DAY) is False
 
 
 def _as_written(_listed: os.stat_result) -> dict[str, int]:
