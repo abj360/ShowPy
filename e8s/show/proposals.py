@@ -13,7 +13,7 @@ Contains:
     withdraw(): closes an open proposal its author takes back
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Final
 
@@ -21,8 +21,9 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
 from e8s.core.ids import SetId, TransitionId
 from e8s.core.strict_json import parse_strict_json
+from e8s.core.types import JsonAny
 from e8s.core.util import close_matches
-from e8s.show.change_models import ItemKey, ItemKind, MergeConflict, MergeResult
+from e8s.show.change_models import ItemChange, ItemKey, ItemKind, MergeConflict, MergeResult
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import ChangeOp, CountsOp, Proposal, ProposalPreview
 from e8s.show.document_paths import SEGMENT_PATTERN
@@ -184,30 +185,63 @@ def _rescaled_transitions(base: Show, change: Sequence[ChangeOp]) -> list[Transi
     ]
 
 
+def _set_start(show: Show, set_id: str) -> float:
+    return sum(s.counts for s in show.sets[: show.set_index(set_id)])
+
+
+def _ends_after(override: JsonAny, start: float) -> bool:
+    if not isinstance(override, Mapping):
+        return False
+    end = override.get("end")
+    return isinstance(end, int | float) and end > start
+
+
+def _shifts_overrides(value: JsonAny, start: float) -> bool:
+    """Tells whether a stored override list holds one ending after `start`; a rescale moves it."""
+    return isinstance(value, Sequence) and any(_ends_after(o, start) for o in value)
+
+
+def _after(rescaled: Mapping[object, ItemChange], row: ItemChange) -> JsonAny:
+    found = rescaled.get(row.key.sort_key())
+    return row.before if found is None else found.after
+
+
 def _rescale_conflicts(
     base: Show, head: Show, theirs: Show, change: Sequence[ChangeOp]
 ) -> list[MergeConflict]:
-    """Lists rows of a rescaled transition the head changed, even to the value the rescale gives.
+    """Lists items the head changed that a rescale times against the base's counts.
 
-    A rescale derives every row's times from the base's counts, so a row the head added, removed
-    or edited is timed against counts the rescale replaces; equal values do not make them agree.
+    A rescale derives every row and route time of the transition, and the count of every facing
+    override after the set, from the base's counts. Such an item the head added, removed or
+    edited is timed against counts the rescale replaces; an equal value is no agreement.
     """
     tids = _rescaled_transitions(base, change)
     if not tids:
         return []
     keys = set_keys_by_id(base)
     folders = {transition_key(keys, tid) for tid in tids}
-    rescaled = {c.key: c for c in changes(base, theirs).changes}
+    first_start = min(_set_start(base, tid[1]) for tid in tids)
+    rescaled = {c.key.sort_key(): c for c in changes(base, theirs).changes}
+
+    def is_retimed(row: ItemChange) -> bool:
+        if row.key.kind in ("path_row", "route"):
+            return row.key.path[0] in folders
+        return row.key.kind == "facing_override" and (
+            _shifts_overrides(row.before, first_start) or _shifts_overrides(row.after, first_start)
+        )
+
     return [
         MergeConflict(
             key=row.key,
             base=row.before,
             ours=row.after,
-            theirs=rescaled[row.key].after if row.key in rescaled else row.before,
-            reason="the head's row is timed against the base's counts, which the rescale replaces",
+            theirs=rescaled[row.key.sort_key()].after
+            if row.key.sort_key() in rescaled
+            else row.before,
+            reason="the head's item is timed against the base's counts, which the rescale replaces",
         )
         for row in changes(base, head).changes
-        if row.key.kind == "path_row" and row.key.path[0] in folders
+        if is_retimed(row)
     ]
 
 
