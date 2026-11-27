@@ -60,8 +60,8 @@ TARGET_HINT = (
 )
 
 DOTS_HINT = (
-    "spell the target without `..` or `.` below folders that do not exist yet, or create those "
-    "folders first"
+    "spell the target without `..` below folders that do not exist yet, or create those folders "
+    "first"
 )
 
 
@@ -83,13 +83,13 @@ def _require_layout_1(source: Path) -> None:
 
 
 def _require_plain_tail(target: Path, ancestor: Path, tail: tuple[str, ...]) -> None:
-    """Refuses `..` or `.` below the deepest existing folder, and a dangling symlink there.
+    """Refuses `..` below the deepest existing folder, and a dangling symlink there.
 
     Creating the missing folders would let the file system follow such a name anywhere, the
     source included, so the target is refused before anything is written.
     """
-    if any(name in {".", ".."} for name in tail):
-        message = f"upgrade target {target} names `..` or `.` below a folder that does not exist"
+    if ".." in tail:
+        message = f"upgrade target {target} names `..` below a folder that does not exist"
         raise _bad_folder(message, DOTS_HINT, target)
     if tail and lstat_info("", ancestor / tail[0]) is not None:
         raise _not_a_folder(target, ancestor / tail[0])
@@ -375,8 +375,8 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     Args:
         source: Root of a repository written before v0.5.0.
         target: New folder for the layout-2 root; it must not exist yet, or be empty, and must
-            not be inside the source under any spelling. `..` and `.` may follow only folders
-            that exist, since the folders the upgrade creates must not lead anywhere else.
+            not be inside the source under any spelling. `..` may follow only folders that
+            exist, since the folders the upgrade creates must not lead anywhere else.
 
     Returns:
         report: For each show, the revisions copied, the blobs linked and copied, the files

@@ -8,13 +8,14 @@ Contains:
         inside the source named with another case, another Unicode normalization, a symlink or
         `..`, and the source itself, changing nothing under the source
     test_regression_dotdot_below_a_missing_folder_never_reaches_the_source: refuses a target
-        that spells `..` or `.` below a folder that does not exist yet, writing nothing anywhere
+        that spells `..` below a folder that does not exist yet, writing nothing anywhere
     test_dotdot_below_a_missing_folder_is_refused_outside_the_source_too: refuses such a target
         where the file system follows `..`, even when it would land outside the source
     test_a_symlink_to_nothing_in_the_target_is_refused: refuses a target through a dangling
         symlink before anything is written
     test_a_new_nested_target_outside_the_source_is_upgraded: upgrades into fresh nested folders,
         and through `..` under folders that exist
+    test_a_dot_below_a_missing_folder_is_dropped: upgrades `x/./y` with `x` missing into `x/y`
 """
 
 import shutil
@@ -161,3 +162,10 @@ def test_a_new_nested_target_outside_the_source_is_upgraded(
     assert [show.show for show in report.shows] == [LEGACY_SHOW]
     assert FileRepository(target).head(LEGACY_SHOW)
     assert fingerprint(source) == before
+
+
+def test_a_dot_below_a_missing_folder_is_dropped(tmp_path: Path) -> None:
+    source = _source_in(tmp_path)
+    upgrade_repository(source, tmp_path / "x" / "." / "y")
+    assert _names_in(tmp_path / "x") == ["y"]
+    assert FileRepository(tmp_path / "x" / "y").head(LEGACY_SHOW)

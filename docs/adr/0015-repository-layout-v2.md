@@ -627,3 +627,5 @@ of truth, and this addendum records where it departs from the text above.
   through a symlink to nothing, is refused by its spelling (`StorageError`, code `BAD_PATH`)
   before anything is written, even where it would land outside the source: creating the missing
   folders would let the file system follow `..` into the source.
+- **Correction 2026-11-27, decision 15.** Only `..` is refused below a missing folder. A `.`
+  never reaches the check: `x/./y` names `x/y`, and the upgrade creates and writes `x/y`.
