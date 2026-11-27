@@ -44,7 +44,6 @@ WARNING: Level = "warning"
 FORMS_ROLE = "forms"
 DRILL_ROLE = "drill"
 MAX_NAMED_UNFLAGGED = 5
-PIN_KIND = "pin"
 
 
 def make_issue(
@@ -84,6 +83,10 @@ def _item(key: ItemKey, **extra: JsonValue) -> dict[str, JsonValue]:
 
 def _form_item(key: str) -> ItemKey:
     return ItemKey(kind="form", path=(key,))
+
+
+def _pin_item(path: tuple[str, ...]) -> ItemKey:
+    return ItemKey(kind="pin", path=path)
 
 
 def _unknown_set(key: str, form: Form) -> ValidationIssue:
@@ -220,7 +223,7 @@ def _unresolved_pin(record: Pin, item: ItemKey, code: ErrorCode, hint: str) -> V
 
 
 def _bad_transition_pin(record: Pin) -> ValidationIssue:
-    item = ItemKey(kind=PIN_KIND, path=(record.target, record.id))
+    item = _pin_item((record.target, record.id))
     return make_issue(
         ERROR,
         ErrorCode.BAD_TRANSITION,
@@ -284,7 +287,7 @@ def _pin_issues(show: Show, record: Pin, scope: _PinScope) -> Iterator[Validatio
     if record.target == "transition" and not _parses(record.id):
         yield _bad_transition_pin(record)
         return
-    item = ItemKey(kind=PIN_KIND, path=pin_path(scope.keys, record))
+    item = _pin_item(pin_path(scope.keys, record))
     if not _pin_exists(show, record, scope):
         yield _unresolved_pin(record, item, ErrorCode.UNKNOWN_PIN, "unpin it or restore the item")
         return
