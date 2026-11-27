@@ -12,12 +12,16 @@ Contains:
         in the same order, as the whole-show derivation over random edits of every kind
     test_events_since_reads_comment_only_and_reverted_revisions_like_whole_shows: gives the same
         events for comment-only revisions and a revert
+    test_events_since_refuses_a_revision_whose_changed_document_is_refused: raises the error a
+        whole-show decode raises for a revision that changed a refused document
 """
 
 import itertools
+import json
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
@@ -25,19 +29,24 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.choreo.recipe_models import LineRecipe
+from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.geo.shapes import line
 from e8s.show.anchors import Anchor
 from e8s.show.change_models import ItemChange
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import Comment, CountsOp, FormOp, PathsOp, PlacementOp
-from e8s.show.documents import dump_json, is_show_doc
+from e8s.show.document_paths import forms_doc, role_docs
+from e8s.show.document_repository import revision_id
+from e8s.show.documents import SHEET_DOC, dump_json, is_show_doc
 from e8s.show.events import events_since
 from e8s.show.history import revert
-from e8s.show.integrity import changed_paths
+from e8s.show.history_models import Revision
+from e8s.show.integrity import blob_digest, changed_paths
 from e8s.show.item_table import TIMING, set_keys_by_id, transition_key
 from e8s.show.items import changes
 from e8s.show.manage import add_set, insert_subset, remove_set
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.pinning import pin, unpin
 from e8s.show.renumber import renumber
@@ -297,3 +306,63 @@ def test_events_since_reads_comment_only_and_reverted_revisions_like_whole_shows
     assert _derived(agent, base) == _reference(open_workspace(repo, agent.show_id), base)
     pairs = itertools.pairwise(agent.repo.revisions(agent.show_id))
     assert all(later.parent == earlier.id for earlier, later in pairs)
+
+
+def _commit_raw(
+    repo: InMemoryRepository, ws: Workspace, docs: Mapping[str, bytes], at: datetime
+) -> str:
+    """Stores documents as a new head through the backend, which runs no show check."""
+    parent = repo.head(ws.show_id)
+    tree = {path: blob_digest(raw) for path, raw in docs.items()}
+    record = Revision(
+        id=revision_id(parent, at, tree),
+        parent=parent,
+        at=at,
+        changed=tuple(changed_paths(ws.tree_at(parent), docs)),
+    )
+    blobs = {blob_digest(raw): raw for raw in docs.values()}
+    repo.backend.commit(ws.show_id, record, tree, blobs)
+    return record.id
+
+
+def _with_json(docs: dict[str, bytes], path: str, change: Callable[[object], object]) -> None:
+    docs[path] = dump_json(change(json.loads(docs[path])))
+
+
+def _with_x(x: object) -> Callable[[object], object]:
+    def moved(rows: object) -> object:
+        assert isinstance(rows, dict)
+        return {**rows, "T1": {**rows["T1"], "x": x}}
+
+    return moved
+
+
+def _refused(docs: dict[str, bytes], name: str) -> None:
+    if name == "bad drill row":
+        _with_json(docs, role_docs("2")[0], _with_x("a"))
+    elif name == "form of another set":
+        docs[forms_doc("2")] = dump_json([FORM.replace(set=SetId("1")).to_json()])
+    elif name == "bad sheet":
+        docs[SHEET_DOC] = b'{"unexpected": 1}'
+    else:
+        _with_json(docs, role_docs("3")[0], _with_x(-9.0))
+
+
+@pytest.mark.parametrize(
+    "name", ["bad drill row", "form of another set", "bad sheet", "stray cast document"]
+)
+def test_events_since_refuses_a_revision_whose_changed_document_is_refused(name: str) -> None:
+    repo, agent, designer = open_session(_base(), AT)
+    base = designer.revision
+    save_show(designer, _edit(load_show(designer), "move", 1), AT + STEP)
+    docs = dict(designer.tree_at(designer.repo.head(designer.show_id)))
+    if name == "stray cast document":
+        _commit_raw(repo, designer, {**docs, "/cast/extra.json": b"{}"}, AT + 2 * STEP)
+        docs["/cast/extra.json"] = b"{}"
+    _refused(docs, name)
+    head = _commit_raw(repo, designer, docs, AT + 3 * STEP)
+    with pytest.raises(SchemaError) as whole:
+        open_workspace(repo, agent.show_id).show_at(head)
+    with pytest.raises(SchemaError) as alone:
+        events_since(agent, base)
+    assert alone.value.message == whole.value.message
