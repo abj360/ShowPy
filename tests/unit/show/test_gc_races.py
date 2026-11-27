@@ -33,7 +33,9 @@ Contains:
         reports them as needing an operator
     test_gc_keeps_a_temp_file_touched_after_the_check: keeps a temp file a writer touched
     test_move_new_renames_where_links_fail: moves by rename without replacing, where the file
-        system refuses hard links, and raises other link failures
+        system refuses hard links (EINVAL included), and raises other link failures
+    test_move_new_reports_a_name_taken_during_its_rename: answers False when the rename finds the
+        name taken
 """
 
 import errno
@@ -461,9 +463,14 @@ def test_gc_keeps_a_temp_file_touched_after_the_check(
     assert temp.exists()
 
 
-def test_move_new_renames_where_links_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("refusal", [errno.EXDEV, errno.EPERM, errno.ENOTSUP, errno.EINVAL])
+def test_move_new_renames_where_links_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusal: int
+) -> None:
+    """EINVAL is how exFAT and some FAT drivers refuse a hard link."""
+
     def refused(*_args: object) -> None:
-        raise OSError(errno.EXDEV, "cross-device link")
+        raise OSError(refusal, "link refused")
 
     monkeypatch.setattr(os, "link", refused)
     source, target = tmp_path / "a", tmp_path / "b"
@@ -482,3 +489,22 @@ def test_move_new_renames_where_links_fail(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(os, "link", failing)
     with pytest.raises(OSError, match="drive failed"):
         durable_io.move_new(source, tmp_path / "d")
+
+
+def test_move_new_reports_a_name_taken_during_its_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows refuses a rename onto an existing name, as when a writer took it meanwhile."""
+
+    def refused(*_args: object) -> None:
+        raise OSError(errno.EXDEV, "link refused")
+
+    def taken(*_args: object) -> None:
+        raise FileExistsError(errno.EEXIST, "name taken")
+
+    monkeypatch.setattr(os, "link", refused)
+    monkeypatch.setattr(os, "rename", taken)
+    source = tmp_path / "a"
+    source.write_bytes(b"x")
+    assert durable_io.move_new(source, tmp_path / "b") is False
+    assert source.read_bytes() == b"x"

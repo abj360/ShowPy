@@ -8,6 +8,7 @@ can stop a commit after any one of them. Every read goes through the capped, no-
 Contains:
     TEMP_PREFIX: starts the name of every temp file a commit writes
     NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
+    MOVE_FALLBACK_ERRNOS: lists the link refusals after which a move renames instead
     WINDOWS_INVALID_NAME: names the Windows error code for an unusable path component
     COMPONENT_MAX_CHARS: caps the length of one path component on NTFS
     mapped_io(): turns an OSError raised inside a block into a StorageError with a code and hint
@@ -50,6 +51,10 @@ from e8s.core.errors import StorageError
 
 TEMP_PREFIX = ".tmp-"
 NO_HARDLINK_ERRNOS = frozenset({errno.EPERM, errno.EXDEV, errno.ENOTSUP})
+# exFAT and some FAT drivers refuse a hard link with EINVAL. A move falls back to a rename on it,
+# which fails the same way if the name itself is bad; a commit's link probe does not, so an
+# EINVAL there still surfaces instead of switching every later commit to in-place writes.
+MOVE_FALLBACK_ERRNOS = NO_HARDLINK_ERRNOS | {errno.EINVAL}
 # Windows has no ENAMETOOLONG for a component over 255 characters: with long paths enabled it
 # raises ERROR_INVALID_NAME (errno EINVAL), which also covers bad characters, so the length
 # decides. NTFS caps one component at 255 UTF-16 units.
@@ -327,11 +332,14 @@ def freshen(path: Path) -> bool:
 
 
 def move_new(source: Path, target: Path) -> bool:
-    """Moves a file to a name no file has, never replacing one, keeping its inode and times.
+    """Moves a file to a name no file has, keeping its inode and times.
 
-    Where the file system can hard-link, the file is linked under the new name and the old name
-    removed, so at every moment one name or both point at it. Elsewhere it is renamed once a
-    lookup finds the new name free.
+    Where the file system can hard-link, the file is linked under the new name, which never
+    replaces a file, and the old name is then removed; at every moment one name or both point
+    at it. Where the link is refused (MOVE_FALLBACK_ERRNOS), it is renamed once a lookup finds
+    the new name free. On POSIX a file a writer places under that name between the lookup and
+    the rename is replaced, which loses nothing where a name fixes its bytes, as it does for
+    blobs and records. Windows refuses the rename onto a taken name, and the file stays.
 
     Args:
         source: The file; one already gone is not moved.
@@ -352,13 +360,13 @@ def move_new(source: Path, target: Path) -> bool:
     except (FileExistsError, FileNotFoundError):
         return False
     except OSError as error:
-        if error.errno not in NO_HARDLINK_ERRNOS:
+        if error.errno not in MOVE_FALLBACK_ERRNOS:
             raise
         if os.path.lexists(target):
             return False
         try:
             source.rename(target)
-        except FileNotFoundError:
+        except (FileExistsError, FileNotFoundError):
             return False
         return True
     remove_file(source)
