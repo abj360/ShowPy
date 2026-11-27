@@ -7,8 +7,11 @@ Contains:
     test_commit_flushes_each_file_and_directory_before_its_slot: flushes blobs, record and their
         directories before the slot, which gets a full flush
     test_directory_flush_is_skipped_on_windows: opens no directory on Windows
-    test_macos_flushes_with_a_barrier_and_the_commit_point_with_a_full_flush: picks the fcntl
-        command per file on macOS
+    test_directory_flush_syncs_an_opened_directory: syncs the descriptor of the
+        directory it opens
+    test_macos_flushes_files_and_directories_with_a_barrier_and_the_slot_directory_fully: picks
+        the fcntl command per flush on macOS
+    test_full_flush_command_is_the_one_the_os_defines: matches F_FULLFSYNC to the fcntl module
     test_other_systems_flush_every_file_with_fsync: calls fsync for blobs, records and slots
 """
 
@@ -32,6 +35,7 @@ FILE_ENTRY = "file"
 LINK_ENTRY = "link"
 DIRECTORY_ENTRY = "dir"
 BARRIER_FSYNC = 85
+COMMIT_POINT = "commit point"
 
 
 def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
@@ -41,22 +45,22 @@ def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, by
     return revision, tree, {digest(data): data}
 
 
-def _record_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str | bool]]:
-    calls: list[tuple[str, str | bool]] = []
+def _record_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
+    calls: list[tuple[str, ...]] = []
     real_flush_file, real_flush_directory = durable_io.flush_file, durable_io.flush_directory
     real_link_new = durable_io.link_new
 
-    def recording_flush_file(descriptor: int, *, is_commit_point: bool) -> None:
-        calls.append((FILE_ENTRY, is_commit_point))
-        real_flush_file(descriptor, is_commit_point=is_commit_point)
+    def recording_flush_file(descriptor: int) -> None:
+        calls.append((FILE_ENTRY,))
+        real_flush_file(descriptor)
 
     def recording_link_new(source: Path, target: Path) -> bool:
         calls.append((LINK_ENTRY, target.parent.name))
         return real_link_new(source, target)
 
-    def recording_flush_directory(path: Path) -> None:
-        calls.append((DIRECTORY_ENTRY, path.name))
-        real_flush_directory(path)
+    def recording_flush_directory(path: Path, *, is_commit_point: bool = False) -> None:
+        calls.append((DIRECTORY_ENTRY, path.name, COMMIT_POINT if is_commit_point else ""))
+        real_flush_directory(path, is_commit_point=is_commit_point)
 
     monkeypatch.setattr(durable_io, "flush_file", recording_flush_file)
     monkeypatch.setattr(durable_io, "link_new", recording_link_new)
@@ -74,15 +78,15 @@ def test_commit_flushes_each_file_and_directory_before_its_slot(
     second, second_tree, second_blobs = _change(first.id, 2)
     backend.commit(SHOW_ID, second, second_tree, second_blobs)
     assert calls == [
-        (FILE_ENTRY, False),
+        (FILE_ENTRY,),
         (LINK_ENTRY, "objects"),
-        (FILE_ENTRY, False),
+        (FILE_ENTRY,),
         (LINK_ENTRY, "records"),
-        (DIRECTORY_ENTRY, "objects"),
-        (DIRECTORY_ENTRY, "records"),
-        (FILE_ENTRY, True),
+        (DIRECTORY_ENTRY, "objects", ""),
+        (DIRECTORY_ENTRY, "records", ""),
+        (FILE_ENTRY,),
         (LINK_ENTRY, "log"),
-        (DIRECTORY_ENTRY, "log"),
+        (DIRECTORY_ENTRY, "log", COMMIT_POINT),
     ]
 
 
@@ -97,32 +101,49 @@ def test_directory_flush_is_skipped_on_windows(
     flush_directory(tmp_path)
 
 
-def test_directory_flush_syncs_an_existing_directory(
+def test_directory_flush_syncs_an_opened_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    opened: list[tuple[Path, int]] = []
     synced: list[int] = []
     monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
     monkeypatch.setattr(durable_io, "IS_MACOS", False)
+
+    def fake_open(path: Path, flags: int) -> int:
+        opened.append((path, flags))
+        return 99
+
+    monkeypatch.setattr(os, "open", fake_open)
     monkeypatch.setattr(os, "fsync", synced.append)
+    monkeypatch.setattr(os, "close", lambda _descriptor: None)
     flush_directory(tmp_path)
-    assert len(synced) == 1
+    assert synced == [99]
+    assert opened[0][0] == tmp_path
 
 
-def test_macos_flushes_with_a_barrier_and_the_commit_point_with_a_full_flush(
-    monkeypatch: pytest.MonkeyPatch,
+def test_macos_flushes_files_and_directories_with_a_barrier_and_the_slot_directory_fully(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     commands: list[int] = []
     monkeypatch.setattr(durable_io, "IS_MACOS", True)
+    monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
     monkeypatch.setattr(durable_io, "fcntl_flush", lambda _fd, command: commands.append(command))
-    flush_file(0, is_commit_point=False)
-    flush_file(0, is_commit_point=True)
-    assert commands == [BARRIER_FSYNC, durable_io.F_FULLFSYNC]
+    flush_file(0)
+    flush_directory(tmp_path)
+    flush_directory(tmp_path, is_commit_point=True)
+    assert commands == [BARRIER_FSYNC, BARRIER_FSYNC, durable_io.F_FULLFSYNC]
+
+
+def test_full_flush_command_is_the_one_the_os_defines() -> None:
+    fcntl = pytest.importorskip("fcntl")
+    if not hasattr(fcntl, "F_FULLFSYNC"):
+        pytest.skip("fcntl has no F_FULLFSYNC on this system")
+    assert durable_io.F_FULLFSYNC == fcntl.F_FULLFSYNC
 
 
 def test_other_systems_flush_every_file_with_fsync(monkeypatch: pytest.MonkeyPatch) -> None:
     synced: list[int] = []
     monkeypatch.setattr(durable_io, "IS_MACOS", False)
     monkeypatch.setattr(os, "fsync", synced.append)
-    flush_file(7, is_commit_point=False)
-    flush_file(8, is_commit_point=True)
-    assert synced == [7, 8]
+    flush_file(7)
+    assert synced == [7]

@@ -486,6 +486,6 @@ class FileBackend:
         self._require_no_gap(show_id, seq)
         slot = jcs(revision.to_json()) + b"\n"
         path = self._slot_path(show_id, seq)
-        if not place_file(self.root / TEMP_DIR, show_id, path, slot, is_commit_point=True):
+        if not place_file(self.root / TEMP_DIR, show_id, path, slot):
             raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
-        flush_directories(path.parent)
+        flush_directories(path.parent, is_commit_point=True)

@@ -21,8 +21,8 @@ Contains:
     F_FULLFSYNC: names the macOS fcntl command that flushes the drive's cache
     F_BARRIERFSYNC: names the macOS fcntl command that orders writes without a cache flush
     fcntl_flush(): runs a macOS fcntl flush command on a descriptor
-    flush_file(): flushes a written file, fully when it is the commit point
-    flush_directory(): flushes a folder so its new names survive power loss
+    flush_file(): flushes a written file
+    flush_directory(): flushes a folder so its new names survive, fully for the commit point
     make_folder(): creates a folder and its missing parents
     write_temp(): writes bytes to a new temp file in a folder and returns its path
     link_new(): links a file under a new name, reporting whether the name was free
@@ -206,47 +206,49 @@ def fcntl_flush(descriptor: int, command: int) -> None:
     fcntl.fcntl(descriptor, command)
 
 
-def flush_file(descriptor: int, *, is_commit_point: bool) -> None:
-    """Flushes a written file to the drive.
+def flush_file(descriptor: int) -> None:
+    """Flushes a written file to the drive, ordered before every later write.
 
-    On macOS `fsync` does not order writes on the drive, so a file gets a barrier flush, and the
-    file whose landing makes a commit visible gets a full flush: a commit that returned survives
-    power loss, and nothing a slot names is lost before the slot. Elsewhere `fsync` is enough.
+    On macOS `fsync` does not order writes on the drive, so a file gets a barrier flush.
 
     Args:
         descriptor: Open descriptor of the file.
-        is_commit_point: Whether the file's landing makes the commit visible.
     """
-    if not IS_MACOS:
-        os.fsync(descriptor)
-    elif is_commit_point:
-        fcntl_flush(descriptor, F_FULLFSYNC)
-    else:
+    if IS_MACOS:
         fcntl_flush(descriptor, F_BARRIERFSYNC)
+    else:
+        os.fsync(descriptor)
 
 
-def flush_directory(path: Path) -> None:
+def flush_directory(path: Path, *, is_commit_point: bool = False) -> None:
     """Flushes a folder so the names created in it survive power loss; a no-op on Windows.
+
+    On macOS a folder gets a barrier flush, which orders its entries before every later write.
+    The folder that holds a commit's slot gets a full flush instead: once it returns, the slot's
+    name and everything the slot names are on the drive.
 
     Args:
         path: Existing folder.
+        is_commit_point: Whether the folder's new entry makes a commit visible.
     """
     if IS_WINDOWS:
         return
     descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     try:
-        os.fsync(descriptor)
+        if not IS_MACOS:
+            os.fsync(descriptor)
+        else:
+            fcntl_flush(descriptor, F_FULLFSYNC if is_commit_point else F_BARRIERFSYNC)
     finally:
         os.close(descriptor)
 
 
-def write_temp(folder: Path, data: bytes, *, is_commit_point: bool = False) -> Path:
+def write_temp(folder: Path, data: bytes) -> Path:
     """Writes bytes to a new temp file in a folder and flushes them to the drive.
 
     Args:
         folder: Folder that holds the temp file; it must exist.
         data: Bytes to write.
-        is_commit_point: Whether the file's landing makes a commit visible (a full flush).
 
     Returns:
         temp: Path of the written file; the caller links or removes it.
@@ -260,7 +262,7 @@ def write_temp(folder: Path, data: bytes, *, is_commit_point: bool = False) -> P
         try:
             handle.write(data)
             handle.flush()
-            flush_file(handle.fileno(), is_commit_point=is_commit_point)
+            flush_file(handle.fileno())
         except OSError:
             handle.close()
             Path(handle.name).unlink(missing_ok=True)
