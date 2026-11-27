@@ -20,6 +20,7 @@ from e8s.show.backend import conflict_error, unknown_revision_error
 from e8s.show.backend_checks import Record, corrupt, require_caller_ids
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
+    is_redirect,
     link_new,
     lstat_mode,
     make_folder,
@@ -140,14 +141,32 @@ class FileBackend:
         return listed, legacy_before
 
     def _check_manifest(self, show_id: str) -> None:
-        """Checks once per backend that the show's manifest, when present, names this show."""
+        """Checks once per backend that no folder is a link and the manifest names this show."""
+        if show_id in self._manifests:
+            return
+        self._require_plain_folders(show_id)
         folder = self._folder(show_id)
-        if show_id in self._manifests or lstat_mode(show_id, folder / MANIFEST_FILE) is None:
+        if lstat_mode(show_id, folder / MANIFEST_FILE) is None:
             return
         listed, legacy_before = self._manifest(show_id, folder)
         if listed != show_id:
             raise corrupt(show_id, folder / MANIFEST_FILE, "manifest names another show")
         self._manifests[show_id] = legacy_before
+
+    def _require_plain_folders(self, show_id: str) -> None:
+        """Refuses a symlink or junction in place of any folder a read or write passes through."""
+        folder = self._folder(show_id)
+        for path in (
+            self.root / SHOWS_DIR,
+            folder,
+            folder / LOG_DIR,
+            folder / RECORD_DIR,
+            folder / OBJECT_DIR,
+            self.root / TEMP_DIR,
+        ):
+            mode = lstat_mode(show_id, path)
+            if mode is not None and is_redirect(path, mode):
+                raise corrupt(show_id, path, "folder is a symbolic link or junction")
 
     def shows(self) -> list[str]:
         """Returns the IDs of shows with at least one slot, read from their manifests."""
@@ -357,6 +376,7 @@ class FileBackend:
         Raises ConflictError, listing what landed, when the parent is no longer the head.
         """
         with mapped_io(show_id, self._folder(show_id)):
+            self._require_plain_folders(show_id)
             require_caller_ids(show_id, revision, tree, blobs)
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1

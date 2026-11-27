@@ -54,6 +54,10 @@ Contains:
         when the manifest names no legacy slots
     test_manifest_legacy_before_must_be_a_positive_integer: refuses a manifest whose legacy_before
         is not a positive integer
+    test_regression_symlinked_show_folder_is_refused: refuses a symlinked shows, show, log or tmp
+        folder for reads and writes, leaving the target untouched
+    test_regression_junction_under_the_root_is_refused: refuses a junction in place of the show
+        folder (Windows only)
     test_every_read_error_names_the_show: carries the real show ID in every read error
     test_regression_shows_errors_never_carry_an_empty_show: leaves out the show key when a folder
         is unreadable before its show is known
@@ -97,6 +101,9 @@ COLD_REVISIONS = 1000
 COLD_LOOKUPS_MAX = 22
 # The cold head checks the show's manifest once: one lookup, then one read that looks it up.
 MANIFEST_LOOKUPS = 2
+# The first read also checks that shows/, the show folder, log/, records/, objects/ and tmp/ are
+# real folders.
+FOLDER_LOOKUPS = 6
 RACERS = 8
 RACE_TRIALS = 200
 RACE_TIMEOUT_S = 120.0
@@ -224,7 +231,7 @@ def test_cold_head_needs_at_most_22_lookups_at_1000_revisions(
     recorder = _LstatRecorder(monkeypatch)
     assert FileBackend(tmp_path).head(SHOW_ID) == landed[-1].id
     assert len(recorder.slots()) <= COLD_LOOKUPS_MAX
-    assert len(recorder.paths) <= COLD_LOOKUPS_MAX + MANIFEST_LOOKUPS
+    assert len(recorder.paths) <= COLD_LOOKUPS_MAX + MANIFEST_LOOKUPS + FOLDER_LOOKUPS
     assert recorder.slots()[-1] == COLD_REVISIONS
 
 
@@ -654,6 +661,80 @@ def test_manifest_legacy_before_must_be_a_positive_integer(
         FileBackend(tmp_path).log(SHOW_ID)
     assert caught.value.code == "CORRUPT"
     assert caught.value.context["file"] == "show.json"
+
+
+def _outside_folder(tmp_path: Path) -> Path:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    return outside
+
+
+def _symlink_shows(root: Path, outside: Path) -> None:
+    (root / "shows").rename(outside / "shows")
+    (root / "shows").symlink_to(outside / "shows", target_is_directory=True)
+
+
+def _symlink_show_folder(root: Path, outside: Path) -> None:
+    _folder(root).rename(outside / _folder(root).name)
+    _folder(root).symlink_to(outside / _folder(root).name, target_is_directory=True)
+
+
+def _symlink_log_folder(root: Path, outside: Path) -> None:
+    (_folder(root) / "log").rename(outside / "log")
+    (_folder(root) / "log").symlink_to(outside / "log", target_is_directory=True)
+
+
+def _symlink_tmp_folder(root: Path, outside: Path) -> None:
+    (root / "tmp").rmdir()
+    (root / "tmp").symlink_to(outside, target_is_directory=True)
+
+
+SYMLINKS: dict[str, Callable[[Path, Path], None]] = {
+    "shows": _symlink_shows,
+    "show folder": _symlink_show_folder,
+    "log folder": _symlink_log_folder,
+    "tmp folder": _symlink_tmp_folder,
+}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs privilege on Windows")
+@pytest.mark.parametrize("kind", sorted(SYMLINKS))
+def test_regression_symlinked_show_folder_is_refused(tmp_path: Path, kind: str) -> None:
+    """Refuses to read or write through a symlinked folder, so no write leaves the root."""
+    root = tmp_path / "root"
+    landed = _landed(FileBackend(root), 1)
+    outside = _outside_folder(tmp_path)
+    SYMLINKS[kind](root, outside)
+    before = sorted(str(p) for p in outside.rglob("*"))
+    revision, tree, blobs = _change(landed[0].id, 5)
+    with pytest.raises(StorageError) as written:
+        FileBackend(root).commit(SHOW_ID, revision, tree, blobs)
+    assert written.value.code == "CORRUPT"
+    assert "symbolic link" in written.value.message
+    assert sorted(str(p) for p in outside.rglob("*")) == before
+    if kind != "tmp folder":
+        with pytest.raises(StorageError) as read:
+            FileBackend(root).log(SHOW_ID)
+        assert read.value.code == "CORRUPT"
+        assert read.value.context["show"] == SHOW_ID
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions exist only on Windows")
+def test_regression_junction_under_the_root_is_refused(tmp_path: Path) -> None:
+    if sys.platform != "win32":
+        return
+    import _winapi
+
+    root = tmp_path / "root"
+    landed = _landed(FileBackend(root), 1)
+    outside = _outside_folder(tmp_path)
+    moved = outside / _folder(root).name
+    _folder(root).rename(moved)
+    _winapi.CreateJunction(str(moved), str(_folder(root)))
+    revision, tree, blobs = _change(landed[0].id, 5)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(root).commit(SHOW_ID, revision, tree, blobs)
+    assert caught.value.code == "CORRUPT"
 
 
 def test_every_read_error_names_the_show(tmp_path: Path) -> None:
