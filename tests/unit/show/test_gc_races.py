@@ -23,8 +23,12 @@ Contains:
         set-aside file, then puts it back and removes it when no slot reaches it
     test_gc_puts_back_a_set_aside_file_a_slot_reaches: restores a set-aside blob a tree names
     test_fsck_reports_a_set_aside_name_it_does_not_understand: reports a malformed set-aside name
-    test_gc_leaves_a_set_aside_copy_that_differs_from_its_name: keeps both files when the name
-        holds other bytes, and removes neither
+    test_gc_leaves_a_set_aside_copy_that_differs_from_its_name: reports a set-aside copy whose
+        name holds other bytes as needing an operator, and gc skips the show saying why
+    test_gc_drops_a_set_aside_copy_of_the_file_under_its_name: drops a copy a gc stopped
+        between its link and its unlink left beside the same file
+    test_gc_leaves_both_files_when_a_name_fills_with_other_bytes_while_aside: keeps both and
+        reports them as needing an operator
     test_gc_keeps_a_temp_file_touched_after_the_check: keeps a temp file a writer touched
     test_move_new_renames_where_links_fail: moves by rename without replacing, where the file
         system refuses hard links, and raises other link failures
@@ -58,6 +62,7 @@ STATIC = "/renders/static.txt"
 RENDER = "/renders/render.txt"
 REDO = b"redo me"
 OLD = timedelta(days=2)
+MOVED = "a slot landed while gc ran; run gc again"
 
 
 class _Crash(BaseException):
@@ -263,7 +268,7 @@ def test_regression_gc_stops_on_a_show_whose_head_moves_during_removal(
     report = gc(tmp_path, at=now, confirm=True)
     monkeypatch.undo()
     assert report.removed == ()
-    assert report.skipped == (_folder(tmp_path).relative_to(tmp_path).as_posix(),)
+    assert report.skipped == ((_folder(tmp_path).relative_to(tmp_path).as_posix(), MOVED),)
     assert fsck(tmp_path).findings == ()
     assert FileBackend(tmp_path).log(SHOW_ID) == [first, landing[0]]
 
@@ -287,7 +292,7 @@ def test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside(
     report = gc(tmp_path, at=now, confirm=True)
     monkeypatch.undo()
     assert report.removed == ()
-    assert report.skipped == (_folder(tmp_path).relative_to(tmp_path).as_posix(),)
+    assert report.skipped == ((_folder(tmp_path).relative_to(tmp_path).as_posix(), MOVED),)
     assert blob.read_bytes() == REDO
     assert fsck(tmp_path).findings == ()
     assert FileBackend(tmp_path).log(SHOW_ID) == [first, revision]
@@ -351,11 +356,56 @@ def test_gc_leaves_a_set_aside_copy_that_differs_from_its_name(tmp_path: Path) -
     _, blob = _unreachable_blob(tmp_path, now)
     aside = blob.with_name(".gc-" + blob.name)
     aside.write_bytes(b"other bytes")
-    report = gc(tmp_path, at=now, confirm=True)
-    assert report.removed == ()
+    found = fsck(tmp_path)
+    assert [(f.code, f.path) for f in found.findings] == [
+        ("UNKNOWN_FILE", aside.relative_to(tmp_path).as_posix()),
+        ("UNREACHABLE", blob.relative_to(tmp_path).as_posix()),
+    ]
+    assert "keep" in found.findings[0].message
+    assert "puts it back" not in found.findings[0].message
+    assert not found.ok
+    for _ in range(2):
+        report = gc(tmp_path, at=now, confirm=True)
+        assert report.removed == ()
+        assert report.skipped == (
+            (
+                _folder(tmp_path).relative_to(tmp_path).as_posix(),
+                "fsck finds UNKNOWN_FILE; run fsck(root)",
+            ),
+        )
     assert aside.read_bytes() == b"other bytes"
     assert blob.read_bytes() == REDO
-    assert [f.code for f in fsck(tmp_path).findings] == ["STALE_TEMP", "UNREACHABLE"]
+
+
+def test_gc_drops_a_set_aside_copy_of_the_file_under_its_name(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    _, blob = _unreachable_blob(tmp_path, now)
+    aside = blob.with_name(".gc-" + blob.name)
+    os.link(blob, aside)
+    found = fsck(tmp_path)
+    assert ("STALE_TEMP", "a stopped gc set this copy aside; the next gc drops it") in [
+        (f.code, f.message) for f in found.findings
+    ]
+    report = gc(tmp_path, at=now, confirm=True)
+    assert report.removed == (blob.relative_to(tmp_path).as_posix(),)
+    assert not aside.exists()
+    assert fsck(tmp_path).findings == ()
+
+
+def test_gc_leaves_both_files_when_a_name_fills_with_other_bytes_while_aside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(UTC)
+    _, blob = _unreachable_blob(tmp_path, now)
+    aside = blob.with_name(".gc-" + blob.name)
+    _moved_name_freed(monkeypatch, blob, lambda: blob.write_bytes(b"other bytes"))
+    report = gc(tmp_path, at=now, confirm=True)
+    monkeypatch.undo()
+    assert report.removed == ()
+    assert aside.read_bytes() == REDO
+    assert blob.read_bytes() == b"other bytes"
+    codes = {(f.code, f.path) for f in fsck(tmp_path).findings}
+    assert ("UNKNOWN_FILE", aside.relative_to(tmp_path).as_posix()) in codes
 
 
 def test_gc_keeps_a_temp_file_touched_after_the_check(

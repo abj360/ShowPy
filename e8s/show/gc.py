@@ -2,6 +2,8 @@
 gc.py --- removes what no slot of a layout-2 file repository reaches, and stale temp files
 
 Contains:
+    TORN_LAYOUT_REASON: says a show was skipped because the layout file is torn
+    MOVED_REASON: says a show was skipped because a slot landed while gc ran
     gc(): removes unreachable records and blobs and stale temp files, or reports them in a dry run
 """
 
@@ -16,6 +18,7 @@ from e8s.show.durable_reads import has_same_bytes, lstat_info
 from e8s.show.file_backend import LOG_DIR, SLOT_DIGITS
 from e8s.show.fsck import require_zoned
 from e8s.show.fsck_findings import (
+    FAILING_CODES,
     SET_ASIDE_PREFIX,
     TORN_FILE,
     Leftover,
@@ -24,6 +27,9 @@ from e8s.show.fsck_findings import (
 )
 from e8s.show.fsck_scan import RepositoryScan, scan_repository
 from e8s.show.storage_models import GcReport
+
+TORN_LAYOUT_REASON = "layout.json is torn; run fsck(root)"
+MOVED_REASON = "a slot landed while gc ran; run gc again"
 
 
 def _is_old(leftover: Leftover, cutoff: datetime) -> bool:
@@ -112,14 +118,22 @@ def _put_back_set_aside(scan: RepositoryScan) -> bool:
 
 
 def _report(
-    root: Path, leftovers: list[Leftover], skipped: list[Path], *, dry_run: bool
+    root: Path, leftovers: list[Leftover], skipped: list[tuple[Path, str]], *, dry_run: bool
 ) -> GcReport:
     return GcReport(
         removed=tuple(sorted(relative_path(root, item.path) for item in leftovers)),
         bytes_freed=sum(item.info.st_size for item in leftovers),
         dry_run=dry_run,
-        skipped=tuple(sorted(relative_path(root, folder) for folder in skipped)),
+        skipped=tuple(sorted((relative_path(root, folder), why) for folder, why in skipped)),
     )
+
+
+def _why_skipped(show: ShowScan, *, is_sound: bool) -> str:
+    """Says why a show is left untouched: a torn layout file, or the codes that fail it."""
+    if not is_sound:
+        return TORN_LAYOUT_REASON
+    codes = sorted({item.code for item in show.findings if item.code in FAILING_CODES})
+    return f"fsck finds {', '.join(codes)}; run fsck(root)"
 
 
 def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
@@ -147,8 +161,8 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
         confirm: Whether to remove the files; without it gc only reports what it would remove.
 
     Returns:
-        report: The paths removed (or that would be), the bytes they held, and the show folders
-            skipped.
+        report: The paths removed (or that would be), the bytes they held, and each show folder
+            skipped with the reason.
 
     Raises:
         VersionError: The root holds layout 1, or a newer layout than this release reads.
@@ -175,7 +189,11 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
             scan = scan_repository(root, None, at)
         is_sound = not any(item.code == TORN_FILE for item in scan.findings)
         healthy = [show for show in scan.shows if is_sound and not show.is_failing]
-        skipped = [show.folder for show in scan.shows if not is_sound or show.is_failing]
+        skipped = [
+            (show.folder, _why_skipped(show, is_sound=is_sound))
+            for show in scan.shows
+            if not is_sound or show.is_failing
+        ]
         candidates = {
             show.folder: [item for item in show.unreachable if _is_old(item, cutoff)]
             for show in healthy
@@ -188,5 +206,5 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
             from_show, has_moved = _removed_unreached(show, candidates[show.folder], cutoff)
             removed.extend(from_show)
             if has_moved:
-                skipped.append(show.folder)
+                skipped.append((show.folder, MOVED_REASON))
         return _report(root, removed, skipped, dry_run=False)

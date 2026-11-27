@@ -49,6 +49,7 @@ SHOW_ID = "show_1"
 OTHER_ID = "other_show"
 LOST_PATH = "/renders/lost.txt"
 TITLES = [two_set_show().title, "second"]
+MOVED = "a slot landed while gc ran; run gc again"
 DAY = timedelta(days=1)
 OLD = 2 * DAY
 SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
@@ -215,7 +216,9 @@ def test_gc_leaves_a_damaged_show_untouched(tmp_path: Path) -> None:
     tree = FileBackend(tmp_path).tree(SHOW_ID, landed[0].id)
     (_folder(tmp_path) / "objects" / min(tree.values())).unlink()
     report = gc(tmp_path, at=AT, confirm=True)
-    assert report.skipped == (_relative(tmp_path, _folder(tmp_path)),)
+    assert report.skipped == (
+        (_relative(tmp_path, _folder(tmp_path)), "fsck finds MISSING_BLOB; run fsck(root)"),
+    )
     assert report.removed == ("tmp/.tmp-crashed",)
     assert all(path.exists() for path in garbage[:-1])
 
@@ -228,7 +231,9 @@ def test_gc_leaves_every_show_when_the_layout_file_is_torn(
     monkeypatch.setattr(time, "sleep", lambda _seconds: None)
     (tmp_path / "layout.json").write_bytes(b'{\n  "format"')
     report = gc(tmp_path, at=AT, confirm=True)
-    assert report.skipped == (_relative(tmp_path, _folder(tmp_path)),)
+    assert report.skipped == (
+        (_relative(tmp_path, _folder(tmp_path)), "layout.json is torn; run fsck(root)"),
+    )
     assert report.removed == ("tmp/.tmp-crashed",)
     assert all(path.exists() for path in garbage[:-1])
 
@@ -250,7 +255,7 @@ def test_gc_skips_a_show_whose_head_moved(tmp_path: Path, monkeypatch: pytest.Mo
 
     monkeypatch.setattr(gc_module, "scan_repository", scan_then_commit)
     report = gc(tmp_path, at=AT, confirm=True)
-    assert report.skipped == (_relative(tmp_path, _folder(tmp_path)),)
+    assert report.skipped == ((_relative(tmp_path, _folder(tmp_path)), MOVED),)
     assert report.removed == ("tmp/.tmp-crashed",)
     assert all(path.exists() for path in garbage[:-1])
 

@@ -600,7 +600,7 @@
       "bytes_freed": "Count",
       "dry_run": "bool",
       "removed": "tuple[str, ...]",
-      "skipped": "tuple[str, ...]"
+      "skipped": "tuple[tuple[str, str], ...]"
     }
   },
   "GeneratedRecipe": {

@@ -33,7 +33,7 @@ from e8s.show.backend_checks import (
     require_blob_digest,
     require_slot_record,
 )
-from e8s.show.durable_reads import listed_entries, lstat_mode, read_capped
+from e8s.show.durable_reads import has_same_bytes, listed_entries, lstat_mode, read_capped
 from e8s.show.file_backend import (
     LOG_DIR,
     LOG_READ_MAX_BYTES,
@@ -72,6 +72,11 @@ SLOT_NAME = re.compile(rf"^[0-9]{{{SLOT_DIGITS}}}$")
 RECORD_NAME = re.compile(r"^([0-9a-f]{64})\.json$")
 BLOB_NAME = re.compile(r"^([0-9a-f]{64})$")
 SHOW_SUBFOLDERS = (LOG_DIR, RECORD_DIR, OBJECT_DIR)
+CONFLICTING_COPY = (
+    "a stopped gc set this aside, and the file now under its name holds other bytes, so gc "
+    "cannot tell which to keep: keep the blob whose bytes hash to its name, or the record that "
+    "holds the revision its slot names, and remove the other by hand"
+)
 
 
 def _applied(
@@ -380,7 +385,14 @@ class _ShowCheck:
         if pattern.fullmatch(origin) is None or not stat.S_ISREG(info.st_mode):
             self.report(UNKNOWN_FILE, path, "is not a set-aside record or blob")
             return
-        self.report(STALE_TEMP, path, "a stopped gc set this aside; the next gc puts it back")
+        named = path.with_name(origin)
+        if lstat_mode(self.show_id, named) is None:
+            self.report(STALE_TEMP, path, "a stopped gc set this aside; the next gc puts it back")
+        elif has_same_bytes(path, named):
+            self.report(STALE_TEMP, path, "a stopped gc set this copy aside; the next gc drops it")
+        else:
+            self.report(UNKNOWN_FILE, path, CONFLICTING_COPY)
+            return
         self.set_aside.append(Leftover(path, info))
 
 
