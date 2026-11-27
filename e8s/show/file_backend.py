@@ -66,8 +66,8 @@ MANIFEST_KEYS = frozenset({"id", "legacy_before"})
 FIRST_SEQ = 1
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
-# A log read holds every slot and record it reads in memory at once; one blob may be this large,
-# so a history may be too, and a larger one is read in pieces with since.
+# A log call reads every slot after `since` and its record. The bytes it reads are capped at the
+# size one blob may have; a longer history is read in pieces with since.
 LOG_READ_MAX_BYTES = BLOB_MAX_BYTES
 # A manifest holds one show ID; stored layout-1 IDs have no length rule, but a folder name of
 # theirs never passed 255 characters. Rounded up.

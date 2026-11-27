@@ -198,7 +198,7 @@ def v1_documents() -> dict[str, bytes]:
 
 
 def _commit_v1(repo: FileRepository, show_id: str, docs: Mapping[str, bytes]) -> str:
-    """Commits v1 documents through the backend, as a v0.3.0 writer stored them."""
+    """Commits v1 documents through the backend, named by the current revision ID scheme."""
     tree = {path: blob_digest(raw) for path, raw in docs.items()}
     revision_id = document_repository.revision_id(ROOT_REVISION, AT, tree)
     revision = Revision(id=revision_id, parent=ROOT_REVISION, at=AT, changed=tuple(sorted(docs)))
