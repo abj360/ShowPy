@@ -44,7 +44,7 @@ from e8s.show.workspace import open_workspace
 from tests.fixtures.layout1 import layout1_documents
 
 AT = datetime(2026, 11, 24, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 CAST_DOC = "/cast/cast.json"
 ORDER_FIELD = "placement_order"
 ROLE_NAMES = ("drill.json", "facing.json", "labels.json")

@@ -28,7 +28,7 @@ from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 
-SHOW_ID = "cached-show"
+SHOW_ID = "cached_show"
 AT = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
 STEP = timedelta(seconds=1)
 SEED = 3

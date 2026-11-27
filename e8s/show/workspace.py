@@ -132,9 +132,9 @@ class Workspace:
         >>> from e8s.examples import two_set_show
         >>> from datetime import datetime, UTC
         >>> repo = InMemoryRepository()
-        >>> _ = repo.put_show("show-1", two_set_show(), expected_revision="",
+        >>> _ = repo.put_show("show_1", two_set_show(), expected_revision="",
         ...                   at=datetime(2026, 11, 11, tzinfo=UTC))
-        >>> open_workspace(repo, "show-1").read("/sets/2/placements.csv").splitlines()[1]
+        >>> open_workspace(repo, "show_1").read("/sets/2/placements.csv").splitlines()[1]
         'T1,0.0,9.0,0.0,,,False,True,'
         """
         split_path(path)

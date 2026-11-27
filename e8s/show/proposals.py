@@ -96,7 +96,7 @@ def propose(
     >>> from e8s.show.show_io import save_show
     >>> from e8s.show.workspace import open_workspace
     >>> now = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> ws = open_workspace(InMemoryRepository(), "show-1")
+    >>> ws = open_workspace(InMemoryRepository(), "show_1")
     >>> _ = save_show(ws, two_set_show(), now)
     >>> propose(ws, [CountsOp(set_id="2", counts=12)], "slower", "p1", now).state
     'open'
@@ -123,7 +123,7 @@ def proposals(ws: Workspace) -> list[Proposal]:
 
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.show.workspace import open_workspace
-    >>> proposals(open_workspace(InMemoryRepository(), "show-1"))
+    >>> proposals(open_workspace(InMemoryRepository(), "show_1"))
     []
     """
     return _stored(ws, ws.revision)
@@ -141,7 +141,7 @@ def get_proposal(ws: Workspace, proposal_id: str) -> Proposal:
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.show.workspace import open_workspace
     >>> try:
-    ...     get_proposal(open_workspace(InMemoryRepository(), "show-1"), "p1")
+    ...     get_proposal(open_workspace(InMemoryRepository(), "show_1"), "p1")
     ... except UnknownRefError as exc:
     ...     print(exc.context["proposal"])
     p1
@@ -342,7 +342,7 @@ def is_stale(ws: Workspace, proposal_id: str) -> bool:
     >>> from e8s.show.workspace import open_workspace
     >>> from datetime import UTC, datetime
     >>> from e8s.show.collab_models import CountsOp
-    >>> ws = open_workspace(InMemoryRepository(), "show-1")
+    >>> ws = open_workspace(InMemoryRepository(), "show_1")
     >>> now = datetime(2026, 1, 1, tzinfo=UTC)
     >>> _ = propose(ws, [CountsOp(set_id="2", counts=12)], "", "p1", now)
     >>> is_stale(ws, "p1")

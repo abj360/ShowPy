@@ -5,6 +5,10 @@ test_history.py --- tests set, path and show diffs, revert, renames and the chan
 
 Contains:
     test_revert_restores_an_earlier_show: reverts to the first of two edits as a new revision
+    test_revert_reads_no_render_blobs: reads no blob of a file both revisions store unchanged
+    test_regression_revert_hint_names_the_stored_path_of_a_derived_table: names the derived
+        table a revision stores and says what is allowed
+    test_revert_report_lists_restored_items: lists every restored, re-added and deleted path
     test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: refuses or repairs a host
         undo (a revert to the parent) that would orphan the agent's path row
     test_regression_undoing_the_first_save_keeps_a_loadable_show: refuses to revert to before the
@@ -36,8 +40,9 @@ from e8s.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from e8s.core.errors import E8sError, UnknownRefError
+from e8s.core.errors import E8sError, LockedError, UnknownRefError
 from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
+from e8s.core.util import content_hash
 from e8s.geo.curves import Segment
 from e8s.show.change_models import ItemKind
 from e8s.show.history import (
@@ -47,6 +52,8 @@ from e8s.show.history import (
     diff_show,
     revert,
 )
+from e8s.show.history_models import Revision
+from e8s.show.integrity import blob_digest
 from e8s.show.items import changes
 from e8s.show.manage import add_set
 from e8s.show.memory_backend import InMemoryRepository
@@ -54,7 +61,7 @@ from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin, unpin
 from e8s.show.show_io import load_show, save_show
 from e8s.show.validate import validate_show
-from e8s.show.workspace import open_workspace
+from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
@@ -169,6 +176,80 @@ def test_revert_restores_every_file() -> None:
     revert(agent, first, AT + 3 * STEP)
     assert agent.read("/config/limits.yaml") == original
     assert "set.py" not in agent.ls("/sets/1")
+
+
+def test_revert_reads_no_render_blobs() -> None:
+    repo, _, ws = open_session(two_set_show(), AT)
+    ws.write("/renders/set-1.png", b"png-bytes", at=AT + STEP)
+    first = ws.revision
+    save_show(ws, _moved(load_show(ws), "T1", 7.0), AT + 2 * STEP)
+    render_digest = blob_digest(b"png-bytes")
+    reads: list[str] = []
+    real_blob = repo.backend.blob
+
+    def counting_blob(show_id: str, digest: str) -> bytes:
+        reads.append(digest)
+        return real_blob(show_id, digest)
+
+    repo.backend.blob = counting_blob  # type: ignore[method-assign]
+    revert(ws, first, AT + 3 * STEP)
+    assert reads
+    assert render_digest not in reads
+
+
+def _plant_derived_table(repo: InMemoryRepository, ws: Workspace, path: str) -> str:
+    raw = b"T1,0.0,5.0\n"
+    old_tree = dict(repo.backend.tree(ws.show_id, ws.revision))
+    planted = Revision(
+        id=content_hash({"planted": path}, domain="test"),
+        parent=ws.revision,
+        at=AT + STEP,
+        changed=(path,),
+    )
+    repo.backend.commit(
+        ws.show_id, planted, {**old_tree, path: blob_digest(raw)}, {blob_digest(raw): raw}
+    )
+    cleaned = Revision(
+        id=content_hash({"cleaned": path}, domain="test"),
+        parent=planted.id,
+        at=AT + 2 * STEP,
+        changed=(path,),
+    )
+    repo.backend.commit(ws.show_id, cleaned, old_tree, {})
+    ws.refresh()
+    return planted.id
+
+
+def test_regression_revert_hint_names_the_stored_path_of_a_derived_table() -> None:
+    """Names the derived table an old revision stores, which revert cannot restore."""
+    path = "/sets/1/placements.csv"
+    repo, _, ws = open_session(two_set_show(), AT)
+    planted = _plant_derived_table(repo, ws, path)
+    head = ws.revision
+    with pytest.raises(LockedError) as raised:
+        revert(ws, planted, AT + 3 * STEP)
+    assert raised.value.code == "READ_ONLY"
+    assert path in raised.value.hint
+    assert planted[:7] in str(raised.value)
+    assert raised.value.context["path"] == path
+    assert "revert" in raised.value.hint
+    assert repo.head(ws.show_id) == head
+
+
+def test_revert_report_lists_restored_items() -> None:
+    _, _, ws = open_session(two_set_show(), AT)
+    ws.write("/renders/set-1.png", b"png", at=AT + STEP)
+    first = ws.revision
+    ws.commit({"/renders/set-1.png": None}, at=AT + 2 * STEP)
+    ws.write("/config/limits.yaml", "max: 1\n", at=AT + 3 * STEP)
+    save_show(ws, _moved(load_show(ws), "T1", 7.0), AT + 4 * STEP)
+    report = revert(ws, first, AT + 5 * STEP)
+    assert report.changed == (
+        "/config/limits.yaml",
+        "/renders/set-1.png",
+        "/sets/2/drill.json",
+    )
+    assert report.parent != first
 
 
 def test_changelog_lines_since_revision() -> None:

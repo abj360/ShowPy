@@ -15,10 +15,11 @@ from datetime import datetime
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
+    SchemaError,
     StorageError,
     UnknownRefError,
 )
-from e8s.core.ids import WINDOWS_DEVICE_NAMES, is_device_name
+from e8s.core.ids import WINDOWS_DEVICE_NAMES, check_id, is_device_name
 from e8s.core.util import close_matches, content_hash
 from e8s.show.backend import (
     RepositoryBackend,
@@ -57,7 +58,7 @@ def _require_show_id(show_id: str) -> None:
         )
 
 
-def _require_new_show_id(show_id: str) -> None:
+def _require_not_device_name(show_id: str) -> None:
     """Refuses a Windows device name for a new show before its folder is looked up.
 
     On Windows that lookup opens the device itself. Shows already stored under such a name still
@@ -71,6 +72,29 @@ def _require_new_show_id(show_id: str) -> None:
             context={"show": show_id},
             code=ErrorCode.BAD_PATH,
         )
+
+
+def _id_rule_refusal(show_id: str) -> StorageError | None:
+    """Returns the refusal for a show ID that fails the ID rule or is not NFC, else None."""
+    try:
+        normalized = check_id(show_id, kind="show")
+    except SchemaError as error:
+        refusal = StorageError(
+            f"show id {show_id!r} cannot start a new show",
+            hint=error.hint,
+            context={"show": show_id},
+            code=ErrorCode.BAD_PATH,
+        )
+        refusal.__cause__ = error
+        return refusal
+    if normalized == show_id:
+        return None
+    return StorageError(
+        f"show id {show_id!r} is not in NFC form and cannot start a new show",
+        hint=f"use the NFC form {normalized!r}",
+        context={"show": show_id},
+        code=ErrorCode.BAD_PATH,
+    )
 
 
 class DocumentRepository:
@@ -147,6 +171,25 @@ class DocumentRepository:
         blob = functools.cache(functools.partial(self.backend.blob, show_id))
         return LazyBlobs(self._tree(show_id, revision), blob)
 
+    def _require_new_show_id(self, show_id: str) -> None:
+        """Refuses a write from the root under an ID a new show may not take.
+
+        The device check touches no path. The ID rule refuses only a show that is not stored:
+        a show stored under an older ID, written from the root, gets the ConflictError of any
+        stale write. A head lookup that fails for such an ID, such as a name too long for the
+        file system, counts as not stored.
+        """
+        _require_not_device_name(show_id)
+        refusal = _id_rule_refusal(show_id)
+        if refusal is None:
+            return
+        try:
+            is_stored = self.head(show_id) != ROOT_REVISION
+        except StorageError as error:
+            raise refusal from error
+        if not is_stored:
+            raise refusal
+
     def _require_head(self, show_id: str, expected: str) -> str:
         head = self.head(show_id)
         if head != expected:
@@ -208,7 +251,7 @@ class DocumentRepository:
             split_path(path)
             require_known_path(path)
         if expected_revision == ROOT_REVISION:
-            _require_new_show_id(show_id)
+            self._require_new_show_id(show_id)
         head = self._require_head(show_id, expected_revision)
         old = self._tree(show_id, expected_revision)
         blobs = {digest(d): d for d in changes.values() if d is not None}
