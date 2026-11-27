@@ -277,6 +277,11 @@ def is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
 
     Python documents st_ino as unique only when non-zero; where a file system reports 0, the
     device, size and times must still all match, and a result with 0 never matches one without.
+
+    It answers whether a name still holds the file an earlier lookup saw, never whether two files
+    hold the same bytes: a reused inode and a coarse clock (Windows) let two files written
+    moments apart match in every field. Ask has_same_bytes() about content, and never remove a
+    file on this answer alone: a file a writer places is fresh, so an age check must hold too.
     """
     return file_identity(first) == file_identity(second)
 
@@ -309,10 +314,13 @@ def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
 def has_same_bytes(first: Path, second: Path) -> bool:
     """Tells whether two regular files hold the same bytes, comparing them a piece at a time.
 
-    One file under two names, known by a non-zero inode and the same size and times, holds the
-    same bytes and is not read; files of different sizes differ. A link, a folder, a missing file
-    or a file swapped for one of those after the lookup never matches. At most
-    COMPARE_PIECE_BYTES of each file are in memory at once.
+    Only the bytes answer "same", even for one file under two names. Metadata answers only
+    "different": files of different sizes differ. A device, inode, size and times never prove
+    equal bytes, since a reused inode and a coarse clock (Windows) let two files written moments
+    apart match in every field, and some file systems (FUSE pass-through, shares spanning several
+    disks) give two different files one device and inode even while both are open. A link, a
+    folder, a missing file or a file swapped for one of those after the lookup never matches. At
+    most COMPARE_PIECE_BYTES of each file are in memory at once.
 
     Args:
         first: One file.
@@ -332,8 +340,6 @@ def has_same_bytes(first: Path, second: Path) -> bool:
     if not all(info is not None and stat.S_ISREG(info.st_mode) for info in infos):
         return False
     one, other = (info for info in infos if info is not None)
-    if one.st_ino != 0 and is_same_file(one, other):
-        return True
     if one.st_size != other.st_size:
         return False
     try:

@@ -12,6 +12,7 @@ Contains:
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.cached(): returns the tree reading each blob through a bounded cache
     LazyBlobs.digests: returns the content digest of each path's blob
+    changed_paths(): lists the paths whose blob differs between two trees, reading no blob
     require_new_set_keys(): checks every set key and transition folder a commit stores in a
         folder the base lacks
     require_distinct_folders(): refuses a new set folder matching another folder ignoring case
@@ -43,6 +44,7 @@ from e8s.show.documents import (
     require_storable,
 )
 from e8s.show.files import require_writable
+from e8s.show.font_paths import require_written_fonts
 from e8s.show.migrate import require_current_show_doc
 from e8s.show.models import Show
 from e8s.show.role_documents import CAST_ROOT, require_cast_beside_roles
@@ -223,6 +225,29 @@ class LazyBlobs(Mapping[str, bytes]):
         return MappingProxyType(self._digests)
 
 
+def _digests(tree: Mapping[str, bytes]) -> Mapping[str, str]:
+    if isinstance(tree, LazyBlobs):
+        return tree.digests
+    return {path: blob_digest(raw) for path, raw in tree.items()}
+
+
+def changed_paths(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> list[str]:
+    """Lists the paths written or deleted between two trees, sorted, comparing digests alone.
+
+    Args:
+        before: Tree of the older state.
+        after: Tree of the newer state.
+
+    Returns:
+        paths: Paths present in only one tree or holding different bytes.
+
+    >>> changed_paths({"/a": b"1", "/b": b"2"}, {"/a": b"1", "/b": b"3", "/c": b"4"})
+    ['/b', '/c']
+    """
+    old, new = _digests(before), _digests(after)
+    return sorted(p for p in old.keys() | new.keys() if old.get(p) != new.get(p))
+
+
 def _require_required_docs(after: Mapping[str, str]) -> None:
     missing = [p for p in REQUIRED_DOCS if p not in after]
     if missing:
@@ -380,6 +405,8 @@ def require_valid_digests(
     """Checks every changed path and decodes the show when any show document changed.
 
     Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
+    A written font document must be named by the SHA-256 of its bytes and load as a font;
+    deleting one is allowed.
     When any show document changes, the show.json the commit leaves must be in the current
     format version, else SchemaError code OLD_FORMAT: show.json versions the whole tree.
     Documents whose digest sits in `cache` at the same path are reused, so a commit loads and
@@ -403,8 +430,10 @@ def require_valid_digests(
         require_known_path(path, is_write=path in after)
         if path in after:
             require_writable(path)
-    require_new_set_keys(before, [p for p in changed if p in after])
+    written = [p for p in changed if p in after]
+    require_new_set_keys(before, written)
     require_distinct_folders(before, after)
+    require_written_fonts(written, after, blob, cache)
     require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
@@ -414,7 +443,7 @@ def require_valid_digests(
     require_cast_beside_roles(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
     require_storable(show)
-    _require_no_orphans(show, [p for p in changed if p in after])
+    _require_no_orphans(show, written)
     return show
 
 

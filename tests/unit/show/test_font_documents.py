@@ -7,12 +7,12 @@ Contains:
     test_reopened_user_font_text_form_rebuilds_without_a_registry: a fresh workspace re-lays text
     test_font_lands_in_the_same_revision_as_its_form: the font and the form share one revision
     test_save_without_the_font_raises_missing_font: a user font missing everywhere fails closed
-    test_tampered_font_document_is_refused: a renamed or changed font file raises the hash code
+    test_tampered_font_document_is_refused: a stored changed font file raises the hash code
     test_bundled_fonts_are_not_stored: a text form on a bundled font writes no font document
     test_reopened_show_saves_again_without_a_registry: stored fonts resolve on the next save
     test_unused_font_documents_are_deleted: a whole-show save drops fonts no form uses
     test_stored_font_bytes_are_the_source_bytes: the file holds the exact bytes
-    test_bad_font_document_names_are_refused_on_load: a non-hash name raises SchemaError
+    test_bad_font_document_names_are_refused_on_load: a stored non-hash name raises SchemaError
     test_regression_one_spot_save_keeps_the_font_and_encodes_only_the_edit: B1 and M2 together
     test_load_fonts_without_documents_is_bundled: an empty tree gives the bundled registry
 """
@@ -27,12 +27,15 @@ from e8s.choreo.models import PlacementPatch
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import FontError, MissingFontError, SchemaError
 from e8s.core.ids import FormId
-from e8s.core.util import asset_uri
+from e8s.core.util import asset_uri, content_hash
 from e8s.examples import two_set_show
 from e8s.geo.fonts import bundled_fonts, register_font
 from e8s.show.document_paths import role_docs, set_doc
 from e8s.show.document_repository import encode_cache_of
-from e8s.show.font_documents import FONTS_ROOT, load_fonts
+from e8s.show.font_documents import load_fonts
+from e8s.show.font_paths import FONTS_ROOT
+from e8s.show.history_models import Revision
+from e8s.show.integrity import blob_digest
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
@@ -60,6 +63,16 @@ def _text_show() -> tuple[Show, str, bytes]:
 
 def _font_path(data: bytes) -> str:
     return f"{FONTS_ROOT}{asset_uri(data).removeprefix('asset:sha256:')}.json"
+
+
+def _stored(repo: InMemoryRepository, show_id: str, docs: dict[str, bytes]) -> None:
+    """Stores documents through the backend, as an older release did, so no commit check runs."""
+    head = repo.head(show_id)
+    tree = {**repo.backend.tree(show_id, head), **{p: blob_digest(d) for p, d in docs.items()}}
+    revision = Revision(
+        id=content_hash(tree), parent=head, at=AT + timedelta(seconds=1), changed=tuple(docs)
+    )
+    repo.backend.commit(show_id, revision, tree, {blob_digest(d): d for d in docs.values()})
 
 
 def _saved() -> tuple[InMemoryRepository, Show, str, bytes]:
@@ -110,11 +123,10 @@ def test_save_without_the_font_raises_missing_font() -> None:
 
 def test_tampered_font_document_is_refused() -> None:
     repo, show, _, data = _saved()
-    ws = open_workspace(repo, show.id)
     wrong = tiny_bytes(family="Other")
-    ws._commit_stored({_font_path(data): wrong}, at=AT + timedelta(seconds=1))
+    _stored(repo, show.id, {_font_path(data): wrong})
     with pytest.raises(FontError) as caught:
-        load_fonts(ws)
+        load_fonts(open_workspace(repo, show.id))
     assert caught.value.code == ErrorCode.FONT_HASH_MISMATCH
     assert _font_path(data) in caught.value.message
 
@@ -149,9 +161,9 @@ def test_unused_font_documents_are_deleted() -> None:
 
 def test_bad_font_document_names_are_refused_on_load() -> None:
     repo, show, _, _ = _saved()
-    ws = open_workspace(repo, show.id)
     for name in ("notes.json", f"{'a' * 64}.txt", f"{'A' * 64}.json"):
-        ws._commit_stored({f"{FONTS_ROOT}{name}": b"{}"}, at=AT + timedelta(seconds=1))
+        _stored(repo, show.id, {f"{FONTS_ROOT}{name}": b"{}"})
+        ws = open_workspace(repo, show.id)
         with pytest.raises(SchemaError) as caught:
             load_fonts(ws)
         assert name in caught.value.message

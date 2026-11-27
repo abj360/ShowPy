@@ -56,7 +56,11 @@ def _is_unchanged(path: Path, leftover: Leftover, cutoff: datetime) -> bool:
     """Tells whether `path` is still the regular file listed, in the same state, and still old.
 
     The inode alone never proves it: a file system may give a freed inode to the file that
-    replaces it, so the device, inode, size and both times must all match the listing.
+    replaces it, so the device, inode, size and both times must all match the listing. The
+    listing keeps no bytes, so a replacement matching every field is not caught here; the file
+    must also be old, and a writer's file is fresh. Bytes would not tell more: a writer that
+    places the name again writes the same blob or a record of the same revision, so only its
+    freshness and the slot it lands show that the file is needed.
     """
     info = lstat_info("", path)
     return info is not None and _is_old_file(info, cutoff) and is_same_file(info, leftover.info)
@@ -75,7 +79,10 @@ def _moved_info(aside: Path, leftover: Leftover, cutoff: datetime) -> os.stat_re
 
 
 def _is_still(path: Path, info: os.stat_result) -> bool:
-    """Tells whether `path` still shows the file and state of an earlier lstat result."""
+    """Tells whether `path` still shows the file and state of an earlier lstat result.
+
+    Like _is_unchanged(), it compares lookups only, as nothing was read to compare bytes with.
+    """
     now = lstat_info("", path)
     return now is not None and is_same_file(now, info)
 

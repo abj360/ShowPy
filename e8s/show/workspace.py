@@ -18,6 +18,7 @@ Contains:
     Workspace.refresh(): moves the workspace to the head revision
     Workspace.show_at(): returns the show at a revision, or None before the first save
     Workspace.tree_at(): returns the stored documents at a revision
+    Workspace.parts_at(): returns the show at a revision read part by part
     open_workspace(): opens a workspace at the head revision
 """
 
@@ -50,6 +51,7 @@ from e8s.show.integrity import LazyBlobs
 from e8s.show.models import Show
 from e8s.show.set_keys import SetFolders
 from e8s.show.storage import ROOT_REVISION, Repository
+from e8s.show.tree_parts import TreeParts
 from e8s.show.workspace_caches import BlobCache, RevisionCache
 
 # A tree keeps three documents per set (set, forms, paths): two trees of a 60-set show are about
@@ -90,8 +92,10 @@ class Workspace:
         self._views = RevisionCache[Mapping[str, bytes]](WORKSPACE_VIEWS)
         self._reads = RevisionCache[MigratedRead](WORKSPACE_SHOWS)
         self._shows = RevisionCache[Show | None](WORKSPACE_SHOWS)
+        self._parts = RevisionCache[TreeParts](WORKSPACE_SHOWS)
         self._blobs = BlobCache(WORKSPACE_BLOB_BYTES)
-        # Serves only show_at, which validates with one context, so entries never mix contexts.
+        # Serves show_at and the part reader, which validate with one context, so entries never
+        # mix contexts.
         self._decode_cache = DecodeCache(WORKSPACE_DECODE_CACHE_SIZE)
         self._canonical_revisions = RevisionCache[bool](WORKSPACE_CANONICAL_REVISIONS)
 
@@ -129,6 +133,25 @@ class Workspace:
         if revision not in self._shows:
             self._shows[revision] = self._decode_at(revision)
         return self._shows[revision]
+
+    def parts_at(self, revision: str) -> TreeParts:
+        """Returns the show at a revision read part by part, sharing show_at's decode cache.
+
+        Each part is decoded and checked only when asked for, so a caller that needs a few sets
+        decodes no whole show; cached like trees.
+
+        >>> from datetime import UTC, datetime
+        >>> from e8s.examples import two_set_show
+        >>> from e8s.show.memory_backend import InMemoryRepository
+        >>> repo = InMemoryRepository()
+        >>> head = repo.put_show("show_1", two_set_show(), expected_revision="",
+        ...                      at=datetime(2026, 11, 27, tzinfo=UTC)).id
+        >>> open_workspace(repo, "show_1").parts_at(head).set("2").counts
+        8.0
+        """
+        if revision not in self._parts:
+            self._parts[revision] = TreeParts(self.tree_at(revision), self._decode_cache)
+        return self._parts[revision]
 
     def _decode_at(self, revision: str) -> Show | None:
         """Returns the show at a revision, taken from its migration when it needs a rewrite."""

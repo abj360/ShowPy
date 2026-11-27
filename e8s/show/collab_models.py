@@ -33,6 +33,7 @@ from e8s.choreo.models import Placement
 from e8s.choreo.path_models import TransitionSpec
 from e8s.core.errors import SchemaError
 from e8s.core.ids import (
+    EventIdField,
     SetId,
 )
 from e8s.core.readonly import ReadOnlyMap
@@ -42,7 +43,15 @@ from e8s.show.change_models import MergeConflict
 from e8s.show.models import Pin
 
 type EventKind = Literal[
-    "move", "edit_form", "pin", "unpin", "edit_paths", "comment", "set_counts", "highlight"
+    "move",
+    "edit_form",
+    "delete_form",
+    "pin",
+    "unpin",
+    "edit_paths",
+    "comment",
+    "set_counts",
+    "highlight",
 ]
 type ProposalState = Literal["open", "accepted", "rejected", "withdrawn"]
 
@@ -153,6 +162,7 @@ EVENT_PAYLOADS: Final[Mapping[str, type[EventPayload]]] = ReadOnlyMap(
     {
         "move": PlacementOp,
         "edit_form": FormOp,
+        "delete_form": FormOp,
         "edit_paths": PathsOp,
         "set_counts": CountsOp,
         "pin": Pin,
@@ -166,20 +176,21 @@ EVENT_PAYLOADS: Final[Mapping[str, type[EventPayload]]] = ReadOnlyMap(
 class CanvasEvent(FrozenModel):
     """Records one edit or pointer from either side of the canvas.
 
-    The payload type follows the kind: `move` carries a `PlacementOp`, `edit_form` a `FormOp`,
-    `edit_paths` a `PathsOp`, `set_counts` a `CountsOp`, `pin` and `unpin` a `Pin`, `comment` a
-    `Comment` and `highlight` a `Highlight`. A payload given as a dict is validated as the
-    model its kind names; a payload of another kind's model is refused.
+    The payload type follows the kind: `move` carries a `PlacementOp`, `edit_form` and
+    `delete_form` a `FormOp` (the form as it was, for a deletion), `edit_paths` a `PathsOp`,
+    `set_counts` a `CountsOp`, `pin` and `unpin` a `Pin`, `comment` a `Comment` and `highlight` a
+    `Highlight`. A payload given as a dict is validated as the model its kind names; a payload of
+    another kind's model is refused.
 
     Attributes:
-        id: Event ID.
+        id: Event ID, 1 to 64 ASCII letters, digits, `_`, `.` and inner `-`.
         at: When it happened.
         kind: What happened.
         payload: Typed body for the kind.
         revision: Revision that holds the edit; empty for pointers such as highlights.
     """
 
-    id: str
+    id: EventIdField
     at: datetime
     kind: EventKind
     payload: EventPayload
