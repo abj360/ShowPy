@@ -13,8 +13,6 @@ Contains:
 """
 
 import json
-import time
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -28,6 +26,7 @@ from tests.fixtures.fsck_repos import (
     AT,
     DAY,
     SHOW_ID,
+    codes,
     landed_revisions,
     record_path,
     relative,
@@ -35,14 +34,7 @@ from tests.fixtures.fsck_repos import (
     slot_path,
 )
 
-
-@pytest.fixture(autouse=True)
-def _no_reread_pauses(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
-
-
-def _codes(root: Path, *, at: datetime | None = None) -> list[tuple[str, str]]:
-    return [(item.code, item.path) for item in fsck(root, at=at).findings]
+pytestmark = pytest.mark.usefixtures("no_reread_pauses")
 
 
 @pytest.mark.parametrize("legacy_before", [10**9, 50])
@@ -58,7 +50,7 @@ def test_regression_fsck_reports_a_legacy_before_past_the_head(
     manifest = show_path(tmp_path) / "show.json"
     manifest.write_bytes(dump_json({"id": SHOW_ID, "legacy_before": legacy_before}))
     report = fsck(tmp_path)
-    assert ("BAD_RECORD", relative(tmp_path, manifest)) in _codes(tmp_path)
+    assert ("BAD_RECORD", relative(tmp_path, manifest)) in codes(tmp_path)
     assert "legacy_before" in next(f.message for f in report.findings if f.path.endswith("json"))
     assert not any(f.code == "UNREACHABLE" for f in report.findings)
     assert not report.ok

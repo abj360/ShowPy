@@ -29,9 +29,8 @@ Contains:
 """
 
 import json
-import time
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -55,6 +54,7 @@ from tests.fixtures.fsck_repos import (
     STATIC_BYTES,
     age_by,
     blob_path,
+    codes,
     landed_revisions,
     numbered_change,
     record_path,
@@ -64,14 +64,7 @@ from tests.fixtures.fsck_repos import (
     snapshot,
 )
 
-
-@pytest.fixture(autouse=True)
-def _no_reread_pauses(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
-
-
-def _codes(root: Path, *, at: datetime | None = None) -> list[tuple[str, str]]:
-    return [(item.code, item.path) for item in fsck(root, at=at).findings]
+pytestmark = pytest.mark.usefixtures("no_reread_pauses")
 
 
 def test_fsck_of_a_clean_repository_is_ok(tmp_path: Path) -> None:
@@ -120,7 +113,7 @@ def test_fsck_reports_bad_blob(tmp_path: Path) -> None:
     blob = blob_path(tmp_path, STATIC_BYTES)
     blob.write_bytes(b"swapped")
     report = fsck(tmp_path)
-    assert _codes(tmp_path) == [("BAD_BLOB", relative(tmp_path, blob))]
+    assert codes(tmp_path) == [("BAD_BLOB", relative(tmp_path, blob))]
     assert "digest" in report.findings[0].message
     assert not report.ok
 
@@ -192,7 +185,7 @@ def test_fsck_reports_bad_record(
     landed = landed_revisions(tmp_path, 3)
     path = damage(tmp_path, landed)
     report = fsck(tmp_path)
-    assert ("BAD_RECORD", relative(tmp_path, path)) in _codes(tmp_path)
+    assert ("BAD_RECORD", relative(tmp_path, path)) in codes(tmp_path)
     assert {item.code for item in report.findings} <= {"BAD_RECORD"}
     assert not report.ok
 
@@ -218,7 +211,7 @@ def test_regression_fsck_reports_an_unchanged_entry_injected_into_a_tree(tmp_pat
     backend = FileBackend(tmp_path)
     assert "/injected.txt" in backend.tree(SHOW_ID, landed[1].id)
     report = fsck(tmp_path)
-    assert _codes(tmp_path) == [
+    assert codes(tmp_path) == [
         ("BAD_RECORD", relative(tmp_path, path)),
         ("BAD_RECORD", relative(tmp_path, record_path(tmp_path, landed[2]))),
     ]
@@ -230,7 +223,7 @@ def test_fsck_reports_slot_gap(tmp_path: Path) -> None:
     landed_revisions(tmp_path, 3)
     slot_path(tmp_path, 2).unlink()
     report = fsck(tmp_path)
-    assert _codes(tmp_path) == [("SLOT_GAP", relative(tmp_path, slot_path(tmp_path, 2)))]
+    assert codes(tmp_path) == [("SLOT_GAP", relative(tmp_path, slot_path(tmp_path, 2)))]
     assert report.findings[0].message == "slot 2 missing before slot 3"
     assert not report.ok
 
@@ -257,7 +250,7 @@ def test_fsck_reports_torn_slot(tmp_path: Path, torn: bytes) -> None:
     landed_revisions(tmp_path, 2)
     slot_path(tmp_path, 3).write_bytes(torn)
     report = fsck(tmp_path)
-    assert _codes(tmp_path) == [("TORN_SLOT", relative(tmp_path, slot_path(tmp_path, 3)))]
+    assert codes(tmp_path) == [("TORN_SLOT", relative(tmp_path, slot_path(tmp_path, 3)))]
     assert "last slot" in report.findings[0].message
     assert not report.ok
     slot_path(tmp_path, 4).write_bytes(slot_path(tmp_path, 2).read_bytes())
@@ -276,7 +269,7 @@ def test_fsck_reports_unreachable(tmp_path: Path) -> None:
     stray = show_path(tmp_path) / "records" / f"{'f' * 64}.json"
     stray.write_bytes(b"{}")
     report = fsck(tmp_path)
-    assert _codes(tmp_path) == [
+    assert codes(tmp_path) == [
         ("UNREACHABLE", relative(tmp_path, blob_path(tmp_path, b"render 9"))),
         ("UNREACHABLE", relative(tmp_path, stray)),
     ]
@@ -292,9 +285,9 @@ def test_fsck_reports_stale_temp(tmp_path: Path) -> None:
     age_by(old, DAY + timedelta(seconds=1))
     age_by(young, DAY - timedelta(seconds=1))
     report = fsck(tmp_path, at=AT)
-    assert _codes(tmp_path, at=AT) == [("STALE_TEMP", "tmp/.tmp-old")]
+    assert codes(tmp_path, at=AT) == [("STALE_TEMP", "tmp/.tmp-old")]
     assert report.ok
-    assert _codes(tmp_path) == [("STALE_TEMP", "tmp/.tmp-old"), ("STALE_TEMP", "tmp/.tmp-young")]
+    assert codes(tmp_path) == [("STALE_TEMP", "tmp/.tmp-old"), ("STALE_TEMP", "tmp/.tmp-young")]
 
 
 def _stray_places(root: Path) -> list[Path]:
@@ -340,7 +333,7 @@ def test_fsck_reports_torn_file(tmp_path: Path) -> None:
     (tmp_path / "tmp").mkdir()
     (tmp_path / "layout.json").write_bytes(b'{\n  "format": "e8.repo')
     report = fsck(tmp_path)
-    assert _codes(tmp_path) == [("TORN_FILE", "layout.json")]
+    assert codes(tmp_path) == [("TORN_FILE", "layout.json")]
     assert not report.ok
     (tmp_path / "layout.json").unlink()
     landed_revisions(tmp_path, 1)
@@ -348,7 +341,7 @@ def test_fsck_reports_torn_file(tmp_path: Path) -> None:
     for name in ("records", "objects"):
         (folder / name).mkdir(parents=True)
     (folder / "show.json").write_bytes(b'{\n  "id": "other_')
-    assert _codes(tmp_path) == [("TORN_FILE", relative(tmp_path, folder / "show.json"))]
+    assert codes(tmp_path) == [("TORN_FILE", relative(tmp_path, folder / "show.json"))]
 
 
 @pytest.mark.parametrize(

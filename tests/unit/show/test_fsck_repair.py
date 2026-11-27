@@ -29,7 +29,6 @@ Contains:
         vanished, is no file or is no longer safe to remove
 """
 
-import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -60,10 +59,7 @@ from tests.fixtures.fsck_repos import (
     snapshot,
 )
 
-
-@pytest.fixture(autouse=True)
-def _no_reread_pauses(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+pytestmark = pytest.mark.usefixtures("no_reread_pauses")
 
 
 def _repair(root: Path, *, at: datetime = AT) -> FsckReport:

@@ -23,8 +23,6 @@ import json
 import os
 import signal
 import sys
-import time
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -40,6 +38,7 @@ from tests.fixtures.fsck_repos import (
     OTHER_ID,
     SHOW_ID,
     blob_path,
+    codes,
     landed_revisions,
     record_path,
     relative,
@@ -52,13 +51,7 @@ FIFO_TIMEOUT_S = 10
 SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
 
 
-@pytest.fixture(autouse=True)
-def _no_reread_pauses(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
-
-
-def _codes(root: Path, *, at: datetime | None = None) -> list[tuple[str, str]]:
-    return [(item.code, item.path) for item in fsck(root, at=at).findings]
+pytestmark = pytest.mark.usefixtures("no_reread_pauses")
 
 
 def test_fsck_of_a_missing_root_is_an_io_error(tmp_path: Path) -> None:
@@ -108,7 +101,7 @@ def test_fsck_never_follows_a_link_under_the_root(tmp_path: Path, name: str) -> 
     shows = root / "shows"
     shows.rename(tmp_path / "shows_elsewhere")
     shows.symlink_to(tmp_path / "shows_elsewhere", target_is_directory=True)
-    assert _codes(root) == [("UNKNOWN_FILE", "shows")]
+    assert codes(root) == [("UNKNOWN_FILE", "shows")]
 
 
 @SKIP_LINKS
@@ -119,7 +112,7 @@ def test_fsck_reports_a_linked_show_folder(tmp_path: Path) -> None:
     folder.rename(outside)
     folder.symlink_to(outside, target_is_directory=True)
     expected = [("UNKNOWN_FILE", relative(root, folder))]
-    assert _codes(root) == expected
+    assert codes(root) == expected
     assert [(f.code, f.path) for f in fsck(root, SHOW_ID).findings] == expected
 
 
@@ -130,7 +123,7 @@ def test_fsck_follows_a_symlinked_root(tmp_path: Path) -> None:
     linked.symlink_to(real, target_is_directory=True)
     assert fsck(linked).ok
     blob_path(real, b"render 1").unlink()
-    assert _codes(linked) == [("MISSING_BLOB", relative(real, blob_path(real, b"render 1")))]
+    assert codes(linked) == [("MISSING_BLOB", relative(real, blob_path(real, b"render 1")))]
 
 
 def test_fsck_of_one_show_checks_only_that_show(tmp_path: Path) -> None:

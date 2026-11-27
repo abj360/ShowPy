@@ -18,6 +18,7 @@ Contains:
     relative(): names a path relative to the root, as findings do
     age_by(): sets a file's times to a moment before AT
     snapshot(): maps every path under a root to its bytes and modification time
+    codes(): lists the code and path of each finding fsck reports
     with_zero_inode(): returns an lstat result whose inode is 0
 """
 
@@ -28,6 +29,7 @@ from pathlib import Path
 from e8s.show.backend import digest
 from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
+from e8s.show.fsck import fsck
 from e8s.show.history_models import Revision
 from e8s.show.show_folders import show_folder
 
@@ -95,6 +97,10 @@ def snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
         )
         for path in sorted(root.rglob("*"))
     }
+
+
+def codes(root: Path, *, at: datetime | None = None) -> list[tuple[str, str]]:
+    return [(item.code, item.path) for item in fsck(root, at=at).findings]
 
 
 def with_zero_inode(info: os.stat_result) -> os.stat_result:
