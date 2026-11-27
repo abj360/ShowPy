@@ -381,6 +381,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("from_json", "e8s.time.timeline", "from_json"),
     ("fsck", "e8s.show.fsck", "fsck"),
     ("gate", "e8s.choreo.form_ops", "gate"),
+    ("gc", "e8s.show.gc", "gc"),
     ("generated_form", "e8s.choreo.forms", "generated_form"),
     ("get_proposal", "e8s.show.proposals", "get_proposal"),
     ("get_sheet", "e8s.sheet.templates", "get_sheet"),

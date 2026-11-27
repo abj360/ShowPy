@@ -599,7 +599,8 @@
     "model": {
       "bytes_freed": "Count",
       "dry_run": "bool",
-      "removed": "tuple[str, ...]"
+      "removed": "tuple[str, ...]",
+      "skipped": "tuple[str, ...]"
     }
   },
   "GeneratedRecipe": {
@@ -1703,6 +1704,7 @@
   "from_json": "(d: dict[str, Any]) -> e8s.time.models.Timeline",
   "fsck": "(root: pathlib.Path, show_id: str | None = None, *, repair: bool = False, confirm: bool = False, at: datetime.datetime | None = None) -> e8s.show.storage_models.FsckReport",
   "gate": "(form: e8s.choreo.form_models.Form, hinge: Literal['start', 'end'] | int, deg: Degrees, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
+  "gc": "(root: pathlib.Path, *, at: datetime.datetime, confirm: bool = False) -> e8s.show.storage_models.GcReport",
   "generated_form": "(form_id: str, members: collections.abc.Sequence[str], fn: str, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, registry: e8s.choreo.form_fns.FormFnRegistry = ..., *, set_id: str = '', n: int | None = None, **params: Any) -> e8s.choreo.form_models.Form",
   "get_proposal": "(ws: e8s.show.workspace.Workspace, proposal_id: str) -> e8s.show.collab_models.Proposal",
   "get_sheet": "(ref: SheetRef, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.sheet.models.Sheet",

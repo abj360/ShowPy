@@ -35,6 +35,7 @@ from e8s.show.fsck_show import (
     STALE_TEMP,
     TORN_FILE,
     UNKNOWN_FILE,
+    Leftover,
     Repairable,
     ShowScan,
     finding,
@@ -62,11 +63,13 @@ class RepositoryScan(NamedTuple):
     Attributes:
         findings: Problems found outside the show folders.
         shows: What checking each show folder found.
+        temps: The temp files reported.
         repairable: A torn layout file a repair may remove, while no show folder exists.
     """
 
     findings: list[FsckFinding]
     shows: list[ShowScan]
+    temps: list[Leftover]
     repairable: list[Repairable]
 
 
@@ -131,6 +134,7 @@ class _RootCheck:
         self.cutoff = None if at is None else at - STALE_TEMP_AGE
         self.findings: list[FsckFinding] = []
         self.shows: list[ShowScan] = []
+        self.temps: list[Leftover] = []
 
     def report(self, code: str, path: Path, message: str) -> None:
         self.findings.append(finding(self.root, code, path, message))
@@ -160,6 +164,7 @@ class _RootCheck:
                 self.report(UNKNOWN_FILE, path, "is not a temp file")
             elif self.cutoff is None or is_stale_temp(name, info, self.cutoff):
                 self.report(STALE_TEMP, path, "temp file a writer left behind")
+                self.temps.append(Leftover(path, info))
 
     def check_shows(self, folder: Path) -> None:
         """Checks each show folder, reporting entries that are not plain show folders."""
@@ -201,8 +206,8 @@ def scan_repository(root: Path, show_id: str | None, at: datetime | None) -> Rep
             running writers and are left out. None reports every temp file.
 
     Returns:
-        scan: Findings outside the show folders, each show folder's scan and a torn layout
-            file a repair may remove.
+        scan: Findings outside the show folders, each show folder's scan, the temp files
+            reported and a torn layout file a repair may remove.
     """
     with mapped_io(show_id or "", root):
         repairable = _check_layout(root)
@@ -213,4 +218,4 @@ def scan_repository(root: Path, show_id: str | None, at: datetime | None) -> Rep
             check.check_root()
         else:
             check.check_one_show(show_id)
-        return RepositoryScan(check.findings, check.shows, repairable)
+        return RepositoryScan(check.findings, check.shows, check.temps, repairable)

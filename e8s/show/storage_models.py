@@ -53,14 +53,17 @@ class GcReport(FrozenModel):
     """Holds what a clean-up removed, or would remove in a dry run.
 
     Attributes:
-        removed: Paths removed.
+        removed: Paths removed, or that a dry run would remove, relative to the root.
         bytes_freed: Bytes the removed files held.
         dry_run: Whether nothing was removed.
+        skipped: Show folders left untouched because a check found damage in them or a slot
+            landed in them while the clean-up ran.
     """
 
     removed: tuple[str, ...] = ()
     bytes_freed: Count = 0
     dry_run: bool = False
+    skipped: tuple[str, ...] = ()
 
 
 class UpgradeReport(FrozenModel):

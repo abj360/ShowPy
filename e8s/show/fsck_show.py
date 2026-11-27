@@ -18,6 +18,7 @@ Contains:
     UNKNOWN_FILE: codes an entry that is not part of a layout-2 repository, or a link
     TORN_FILE: codes a manifest or layout file that a crashed first write left empty or cut short
     FAILING_CODES: lists the codes that fail a check; the others are left for a clean-up
+    Leftover: holds a file a clean-up may remove, with its lstat result when it was listed
     Repairable: holds a torn file a repair may remove and the checks it must still pass
     ShowScan: holds what checking one show folder found
     finding(): builds a finding whose path is relative to the repository root
@@ -147,6 +148,13 @@ def is_torn_manifest(data: bytes, folder_name: str) -> bool:
     )
 
 
+class Leftover(NamedTuple):
+    """Holds a file a clean-up may remove: its path and its lstat result when it was listed."""
+
+    path: Path
+    info: os.stat_result
+
+
 class Repairable(NamedTuple):
     """Holds a torn file a repair may remove, and the checks it must still pass when removed.
 
@@ -171,6 +179,7 @@ class ShowScan(NamedTuple):
         show_id: ID its manifest names; empty when the manifest is missing or damaged.
         findings: Problems found; records and blobs are reported unreachable only when every
             slot and record was read.
+        unreachable: The records and blobs reported unreachable.
         repairable: Torn files a repair may remove: a torn last slot after an intact slot, and a
             torn manifest of a show with no slot.
         last_seq: Number of the last slot, 0 before the first.
@@ -179,8 +188,14 @@ class ShowScan(NamedTuple):
     folder: Path
     show_id: str
     findings: list[FsckFinding]
+    unreachable: list[Leftover]
     repairable: list[Repairable]
     last_seq: int
+
+    @property
+    def is_failing(self) -> bool:
+        """Tells whether any finding fails the check, so no file of the show may be removed."""
+        return any(item.code in FAILING_CODES for item in self.findings)
 
 
 def _applied(
@@ -201,6 +216,7 @@ class _ShowCheck:
         self.show_id = ""
         self.legacy_before = FIRST_SEQ
         self.problems: list[tuple[str, Path, str]] = []
+        self.unreachable: list[Leftover] = []
         self.repairable: list[Repairable] = []
         self.records: set[str] = set()
         self.blobs: set[str] = set()
@@ -218,6 +234,7 @@ class _ShowCheck:
             self.folder,
             self.show_id,
             findings,
+            self.unreachable,
             self.repairable,
             self.last_seq,
         )
@@ -429,6 +446,7 @@ class _ShowCheck:
                 self.report(UNKNOWN_FILE, path, f"is not a {name} file name or not a regular file")
             elif self.is_proven:
                 self.report(UNREACHABLE, path, "no slot reaches this file")
+                self.unreachable.append(Leftover(path, info))
 
 
 def _is_absent(path: Path) -> bool:
@@ -450,7 +468,7 @@ def scan_show(root: Path, folder: Path) -> ShowScan:
         folder: The show folder, already known to be a plain folder under `<root>/shows/`.
 
     Returns:
-        scan: The show's ID, findings, repairable files and last slot.
+        scan: The show's ID, findings, unreachable files, repairable files and last slot.
     """
     check = _ShowCheck(root, folder)
     check.run()
