@@ -13,9 +13,10 @@ A v2 spot has no `claimable` field: publishing left the library. The step remove
 spot and lists each spot that stored a value other than the v1 default `performer` with
 `report.drop()`, so a host can keep who may claim it.
 
-A v2 show places only spots its cast holds. The step removes each set placement naming a spot
-the cast lacks and lists it with `report.drop()`, the whole stored row as its fields, so a host
-can keep it.
+A v2 show refers only to spots its cast holds. After its repairs the step removes every
+reference to a spot the cast lacks (placements, path rows and facings, route and form members,
+facing overrides and entity pins) and lists each with `report.drop()`; the stray spots module
+holds the rules.
 
 A v2 note time carries a time zone. A stored note time without one is read as UTC and the
 change is recorded with `report.repair()`, one per note; a value that is not a time is left for
@@ -23,8 +24,8 @@ model validation to refuse.
 
 Contains:
     NOTES_DOC: names the stored notes document
-    migrate_cast(): rewrites the cast, the set placements and the note times from the v1 shape
-        to the v2 shape
+    migrate_cast(): rewrites the cast, the references to its spots and the note times from the
+        v1 shape to the v2 shape
 """
 
 import math
@@ -35,6 +36,7 @@ from typing import TYPE_CHECKING, Final
 from e8s.cast.models import HEX_COLOR_PATTERN, MAX_LABEL_PAD
 from e8s.core.errors import SchemaError
 from e8s.core.json_types import JsonValue
+from e8s.show.migrations.v1_to_v2_stray_spots import drop_stray_spots
 
 if TYPE_CHECKING:
     from e8s.show.migrate import ReportBuilder
@@ -43,7 +45,6 @@ if TYPE_CHECKING:
 # imported here.
 SHOW_DOC: Final = "/show/show.json"
 NOTES_DOC: Final = "/show/notes.json"
-SET_DOC: Final = re.compile(r"^/sets/[^/]+/set\.json$")
 SHAPE_SIZE_FIELDS: Final = ("radius_m", "width_m", "depth_m")
 CLAIMABLE_FIELD: Final = "claimable"
 V1_DEFAULT_CLAIMABLE: Final = "performer"
@@ -224,34 +225,8 @@ def _migrate_notes(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[
     return {**docs, NOTES_DOC: [_read_note_time_as_utc(note, report) for note in notes]}
 
 
-def _placements_of_cast_spots(
-    path: str, set_doc: JsonValue, known: frozenset[str], report: "ReportBuilder"
-) -> JsonValue:
-    rows = _list(_object(set_doc).get("placements"))
-    kept: list[JsonValue] = []
-    for position, row in enumerate(rows):
-        spot = _object(row).get("entity")
-        if not isinstance(spot, str) or spot in known:
-            kept.append(row)
-            continue
-        report.drop(path, f"placements[{position}]", _object(row), stored_id=spot)
-    if len(kept) == len(rows):
-        return set_doc
-    return {**_object(set_doc), "placements": kept}
-
-
-def _drop_stray_placements(
-    docs: dict[str, JsonValue], cast: JsonObject, report: "ReportBuilder"
-) -> dict[str, JsonValue]:
-    known = frozenset(str(_object(spot).get("id")) for spot in _list(cast.get("spots")))
-    return {
-        path: _placements_of_cast_spots(path, doc, known, report) if SET_DOC.match(path) else doc
-        for path, doc in docs.items()
-    }
-
-
 def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:
-    """Rewrites the cast, the set placements and the note times from the v1 shape to the v2 shape.
+    """Rewrites the cast, the references to its spots and the note times from v1 to v2 shape.
 
     Args:
         docs: Stored path to parsed document, without a format header; never mutated.
@@ -259,7 +234,7 @@ def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[st
 
     Returns:
         docs: The documents with the repaired cast, without spot claimability, without
-            placements of spots the cast lacks, and with aware note times; a value with no safe
+            references to spots the cast lacks, and with aware note times; a value with no safe
             repair raises SchemaError.
     """
     docs = _migrate_notes(docs, report)
@@ -272,5 +247,5 @@ def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[st
     repaired = _drop_dangling_selection_ids(repaired, report)
     repaired = _drop_unknown_prefixes(repaired, report)
     repaired = _drop_claimable(repaired, report)
-    docs = _drop_stray_placements(docs, repaired, report)
-    return {**docs, SHOW_DOC: {**show, "cast": repaired}}
+    known = frozenset(str(_object(spot).get("id")) for spot in _list(repaired.get("spots")))
+    return drop_stray_spots({**docs, SHOW_DOC: {**show, "cast": repaired}}, known, report)
