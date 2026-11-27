@@ -18,6 +18,7 @@ from e8s.core.json_types import JsonValue
 from e8s.show import durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
+    REVISION_ID_PATTERN,
     conflict_error,
     history_too_long_error,
     unknown_revision_error,
@@ -60,7 +61,7 @@ from e8s.show.layout import (
     HOUSEKEEPING_NAMES,
     TEMP_DIR,
 )
-from e8s.show.layout1 import BLOB_MAX_BYTES, REVISION_ID_PATTERN, TREE_MAX_BYTES
+from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
 from e8s.show.manifests import (
     Manifest,
     parsed_manifest,

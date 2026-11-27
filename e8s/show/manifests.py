@@ -26,8 +26,8 @@ from typing import NamedTuple
 
 from e8s.core.canonical import jcs
 from e8s.core.json_types import JsonValue
+from e8s.show.backend import REVISION_ID_PATTERN
 from e8s.show.backend_checks import FIRST_SEQ, corrupt
-from e8s.show.layout1 import REVISION_ID_PATTERN
 from e8s.show.show_folders import show_folder
 
 LEGACY_KEYS = frozenset({"legacy_before", "legacy_count", "legacy_digest"})

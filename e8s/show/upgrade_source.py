@@ -23,13 +23,13 @@ from typing import NamedTuple
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.show.assets import ASSET_DIR
+from e8s.show.backend import REVISION_ID_PATTERN
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import is_redirect, listed_entries, lstat_mode
 from e8s.show.layout import HOUSEKEEPING_NAMES
 from e8s.show.layout1 import (
     LINK_DIR,
     OBJECT_DIR,
-    REVISION_ID_PATTERN,
     ROOT_LINK,
     TEMP_PREFIX,
     TREE_DIR,

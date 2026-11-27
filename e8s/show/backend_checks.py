@@ -35,9 +35,10 @@ from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_reads
+from e8s.show.backend import REVISION_ID_PATTERN
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.layout1 import BLOB_MAX_BYTES, REVISION_ID_PATTERN
+from e8s.show.layout1 import BLOB_MAX_BYTES
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_line
 

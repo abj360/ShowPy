@@ -2,7 +2,6 @@
 layout1.py --- reads layout-1 repositories, which keep revisions as JSON and blob files under a root
 
 Contains:
-    REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
     LINK_MAX_BYTES: caps the size of a next/ link file read
     TREE_MAX_BYTES: caps the size of a tree record read
@@ -15,7 +14,6 @@ Contains:
 import errno
 import functools
 import os
-import re
 import stat
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -27,6 +25,7 @@ from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.backend import (
     MAX_REVISIONS,
+    REVISION_ID_PATTERN,
     history_too_long_error,
     revisions_after,
     unknown_revision_error,
@@ -42,7 +41,6 @@ TREE_DIR = "trees"
 LINK_DIR = "next"
 OBJECT_DIR = "objects"
 TEMP_PREFIX = ".tmp-"
-REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
 RECORD_PARTS = frozenset({"revision", "tree"})
 # A link holds one 64-digit hex ID; v0.1 and v0.2 may have added a newline. Rounded up.
