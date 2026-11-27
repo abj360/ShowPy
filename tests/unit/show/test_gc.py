@@ -505,7 +505,9 @@ def test_gc_never_follows_a_link(tmp_path: Path) -> None:
 
 def test_gc_refuses_layout_1_and_a_time_without_a_zone(tmp_path: Path) -> None:
     stored_layout1(tmp_path, "old", {"/renders/a.txt": b"x"}, at=AT)
-    with pytest.raises(VersionError):
+    with pytest.raises(VersionError) as caught:
         gc(tmp_path, at=AT, confirm=True)
+    assert caught.value.code == "OLD_LAYOUT"
+    assert "upgrade_repository(Path(" in caught.value.hint
     with pytest.raises(SchemaError):
         gc(tmp_path, at=AT.replace(tzinfo=None))

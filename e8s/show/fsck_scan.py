@@ -44,6 +44,7 @@ from e8s.show.layout import (
     TEMP_DIR,
     read_layout,
 )
+from e8s.show.layout1 import old_layout_error
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.storage_models import FsckFinding
 from e8s.show.torn_reads import is_short_of
@@ -77,13 +78,13 @@ def _missing_root(root: Path) -> StorageError:
 
 
 def _layout_1(root: Path) -> VersionError:
+    """Builds the OLD_LAYOUT error for a layout-1 root, whose hint copies it into layout 2."""
+    error = old_layout_error(root)
     return VersionError(
         f"repository at {root} is layout 1, which fsck and gc do not check",
-        hint=(
-            "open it with FileRepository, which reads layout 1, or copy it into layout 2 with "
-            "upgrade_repository(source, target); fsck and gc check layout 2 only"
-        ),
-        context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(root)},
+        hint=error.hint,
+        context=error.context,
+        code=error.code,
     )
 
 
