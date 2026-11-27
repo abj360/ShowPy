@@ -132,7 +132,8 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
         at: Time stamp of the new revision.
 
     Returns:
-        revision: The new head; the head itself when nothing differs.
+        revision: The new head, whose `changed` lists each restored, re-added and deleted stored
+            path; the head itself when nothing differs.
 
     >>> from datetime import UTC
     >>> from e8s.show.memory_backend import InMemoryRepository

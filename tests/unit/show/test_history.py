@@ -8,6 +8,7 @@ Contains:
     test_revert_reads_no_render_blobs: reads no blob of a file both revisions store unchanged
     test_regression_revert_hint_names_the_stored_path_of_a_derived_table: names the derived
         table a revision stores and says what is allowed
+    test_revert_report_lists_restored_items: lists every restored, re-added and deleted path
     test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: refuses or repairs a host
         undo (a revert to the parent) that would orphan the agent's path row
     test_regression_undoing_the_first_save_keeps_a_loadable_show: refuses to revert to before the
@@ -233,6 +234,22 @@ def test_regression_revert_hint_names_the_stored_path_of_a_derived_table() -> No
     assert raised.value.context["path"] == path
     assert "revert" in raised.value.hint
     assert repo.head(ws.show_id) == head
+
+
+def test_revert_report_lists_restored_items() -> None:
+    _, _, ws = open_session(two_set_show(), AT)
+    ws.write("/renders/set-1.png", b"png", at=AT + STEP)
+    first = ws.revision
+    ws.commit({"/renders/set-1.png": None}, at=AT + 2 * STEP)
+    ws.write("/config/limits.yaml", "max: 1\n", at=AT + 3 * STEP)
+    save_show(ws, _moved(load_show(ws), "T1", 7.0), AT + 4 * STEP)
+    report = revert(ws, first, AT + 5 * STEP)
+    assert report.changed == (
+        "/config/limits.yaml",
+        "/renders/set-1.png",
+        "/sets/2/drill.json",
+    )
+    assert report.parent != first
 
 
 def test_changelog_lines_since_revision() -> None:
