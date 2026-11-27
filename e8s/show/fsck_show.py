@@ -11,6 +11,7 @@ Contains:
     scan_show(): checks one show folder: manifest, slot chain, records, trees and blobs
 """
 
+import os
 import re
 import stat
 from collections.abc import Mapping
@@ -44,7 +45,9 @@ from e8s.show.fsck_findings import (
     BAD_BLOB,
     BAD_RECORD,
     MISSING_BLOB,
+    SET_ASIDE_PREFIX,
     SLOT_GAP,
+    STALE_TEMP,
     TORN_FILE,
     TORN_SLOT,
     UNKNOWN_FILE,
@@ -87,6 +90,7 @@ class _ShowCheck:
         self.legacy_before = FIRST_SEQ
         self.problems: list[tuple[str, Path, str]] = []
         self.unreachable: list[Leftover] = []
+        self.set_aside: list[Leftover] = []
         self.repairable: list[Repairable] = []
         self.records: set[str] = set()
         self.blobs: set[str] = set()
@@ -105,6 +109,7 @@ class _ShowCheck:
             self.show_id,
             findings,
             self.unreachable,
+            self.set_aside,
             self.repairable,
             self.last_seq,
         )
@@ -309,6 +314,9 @@ class _ShowCheck:
             return
         for entry, info in listed_entries(folder):
             path = folder / entry
+            if entry.startswith(SET_ASIDE_PREFIX):
+                self._report_set_aside(path, info, pattern)
+                continue
             matched = pattern.fullmatch(entry)
             if entry in HOUSEKEEPING_NAMES or (matched and matched.group(1) in reached):
                 continue
@@ -317,6 +325,15 @@ class _ShowCheck:
             elif self.is_proven:
                 self.report(UNREACHABLE, path, "no slot reaches this file")
                 self.unreachable.append(Leftover(path, info))
+
+    def _report_set_aside(self, path: Path, info: os.stat_result, pattern: re.Pattern[str]) -> None:
+        """Reports a record or blob a stopped gc left under its set-aside name."""
+        origin = path.name.removeprefix(SET_ASIDE_PREFIX)
+        if pattern.fullmatch(origin) is None or not stat.S_ISREG(info.st_mode):
+            self.report(UNKNOWN_FILE, path, "is not a set-aside record or blob")
+            return
+        self.report(STALE_TEMP, path, "a stopped gc set this aside; the next gc puts it back")
+        self.set_aside.append(Leftover(path, info))
 
 
 def _is_absent(path: Path) -> bool:

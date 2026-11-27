@@ -11,16 +11,35 @@ Contains:
         record again when a clean-up removed it between the commit's check and its freshen
     test_freshen_moves_a_files_time_and_never_a_link_target: freshens a file to the file system's
         time, reports a missing one and leaves a link's target alone
+    test_regression_gc_keeps_a_file_freshened_just_before_it_moves: keeps an unreachable blob a
+        writer freshened just before gc's first move of it
+    test_regression_gc_keeps_a_file_a_writer_placed_again_while_set_aside: reports nothing removed
+        when a writer placed the file again while gc held it aside
+    test_regression_gc_stops_on_a_show_whose_head_moves_during_removal: puts the file back and
+        skips the show once a slot lands while gc removes
+    test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back: reports the
+        set-aside file, then puts it back and removes it when no slot reaches it
+    test_gc_puts_back_a_set_aside_file_a_slot_reaches: restores a set-aside blob a tree names
+    test_fsck_reports_a_set_aside_name_it_does_not_understand: reports a malformed set-aside name
+    test_gc_leaves_a_set_aside_copy_that_differs_from_its_name: keeps both files when the name
+        holds other bytes, and removes neither
+    test_gc_keeps_a_temp_file_touched_after_the_check: keeps a temp file a writer touched
+    test_move_new_renames_where_links_fail: moves by rename without replacing, where the file
+        system refuses hard links, and raises other link failures
 """
 
+import errno
 import os
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from os import PathLike
 from pathlib import Path
 
 import pytest
 
-from e8s.show import durable_io
+from e8s.show import durable_io, fsck_scan
+from e8s.show import gc as gc_module
 from e8s.show.backend import digest
 from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import FileBackend
@@ -30,6 +49,8 @@ from e8s.show.history_models import Revision
 from e8s.show.show_folders import show_folder
 
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
+type StrPath = str | PathLike[str]
+
 SHOW_ID = "race_show"
 STATIC = "/renders/static.txt"
 RENDER = "/renders/render.txt"
@@ -147,3 +168,210 @@ def test_freshen_moves_a_files_time_and_never_a_link_target(tmp_path: Path) -> N
     assert durable_io.freshen(target) is True
     assert target.stat().st_mtime > old
     assert durable_io.freshen(tmp_path / "missing") is False
+
+
+def _unreachable_blob(root: Path, now: datetime) -> tuple[Revision, Path]:
+    """Lands one revision and leaves the old blob of a crashed second commit, unreached."""
+    first = _change("", b"render 0")
+    FileBackend(root).commit(SHOW_ID, *first)
+    blob = _crashed_attempt(root, _change(first[0].id, REDO), "blob")[0]
+    _make_old(blob, now)
+    return first[0], blob
+
+
+def _around_first_move(
+    monkeypatch: pytest.MonkeyPatch, path: Path, before: Callable[[], object]
+) -> None:
+    """Runs `before` just before the first OS call that moves or removes `path`."""
+    fired: list[bool] = []
+
+    def wrapped(real: Callable[..., object]) -> Callable[..., object]:
+        def call(source: object, *args: object, **kwargs: object) -> object:
+            if Path(str(source)) == path and not fired:
+                fired.append(True)
+                before()
+            return real(source, *args, **kwargs)
+
+        return call
+
+    for name in ("unlink", "rename", "link"):
+        monkeypatch.setattr(os, name, wrapped(getattr(os, name)))
+
+
+def _moved_name_freed(
+    monkeypatch: pytest.MonkeyPatch, path: Path, after: Callable[[], object]
+) -> None:
+    """Runs `after` once `path` is gone from its name, whichever call gc moved it with."""
+    real_unlink, real_rename = os.unlink, os.rename
+    fired: list[bool] = []
+
+    def freed(name: StrPath) -> None:
+        if Path(name) == path and not fired:
+            fired.append(True)
+            after()
+
+    def unlink(target: StrPath, *, dir_fd: int | None = None) -> None:
+        real_unlink(target, dir_fd=dir_fd)
+        freed(target)
+
+    def rename(source: StrPath, target: StrPath) -> None:
+        real_rename(source, target)
+        freed(source)
+
+    monkeypatch.setattr(os, "unlink", unlink)
+    monkeypatch.setattr(os, "rename", rename)
+
+
+def test_regression_gc_keeps_a_file_freshened_just_before_it_moves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(UTC)
+    _, blob = _unreachable_blob(tmp_path, now)
+    _around_first_move(monkeypatch, blob, lambda: durable_io.freshen(blob))
+    report = gc(tmp_path, at=now, confirm=True)
+    monkeypatch.undo()
+    assert report.removed == ()
+    assert blob.read_bytes() == REDO
+    assert sorted(p.name for p in blob.parent.iterdir()) == sorted(
+        [blob.name, digest(b"render 0"), digest(b"static")]
+    )
+
+
+def test_regression_gc_keeps_a_file_a_writer_placed_again_while_set_aside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(UTC)
+    _, blob = _unreachable_blob(tmp_path, now)
+    _moved_name_freed(monkeypatch, blob, lambda: blob.write_bytes(REDO))
+    report = gc(tmp_path, at=now, confirm=True)
+    monkeypatch.undo()
+    assert report.removed == ()
+    assert blob.read_bytes() == REDO
+    assert not any(p.name.startswith(".gc-") for p in blob.parent.iterdir())
+
+
+def test_regression_gc_stops_on_a_show_whose_head_moves_during_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A commit landing after gc's last check names the blob gc is removing."""
+    now = datetime.now(UTC)
+    first, blob = _unreachable_blob(tmp_path, now)
+    landing = _change(first.id, REDO)
+    _around_first_move(monkeypatch, blob, lambda: FileBackend(tmp_path).commit(SHOW_ID, *landing))
+    report = gc(tmp_path, at=now, confirm=True)
+    monkeypatch.undo()
+    assert report.removed == ()
+    assert report.skipped == (_folder(tmp_path).relative_to(tmp_path).as_posix(),)
+    assert fsck(tmp_path).findings == ()
+    assert FileBackend(tmp_path).log(SHOW_ID) == [first, landing[0]]
+
+
+def test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(UTC)
+    _, blob = _unreachable_blob(tmp_path, now)
+
+    def stop() -> None:
+        raise _Crash
+
+    _moved_name_freed(monkeypatch, blob, stop)
+    with pytest.raises(_Crash):
+        gc(tmp_path, at=now, confirm=True)
+    monkeypatch.undo()
+    aside = blob.with_name(".gc-" + blob.name)
+    assert aside.read_bytes() == REDO
+    report = fsck(tmp_path)
+    assert [(f.code, f.path) for f in report.findings] == [
+        ("STALE_TEMP", aside.relative_to(tmp_path).as_posix())
+    ]
+    assert report.ok
+    assert gc(tmp_path, at=now).removed == ()
+    assert aside.exists()
+    swept = gc(tmp_path, at=now, confirm=True)
+    assert swept.removed == (blob.relative_to(tmp_path).as_posix(),)
+    assert not blob.exists()
+    assert not aside.exists()
+    assert fsck(tmp_path).findings == ()
+
+
+def test_gc_puts_back_a_set_aside_file_a_slot_reaches(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    first = _change("", b"render 0")
+    FileBackend(tmp_path).commit(SHOW_ID, *first)
+    blob = _folder(tmp_path) / "objects" / digest(b"render 0")
+    _make_old(blob, now)
+    blob.rename(blob.with_name(".gc-" + blob.name))
+    found = fsck(tmp_path)
+    assert sorted(f.code for f in found.findings) == ["MISSING_BLOB", "STALE_TEMP"]
+    report = gc(tmp_path, at=now, confirm=True)
+    assert report.removed == ()
+    assert fsck(tmp_path).findings == ()
+    assert FileBackend(tmp_path).blob(SHOW_ID, digest(b"render 0")) == b"render 0"
+
+
+def test_fsck_reports_a_set_aside_name_it_does_not_understand(tmp_path: Path) -> None:
+    FileBackend(tmp_path).commit(SHOW_ID, *_change("", b"render 0"))
+    for folder, name in (("objects", ".gc-abc"), ("records", ".gc-" + "f" * 64)):
+        (_folder(tmp_path) / folder / name).write_bytes(b"?")
+    report = fsck(tmp_path)
+    assert [f.code for f in report.findings] == ["UNKNOWN_FILE", "UNKNOWN_FILE"]
+    assert gc(tmp_path, at=datetime.now(UTC) + 2 * OLD, confirm=True).removed == ()
+
+
+def test_gc_leaves_a_set_aside_copy_that_differs_from_its_name(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    _, blob = _unreachable_blob(tmp_path, now)
+    aside = blob.with_name(".gc-" + blob.name)
+    aside.write_bytes(b"other bytes")
+    report = gc(tmp_path, at=now, confirm=True)
+    assert report.removed == ()
+    assert aside.read_bytes() == b"other bytes"
+    assert blob.read_bytes() == REDO
+    assert [f.code for f in fsck(tmp_path).findings] == ["STALE_TEMP", "UNREACHABLE"]
+
+
+def test_gc_keeps_a_temp_file_touched_after_the_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(UTC)
+    _unreachable_blob(tmp_path, now)
+    temp = tmp_path / "tmp" / ".tmp-in-use"
+    temp.write_bytes(b"writing")
+    _make_old(temp, now)
+    scan = fsck_scan.scan_repository
+
+    def scan_then_touch(
+        root: Path, show_id: str | None, at: datetime | None
+    ) -> fsck_scan.RepositoryScan:
+        found = scan(root, show_id, at)
+        durable_io.freshen(temp)
+        return found
+
+    monkeypatch.setattr(gc_module, "scan_repository", scan_then_touch)
+    report = gc(tmp_path, at=now, confirm=True)
+    assert "tmp/.tmp-in-use" not in report.removed
+    assert temp.exists()
+
+
+def test_move_new_renames_where_links_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def refused(*_args: object) -> None:
+        raise OSError(errno.EXDEV, "cross-device link")
+
+    monkeypatch.setattr(os, "link", refused)
+    source, target = tmp_path / "a", tmp_path / "b"
+    source.write_bytes(b"x")
+    assert durable_io.move_new(source, target) is True
+    assert target.read_bytes() == b"x"
+    assert not source.exists()
+    source.write_bytes(b"y")
+    assert durable_io.move_new(source, target) is False
+    assert target.read_bytes() == b"x"
+    assert durable_io.move_new(tmp_path / "gone", tmp_path / "c") is False
+
+    def failing(*_args: object) -> None:
+        raise OSError(errno.EIO, "drive failed")
+
+    monkeypatch.setattr(os, "link", failing)
+    with pytest.raises(OSError, match="drive failed"):
+        durable_io.move_new(source, tmp_path / "d")

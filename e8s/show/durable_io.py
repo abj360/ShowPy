@@ -30,6 +30,7 @@ Contains:
     create_new(): creates a file under a new name, writes it in one call and flushes it
     remove_file(): removes a file when it exists
     freshen(): sets a file's modification time to the file system's current time
+    move_new(): moves a file to a name no file has, never replacing one
     is_stale_temp(): tells whether a folder entry is a temp file last modified before a cut-off
     remove_stale_temps(): removes the temp files in a folder last modified before a cut-off
 """
@@ -322,6 +323,45 @@ def freshen(path: Path) -> bool:
             os.utime(path)
     except FileNotFoundError:
         return False
+    return True
+
+
+def move_new(source: Path, target: Path) -> bool:
+    """Moves a file to a name no file has, never replacing one, keeping its inode and times.
+
+    Where the file system can hard-link, the file is linked under the new name and the old name
+    removed, so at every moment one name or both point at it. Elsewhere it is renamed once a
+    lookup finds the new name free.
+
+    Args:
+        source: The file; one already gone is not moved.
+        target: Its new name, in the same folder or on the same file system.
+
+    Returns:
+        is_moved: False when `target` was taken or `source` was gone.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     a, b = Path(folder) / "a", Path(folder) / "b"
+    ...     _ = a.write_bytes(b"x")
+    ...     move_new(a, b), move_new(a, b), b.read_bytes()
+    (True, False, b'x')
+    """
+    try:
+        os.link(source, target)
+    except (FileExistsError, FileNotFoundError):
+        return False
+    except OSError as error:
+        if error.errno not in NO_HARDLINK_ERRNOS:
+            raise
+        if os.path.lexists(target):
+            return False
+        try:
+            source.rename(target)
+        except FileNotFoundError:
+            return False
+        return True
+    remove_file(source)
     return True
 
 

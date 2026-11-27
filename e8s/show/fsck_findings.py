@@ -12,6 +12,7 @@ Contains:
     UNKNOWN_FILE: codes an entry that is not part of a layout-2 repository, or a link
     TORN_FILE: codes a manifest or layout file that a crashed first write left empty or cut short
     FAILING_CODES: lists the codes that fail a check; the others are left for a clean-up
+    SET_ASIDE_PREFIX: starts the name gc moves a record or blob to while it removes it
     Leftover: holds a file a clean-up may remove, with its lstat result when it was listed
     Repairable: holds a torn file a repair may remove and the checks it must still pass
     ShowScan: holds what checking one show folder found
@@ -44,6 +45,9 @@ TORN_FILE = "TORN_FILE"
 FAILING_CODES = frozenset(
     {MISSING_BLOB, BAD_BLOB, BAD_RECORD, SLOT_GAP, TORN_SLOT, UNKNOWN_FILE, TORN_FILE}
 )
+# gc moves a file to this name in its own folder before it removes it, and moves it back when a
+# writer touched it meanwhile; a gc that stops between the two leaves the name behind.
+SET_ASIDE_PREFIX = ".gc-"
 # A manifest is written as dump_json({"id": show_id}); a show ID is written verbatim between its
 # quotes only when it holds none of the characters JSON escapes, which stored show IDs never do.
 MANIFEST_HEAD = b'{\n  "id": "'
@@ -141,6 +145,7 @@ class ShowScan(NamedTuple):
         findings: Problems found; records and blobs are reported unreachable only when every
             slot and record was read.
         unreachable: The records and blobs reported unreachable.
+        set_aside: Records and blobs a stopped gc left under a set-aside name.
         repairable: Torn files a repair may remove: a torn last slot after an intact slot, and a
             torn manifest of a show with no slot.
         last_seq: Number of the last slot, 0 before the first.
@@ -150,6 +155,7 @@ class ShowScan(NamedTuple):
     show_id: str
     findings: list[FsckFinding]
     unreachable: list[Leftover]
+    set_aside: list[Leftover]
     repairable: list[Repairable]
     last_seq: int
 
