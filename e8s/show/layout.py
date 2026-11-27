@@ -8,6 +8,7 @@ Contains:
     LAYOUT_MAX_BYTES: caps the size of the layout file read
     HOUSEKEEPING_NAMES: lists the entries operating systems add to a folder, which a root skips
     TEMP_DIR: names the folder under a layout-2 root that holds every writer's temp files
+    ASSET_DIR: names the folder under a root that the file asset store keeps assets in
     require_usable_path(): refuses a path holding a NUL character, which no file system takes
     read_layout(): reports the layout version of a repository root
     read_layout_file(): reads and checks the layout file itself, refusing a missing one
@@ -34,6 +35,7 @@ LEGACY_LAYOUT = 1
 LAYOUT_MAX_BYTES = 1024
 LAYOUT_KEYS = frozenset({"format", "layout"})
 TEMP_DIR = "tmp"
+ASSET_DIR = "assets"
 # Operating systems add these to a folder on their own: macOS Finder, Spotlight, the trash and the
 # file-system event log; fsck on ext file systems; Windows Explorer, the recycle bin and system
 # restore. They are skipped wherever a repository lists its entries; anything else fails closed.
@@ -96,9 +98,13 @@ def _is_legacy_show_dir(entry: os.DirEntry[str]) -> bool:
     )
 
 
-def _is_temp_dir(entry: os.DirEntry[str]) -> bool:
-    """Tells the temp folder a first commit creates just before it links the layout file."""
-    return entry.name == TEMP_DIR and entry.is_dir(follow_symlinks=False)
+def _is_store_dir(entry: os.DirEntry[str]) -> bool:
+    """Tells the folders a root holds before its first show: temp files and assets.
+
+    A first commit creates `tmp/` just before it links the layout file, and the asset store,
+    which shares the root, creates `tmp/` and `assets/` on its first put.
+    """
+    return entry.name in {TEMP_DIR, ASSET_DIR} and entry.is_dir(follow_symlinks=False)
 
 
 def _unversioned_layout(root: Path) -> int:
@@ -124,7 +130,7 @@ def _unversioned_layout(root: Path) -> int:
             return _declared_layout(root, root / LAYOUT_FILE)
         if any(_is_legacy_show_dir(entry) for entry in stored):
             return LEGACY_LAYOUT
-        if all(_is_temp_dir(entry) for entry in stored):
+        if all(_is_store_dir(entry) for entry in stored):
             return CURRENT_LAYOUT
     raise _corrupt(root, f"no {LAYOUT_FILE} and no layout-1 show folders")
 
@@ -167,8 +173,9 @@ def read_layout(root: Path) -> int:
     show folders. A root with show folders that hold a `next/root` link and no `layout.json` is
     layout 1. An empty or missing root reports the current layout, because storing the first
     show creates the file; entries the operating system adds, such as `.DS_Store`, do not count,
-    and neither does the `tmp` folder a first commit creates just before that file. A symlinked
-    root is followed. Any other content raises StorageError CORRUPT, a newer layout
+    and neither do the `tmp` folder a first commit creates just before that file and the `tmp`
+    and `assets` folders the file asset store, which shares the root, creates. A symlinked root
+    is followed. Any other content raises StorageError CORRUPT, a newer layout
     raises VersionError, a file-system failure raises StorageError IO, and a root path holding a
     NUL character raises StorageError BAD_PATH.
 

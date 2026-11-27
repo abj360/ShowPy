@@ -25,10 +25,9 @@ from e8s.core.util import ASSET_PREFIX, asset_uri
 from e8s.show.durable_io import NO_HARDLINK_ERRNOS
 from e8s.show.durable_reads import read_capped
 from e8s.show.integrity import blob_digest
-from e8s.show.layout import holds_layout_1, require_usable_path
+from e8s.show.layout import ASSET_DIR, holds_layout_1, require_usable_path
 from e8s.show.layout1 import BLOB_MAX_BYTES, TEMP_PREFIX, old_layout_error
 
-ASSET_DIR = "assets"
 TEMP_DIR = "tmp"
 ASSET_NAME_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)

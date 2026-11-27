@@ -14,7 +14,6 @@ from pathlib import Path
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.show import durable_io
-from e8s.show.assets import ASSET_DIR
 from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt, recomputes
 from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer, record_bytes, slot_bytes
 from e8s.show.document_dump import dump_json
@@ -40,6 +39,7 @@ from e8s.show.file_backend import (
 )
 from e8s.show.history_models import Revision
 from e8s.show.layout import (
+    ASSET_DIR,
     HOUSEKEEPING_NAMES,
     LAYOUT_FILE,
     LEGACY_LAYOUT,
