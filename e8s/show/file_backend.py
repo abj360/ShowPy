@@ -10,13 +10,14 @@ Contains:
 """
 
 from collections.abc import Mapping
+from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
 from e8s.core.errors import SchemaError, UnknownRefError, VersionError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show import document_repository
+from e8s.show import document_repository, durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
     conflict_error,
@@ -24,16 +25,13 @@ from e8s.show.backend import (
     unknown_revision_error,
 )
 from e8s.show.backend_checks import ReadBudget, Record, corrupt, require_caller_ids
+from e8s.show.commit_writes import flush_directories, place_file, store_blobs, store_record
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
     is_redirect,
-    link_new,
     lstat_mode,
-    make_folder,
     mapped_io,
     read_capped,
-    remove_file,
-    write_temp,
 )
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
@@ -110,6 +108,7 @@ class FileBackend:
         self._seen: dict[str, tuple[int, str]] = {}
         self._manifests: dict[str, int] = {}
         self._has_layout = False
+        self._flushed: set[str] = set()
 
     def _folder(self, show_id: str) -> Path:
         return self.root / SHOWS_DIR / show_folder(show_id)
@@ -416,6 +415,8 @@ class FileBackend:
             self._prepare(show_id)
             self._store_blobs(show_id, blobs)
             self._store_record(show_id, revision, seq, tree)
+            folder = self._folder(show_id)
+            flush_directories(folder / OBJECT_DIR, folder / RECORD_DIR)
             self._claim_slot(show_id, revision, seq)
             self._remember(show_id, seq, revision.id)
 
@@ -432,17 +433,25 @@ class FileBackend:
             raise conflict_error(show_id, parent, self.log(show_id)) from None
 
     def _prepare(self, show_id: str) -> None:
-        """Writes the layout file, the show's folders and its manifest when missing."""
+        """Writes what is missing of the layout file, folders and manifest, and flushes them.
+
+        Whichever process placed an entry, every process flushes the folders that hold them once
+        per show, so a commit never returns while an entry it relies on is still volatile.
+        """
         self._ensure_layout(show_id)
-        if show_id in self._manifests:
+        if show_id in self._flushed:
             return
         folder = self._folder(show_id)
         for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
-            make_folder(folder / name)
-        if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
-            self._manifests[show_id] = FIRST_SEQ
-        else:
-            self._check_manifest(show_id)
+            durable_io.make_folder(folder / name)
+        if show_id not in self._manifests:
+            if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
+                self._manifests[show_id] = FIRST_SEQ
+            else:
+                self._check_manifest(show_id)
+        durable_io.flush_directory(self.root, follows_links=True)
+        flush_directories(self.root / SHOWS_DIR, folder)
+        self._flushed.add(show_id)
 
     def _ensure_layout(self, show_id: str) -> None:
         """Links `layout.json` into place, after `tmp/` and before anything else is written."""
@@ -454,46 +463,33 @@ class FileBackend:
                 hint="open it with FileRepository, which reads layout 1",
                 context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(self.root)},
             )
-        make_folder(self.root / TEMP_DIR)
+        durable_io.make_folder(self.root / TEMP_DIR)
         if not self._place(show_id, self.root / LAYOUT_FILE, LAYOUT_BYTES):
             read_layout(self.root)
         self._has_layout = True
 
     def _place(self, show_id: str, target: Path, data: bytes) -> bool:
         """Writes `data` under `target` through a temp file; False when the name was taken."""
-        temp = write_temp(self.root / TEMP_DIR, data)
-        try:
-            with mapped_io(show_id, target, is_link=True):
-                return link_new(temp, target)
-        finally:
-            remove_file(temp)
+        return place_file(self.root / TEMP_DIR, show_id, target, data)
 
     def _store_blobs(self, show_id: str, blobs: Mapping[str, bytes]) -> None:
         """Stores each blob, keeping one already there only when it holds the same bytes."""
         objects = self._folder(show_id) / OBJECT_DIR
-        for digest, data in blobs.items():
-            target = objects / digest
-            if lstat_mode(show_id, target) is None and self._place(show_id, target, data):
-                continue
-            self._verified_blob(show_id, target)
+        verify = partial(self._verified_blob, show_id)
+        store_blobs(self.root / TEMP_DIR, show_id, objects, blobs, verify)
 
     def _store_record(
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
     ) -> None:
         """Places the revision record, or checks the one an identical commit placed first."""
-        path = self._record_path(show_id, revision.id)
         record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
-        if self._place(show_id, path, record):
-            return
-        stored = read_capped(
-            path, "revision record", TREE_MAX_BYTES, lambda p, why: corrupt(show_id, p, why)
-        )
-        if stored != record:
-            raise corrupt(show_id, path, "revision record differs from this commit")
+        store_record(self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record)
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
         self._require_no_gap(show_id, seq)
         slot = jcs(revision.to_json()) + b"\n"
-        if not self._place(show_id, self._slot_path(show_id, seq), slot):
+        path = self._slot_path(show_id, seq)
+        if not place_file(self.root / TEMP_DIR, show_id, path, slot):
             raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
+        flush_directories(path.parent, is_commit_point=True)

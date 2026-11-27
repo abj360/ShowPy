@@ -86,7 +86,7 @@ import pytest
 from e8s.core.canonical import jcs
 from e8s.core.errors import ConflictError, StorageError, UnknownRefError, VersionError
 from e8s.core.util import content_hash
-from e8s.show import file_backend
+from e8s.show import durable_io, file_backend
 from e8s.show.backend import digest
 from e8s.show.backend_checks import ReadBudget
 from e8s.show.document_dump import dump_json
@@ -442,10 +442,10 @@ def test_failed_temp_write_leaves_no_temp_file(
     backend = FileBackend(tmp_path)
     [first] = _landed(backend, 1)
 
-    def failing_fsync(_descriptor: int) -> None:
+    def failing_flush(*_args: object, **_kwargs: object) -> None:
         raise OSError(errno.EIO, "Input/output error")
 
-    monkeypatch.setattr(os, "fsync", failing_fsync)
+    monkeypatch.setattr(durable_io, "flush_file", failing_flush)
     revision, tree, blobs = _change(first.id, 1)
     with pytest.raises(StorageError) as caught:
         backend.commit(SHOW_ID, revision, tree, blobs)
