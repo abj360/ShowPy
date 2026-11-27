@@ -22,6 +22,23 @@ Contains:
     test_proposal_accepted__revision_is_set_exactly_when_accepted: refuses an accepted proposal
         without its revision and a revision on any other state
     test_proposal_reason_is_set_only_when_rejected: refuses a reason on any state but rejected
+    test_accept_writes_the_change_and_the_state_in_one_revision: lands a merged change and the
+        accepted state together after the base moved
+    test_non_overlapping_proposal_lands_after_the_base_moved: keeps the designer's edit and the
+        proposal's edit on different items
+    test_preview_shows_the_merge_on_the_head: previews head against the merged show
+    test_preview_of_a_conflicting_proposal_lists_only_its_conflicts: previews conflicts and
+        nothing else
+    test_is_stale_agrees_with_the_merge_conflicts: names the same items as accept refuses
+    test_regression_preview_does_not_move_the_workspace: keeps the caller's base revision, so a
+        stale write after a preview still conflicts
+    test_rescale_merges_when_the_head_left_its_transition_alone: lands a rescale beside an edit
+        elsewhere
+    test_rescale_conflicts_with_a_row_the_head_added: refuses a rescale beside a head-added row
+    test_rescale_conflicts_with_a_row_the_head_edited_to_the_rescaled_value: refuses an equal
+        value the head wrote against the base's counts
+    test_regression_accept_by_merge_respects_a_pin_added_after_the_base: refuses a merge that
+        changes an item pinned on the head
 """
 
 from datetime import UTC, datetime, timedelta
@@ -30,29 +47,32 @@ from pathlib import Path
 import pytest
 
 from e8s.choreo.models import Placement
+from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError, E8sError, SchemaError, UnknownRefError
-from e8s.core.ids import SetId, SpotId
+from e8s.core.errors import ConflictError, E8sError, LockedError, SchemaError, UnknownRefError
+from e8s.core.ids import SetId, SpotId, make_tid
 from e8s.show.backend import digest
 from e8s.show.changes import apply_change
-from e8s.show.collab_models import PlacementOp, Proposal, ProposalState
+from e8s.show.collab_models import CountsOp, PlacementOp, Proposal, ProposalState
 from e8s.show.events import events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import diff_show
 from e8s.show.history_models import Revision
 from e8s.show.manage import add_set
 from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.pinning import pin
 from e8s.show.proposals import (
     accept,
     get_proposal,
     is_stale,
+    preview_proposal,
     proposals,
     propose,
     reject,
     withdraw,
 )
 from e8s.show.show_io import load_show, save_show
-from e8s.show.workspace import open_workspace
+from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import SHOW_ID, open_session
 
@@ -217,8 +237,144 @@ def test_accept_of_a_stale_proposal_is_proposal_stale() -> None:
     with pytest.raises(ConflictError) as info:
         accept(designer, "p1", AT + 3 * STEP)
     assert info.value.code == ErrorCode.PROPOSAL_STALE
-    assert info.value.context["overlap"] == ["placement T1 in set 2"]
+    assert info.value.context["conflicts"] == [
+        "placement 2/T1 (drill): both sides changed this item differently"
+    ]
     assert get_proposal(designer, "p1").state == "open"
+
+
+def _moved_both_ways(at: datetime) -> tuple[Workspace, Workspace]:
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), at)
+    propose(agent, [_move("T3", -1.0)], "shift", "p1", at + STEP)
+    designer.refresh()
+    save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), at + 2 * STEP)
+    return agent, designer
+
+
+def test_accept_writes_the_change_and_the_state_in_one_revision() -> None:
+    _, designer = _moved_both_ways(AT)
+    head = designer.revision
+    revision = accept(designer, "p1", AT + 3 * STEP)
+    assert revision.parent == head
+    assert get_proposal(designer, "p1").accepted_revision == head
+    assert designer.repo.head(SHOW_ID) == revision.id
+    assert load_show(designer).set("2").get("T3").x == -1.0
+
+
+def test_non_overlapping_proposal_lands_after_the_base_moved() -> None:
+    _, designer = _moved_both_ways(AT)
+    assert not is_stale(designer, "p1")
+    accept(designer, "p1", AT + 3 * STEP)
+    landed = load_show(designer).set("2")
+    assert (landed.get("T1").x, landed.get("T3").x) == (8.0, -1.0)
+
+
+def test_preview_shows_the_merge_on_the_head() -> None:
+    _, designer = _moved_both_ways(AT)
+    preview = preview_proposal(designer, "p1")
+    assert preview.conflicts == ()
+    assert [p.entity for p in preview.placements[SetId("2")]] == ["T3"]
+    assert preview.placements[SetId("2")][0].x == -1.0
+    assert preview.proposal_id == "p1"
+
+
+def test_preview_of_a_conflicting_proposal_lists_only_its_conflicts() -> None:
+    _, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT + STEP)
+    designer.refresh()
+    save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), AT + 2 * STEP)
+    preview = preview_proposal(designer, "p1")
+    assert [(c.key.kind, c.key.path) for c in preview.conflicts] == [("placement", ("2", "T1"))]
+    assert preview.model_copy(update={"conflicts": ()}) == type(preview)(proposal_id="p1")
+
+
+def test_regression_preview_does_not_move_the_workspace() -> None:
+    """Keeps the caller's base revision, so a stale write after a preview still conflicts."""
+    _, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT + STEP)
+    stale = designer.revision
+    assert stale != designer.repo.head(SHOW_ID)
+    preview = preview_proposal(designer, "p1")
+    assert preview.placements[SetId("2")][0].x == -1.0
+    assert designer.revision == stale
+    with pytest.raises(ConflictError):
+        save_show(designer, load_show(designer), AT + 2 * STEP)
+
+
+def _rescale_session(rows: dict[SpotId, PathRow]) -> tuple[Workspace, Workspace]:
+    show = two_set_show()
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=show.set("2").counts, rows=rows)
+    _, agent, designer = open_session(show.replace(transitions=(spec,)), AT)
+    rescale = CountsOp(set_id=SetId("2"), counts=show.set("2").counts * 2, rescale=True)
+    propose(agent, [rescale], "", "p1", AT + STEP)
+    designer.refresh()
+    return agent, designer
+
+
+def test_rescale_merges_when_the_head_left_its_transition_alone() -> None:
+    _, designer = _rescale_session({SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)})
+    save_show(designer, apply_change(load_show(designer), [_move("T2", 7.0)]), AT + 2 * STEP)
+    assert not is_stale(designer, "p1")
+    accept(designer, "p1", AT + 3 * STEP)
+    landed = load_show(designer)
+    assert landed.transition(("1", "2")).rows[SpotId("T1")].start == 4
+    assert landed.set("2").get("T2").x == 7.0
+
+
+def test_rescale_conflicts_with_a_row_the_head_added() -> None:
+    _, designer = _rescale_session({})
+    added = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=load_show(designer).set("2").counts,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=1)},
+    )
+    save_show(designer, load_show(designer).replace(transitions=(added,)), AT + 2 * STEP)
+    assert is_stale(designer, "p1")
+    conflicts = preview_proposal(designer, "p1").conflicts
+    assert [(c.key.kind, c.key.path) for c in conflicts] == [("path_row", ("1-2", "T1"))]
+    assert "timed against the base's counts" in conflicts[0].reason
+    with pytest.raises(ConflictError) as info:
+        accept(designer, "p1", AT + 3 * STEP)
+    assert info.value.code == ErrorCode.PROPOSAL_STALE
+
+
+def test_rescale_conflicts_with_a_row_the_head_edited_to_the_rescaled_value() -> None:
+    _, designer = _rescale_session({SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)})
+    show = load_show(designer)
+    equal = show.transition(("1", "2")).replace(
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=4)}
+    )
+    save_show(designer, show.replace(transitions=(equal,)), AT + 2 * STEP)
+    assert is_stale(designer, "p1")
+
+
+def test_is_stale_agrees_with_the_merge_conflicts() -> None:
+    _, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT + STEP)
+    designer.refresh()
+    assert not is_stale(designer, "p1")
+    assert not preview_proposal(designer, "p1").conflicts
+    save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), AT + 2 * STEP)
+    assert is_stale(designer, "p1")
+    assert preview_proposal(designer, "p1").conflicts
+    with pytest.raises(ConflictError) as info:
+        accept(designer, "p1", AT + 3 * STEP)
+    assert info.value.context["conflicts"] == [
+        f"placement 2/T1 (drill): {c.reason}" for c in preview_proposal(designer, "p1").conflicts
+    ]
+
+
+def test_regression_accept_by_merge_respects_a_pin_added_after_the_base() -> None:
+    """Refuses a proposal that moves a spot the designer pinned after the proposal's base."""
+    _, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT + STEP)
+    designer.refresh()
+    save_show(designer, pin(load_show(designer), "entity", "T1"), AT + 2 * STEP)
+    assert not is_stale(designer, "p1")
+    with pytest.raises(LockedError):
+        accept(designer, "p1", AT + 3 * STEP)
+    assert get_proposal(designer, "p1").state == "open"
+    assert load_show(designer).set("2").get("T1").x == 0.0
 
 
 @pytest.mark.parametrize(
