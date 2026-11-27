@@ -2,6 +2,7 @@
 commit_writes.py --- the writes of a layout-2 commit: files placed by exclusive link
 
 Contains:
+    flush_directories: flushes each folder so the names placed in it survive power loss
     place_file: writes bytes to a temp file and links it under a name that never gets replaced
     store_blobs: places each blob, keeping one already there only when it holds the same bytes
     store_record: places a revision record, or checks the one an identical commit placed first
@@ -10,19 +11,14 @@ Contains:
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
+from e8s.show import durable_io
 from e8s.show.backend_checks import corrupt
-from e8s.show.durable_io import (
-    link_new,
-    lstat_mode,
-    mapped_io,
-    read_capped,
-    remove_file,
-    write_temp,
-)
 from e8s.show.layout1 import TREE_MAX_BYTES
 
 
-def place_file(temp_folder: Path, show_id: str, target: Path, data: bytes) -> bool:
+def place_file(
+    temp_folder: Path, show_id: str, target: Path, data: bytes, *, is_commit_point: bool = False
+) -> bool:
     """Writes `data` under `target` through a temp file; False when the name was taken.
 
     Args:
@@ -30,16 +26,18 @@ def place_file(temp_folder: Path, show_id: str, target: Path, data: bytes) -> bo
         show_id: Show the write belongs to, named in errors.
         target: New name for the file; a file already there is never replaced.
         data: Bytes to write.
+        is_commit_point: Whether this file's landing makes the commit visible, so it gets a full
+            flush.
 
     Returns:
         is_placed: True when the name was free and now holds the bytes.
     """
-    temp = write_temp(temp_folder, data)
+    temp = durable_io.write_temp(temp_folder, data, is_commit_point=is_commit_point)
     try:
-        with mapped_io(show_id, target, is_link=True):
-            return link_new(temp, target)
+        with durable_io.mapped_io(show_id, target, is_link=True):
+            return durable_io.link_new(temp, target)
     finally:
-        remove_file(temp)
+        durable_io.remove_file(temp)
 
 
 def store_blobs(
@@ -60,7 +58,9 @@ def store_blobs(
     """
     for digest, data in blobs.items():
         target = objects / digest
-        if lstat_mode(show_id, target) is None and place_file(temp_folder, show_id, target, data):
+        if durable_io.lstat_mode(show_id, target) is None and place_file(
+            temp_folder, show_id, target, data
+        ):
             continue
         verify(target)
 
@@ -76,8 +76,18 @@ def store_record(temp_folder: Path, show_id: str, path: Path, record: bytes) -> 
     """
     if place_file(temp_folder, show_id, path, record):
         return
-    stored = read_capped(
+    stored = durable_io.read_capped(
         path, "revision record", TREE_MAX_BYTES, lambda p, why: corrupt(show_id, p, why)
     )
     if stored != record:
         raise corrupt(show_id, path, "revision record differs from this commit")
+
+
+def flush_directories(*folders: Path) -> None:
+    """Flushes each folder so the names placed in it survive power loss.
+
+    Args:
+        folders: Folders whose entries were just created.
+    """
+    for folder in folders:
+        durable_io.flush_directory(folder)

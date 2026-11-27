@@ -17,7 +17,7 @@ from e8s.core.canonical import jcs
 from e8s.core.errors import SchemaError, UnknownRefError, VersionError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show import document_repository
+from e8s.show import document_repository, durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
     conflict_error,
@@ -25,12 +25,11 @@ from e8s.show.backend import (
     unknown_revision_error,
 )
 from e8s.show.backend_checks import ReadBudget, Record, corrupt, require_caller_ids
-from e8s.show.commit_writes import place_file, store_blobs, store_record
+from e8s.show.commit_writes import flush_directories, place_file, store_blobs, store_record
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
     is_redirect,
     lstat_mode,
-    make_folder,
     mapped_io,
     read_capped,
 )
@@ -415,6 +414,8 @@ class FileBackend:
             self._prepare(show_id)
             self._store_blobs(show_id, blobs)
             self._store_record(show_id, revision, seq, tree)
+            folder = self._folder(show_id)
+            flush_directories(folder / OBJECT_DIR, folder / RECORD_DIR)
             self._claim_slot(show_id, revision, seq)
             self._remember(show_id, seq, revision.id)
 
@@ -437,8 +438,11 @@ class FileBackend:
             return
         folder = self._folder(show_id)
         for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
-            make_folder(folder / name)
+            durable_io.make_folder(folder / name)
         if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
+            flush_directories(
+                folder / LOG_DIR, folder / RECORD_DIR, folder / OBJECT_DIR, folder, folder.parent
+            )
             self._manifests[show_id] = FIRST_SEQ
         else:
             self._check_manifest(show_id)
@@ -453,8 +457,10 @@ class FileBackend:
                 hint="open it with FileRepository, which reads layout 1",
                 context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(self.root)},
             )
-        make_folder(self.root / TEMP_DIR)
-        if not self._place(show_id, self.root / LAYOUT_FILE, LAYOUT_BYTES):
+        durable_io.make_folder(self.root / TEMP_DIR)
+        if self._place(show_id, self.root / LAYOUT_FILE, LAYOUT_BYTES):
+            flush_directories(self.root / TEMP_DIR, self.root)
+        else:
             read_layout(self.root)
         self._has_layout = True
 
@@ -479,5 +485,7 @@ class FileBackend:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
         self._require_no_gap(show_id, seq)
         slot = jcs(revision.to_json()) + b"\n"
-        if not self._place(show_id, self._slot_path(show_id, seq), slot):
+        path = self._slot_path(show_id, seq)
+        if not place_file(self.root / TEMP_DIR, show_id, path, slot, is_commit_point=True):
             raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
+        flush_directories(path.parent)

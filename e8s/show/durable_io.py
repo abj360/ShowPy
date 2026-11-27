@@ -16,6 +16,13 @@ Contains:
     lstat_mode(): returns the lstat mode of a path, or None when it is absent
     is_redirect(): tells whether a path is a symlink or a Windows junction
     read_capped(): reads a regular file of at most a given size, reporting problems through a hook
+    IS_WINDOWS: tells whether the process runs on Windows, which has no directory flush
+    IS_MACOS: tells whether the process runs on macOS, which flushes with fcntl commands
+    F_FULLFSYNC: names the macOS fcntl command that flushes the drive's cache
+    F_BARRIERFSYNC: names the macOS fcntl command that orders writes without a cache flush
+    fcntl_flush(): runs a macOS fcntl flush command on a descriptor
+    flush_file(): flushes a written file, fully when it is the commit point
+    flush_directory(): flushes a folder so its new names survive power loss
     make_folder(): creates a folder and its missing parents
     write_temp(): writes bytes to a new temp file in a folder and returns its path
     link_new(): links a file under a new name, reporting whether the name was free
@@ -25,6 +32,7 @@ Contains:
 import errno
 import os
 import stat
+import sys
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -54,6 +62,11 @@ READ_FLAGS = (
 )
 # open(O_NOFOLLOW) on a symlink fails with ELOOP on Linux and macOS, EMLINK on FreeBSD.
 SYMLINK_OPEN_ERRNOS = frozenset({errno.ELOOP, errno.EMLINK})
+IS_WINDOWS = sys.platform == "win32"
+IS_MACOS = sys.platform == "darwin"
+# fcntl commands of macOS (sys/fcntl.h); Python's fcntl module has only F_FULLFSYNC.
+F_FULLFSYNC = 51
+F_BARRIERFSYNC = 85
 
 
 def _open_no_follow(path: Path, fail: Callable[[Path, str], Exception]) -> int:
@@ -186,12 +199,54 @@ def make_folder(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def write_temp(folder: Path, data: bytes) -> Path:
+def fcntl_flush(descriptor: int, command: int) -> None:
+    """Flushes a descriptor with a macOS `fcntl` command."""
+    import fcntl
+
+    fcntl.fcntl(descriptor, command)
+
+
+def flush_file(descriptor: int, *, is_commit_point: bool) -> None:
+    """Flushes a written file to the drive.
+
+    On macOS `fsync` does not order writes on the drive, so a file gets a barrier flush, and the
+    file whose landing makes a commit visible gets a full flush: a commit that returned survives
+    power loss, and nothing a slot names is lost before the slot. Elsewhere `fsync` is enough.
+
+    Args:
+        descriptor: Open descriptor of the file.
+        is_commit_point: Whether the file's landing makes the commit visible.
+    """
+    if not IS_MACOS:
+        os.fsync(descriptor)
+    elif is_commit_point:
+        fcntl_flush(descriptor, F_FULLFSYNC)
+    else:
+        fcntl_flush(descriptor, F_BARRIERFSYNC)
+
+
+def flush_directory(path: Path) -> None:
+    """Flushes a folder so the names created in it survive power loss; a no-op on Windows.
+
+    Args:
+        path: Existing folder.
+    """
+    if IS_WINDOWS:
+        return
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def write_temp(folder: Path, data: bytes, *, is_commit_point: bool = False) -> Path:
     """Writes bytes to a new temp file in a folder and flushes them to the drive.
 
     Args:
         folder: Folder that holds the temp file; it must exist.
         data: Bytes to write.
+        is_commit_point: Whether the file's landing makes a commit visible (a full flush).
 
     Returns:
         temp: Path of the written file; the caller links or removes it.
@@ -205,7 +260,7 @@ def write_temp(folder: Path, data: bytes) -> Path:
         try:
             handle.write(data)
             handle.flush()
-            os.fsync(handle.fileno())
+            flush_file(handle.fileno(), is_commit_point=is_commit_point)
         except OSError:
             handle.close()
             Path(handle.name).unlink(missing_ok=True)
