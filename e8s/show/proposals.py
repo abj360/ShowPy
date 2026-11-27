@@ -19,15 +19,18 @@ from typing import Final
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
+from e8s.core.ids import SetId, TransitionId
 from e8s.core.strict_json import parse_strict_json
 from e8s.core.util import close_matches
 from e8s.show.change_models import MergeConflict, MergeResult
 from e8s.show.changes import apply_change
-from e8s.show.collab_models import ChangeOp, Proposal, ProposalPreview
+from e8s.show.collab_models import ChangeOp, CountsOp, Proposal, ProposalPreview
 from e8s.show.document_paths import SEGMENT_PATTERN
 from e8s.show.documents import dump_json
 from e8s.show.files import show_changes
 from e8s.show.history_models import Revision
+from e8s.show.item_table import set_keys_by_id, transition_key
+from e8s.show.items import changes
 from e8s.show.locks import locked_changes, require_unlocked
 from e8s.show.merge import merge
 from e8s.show.models import Show
@@ -170,9 +173,54 @@ def _base_show(ws: Workspace, proposal: Proposal, head: Show) -> Show:
     return head if base is None else base
 
 
+def _rescaled_transitions(base: Show, change: Sequence[ChangeOp]) -> list[TransitionId]:
+    """Returns the transitions a rescaling counts op retimes, judged on the base show."""
+    rescaled = {op.set_id: op.counts for op in change if isinstance(op, CountsOp) and op.rescale}
+    return [
+        tid
+        for tid in base.transition_ids()
+        if tid[1] in rescaled and base.transition(tid).counts != rescaled[SetId(tid[1])]
+    ]
+
+
+def _rescale_conflicts(
+    base: Show, head: Show, theirs: Show, change: Sequence[ChangeOp]
+) -> list[MergeConflict]:
+    """Lists rows of a rescaled transition the head changed, even to the value the rescale gives.
+
+    A rescale derives every row's times from the base's counts, so a row the head added, removed
+    or edited is timed against counts the rescale replaces; equal values do not make them agree.
+    """
+    tids = _rescaled_transitions(base, change)
+    if not tids:
+        return []
+    keys = set_keys_by_id(base)
+    folders = {transition_key(keys, tid) for tid in tids}
+    rescaled = {c.key: c for c in changes(base, theirs).changes}
+    return [
+        MergeConflict(
+            key=row.key,
+            base=row.before,
+            ours=row.after,
+            theirs=rescaled[row.key].after if row.key in rescaled else row.before,
+            reason="the head's row is timed against the base's counts, which the rescale replaces",
+        )
+        for row in changes(base, head).changes
+        if row.key.kind == "path_row" and row.key.path[0] in folders
+    ]
+
+
 def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResult:
     base = _base_show(ws, proposal, head)
-    return merge(base, head, apply_change(base, proposal.change, force=True))
+    theirs = apply_change(base, proposal.change, force=True)
+    result = merge(base, head, theirs)
+    rows = _rescale_conflicts(base, head, theirs, proposal.change)
+    if not rows:
+        return result
+    known = {c.key.sort_key() for c in result.conflicts}
+    return MergeResult(
+        conflicts=(*result.conflicts, *(c for c in rows if c.key.sort_key() not in known))
+    )
 
 
 def _show_at_head(ws: Workspace, head_revision: str) -> Show:

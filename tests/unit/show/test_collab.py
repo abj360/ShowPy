@@ -425,8 +425,6 @@ def test_regression_proposal_against_unsaved_show_can_be_accepted() -> None:
     assert revision.id == designer.revision
 
 
-@pytest.mark.defect("UP-9.7-46")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-46")
 def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_transition() -> None:
     """Refuses a rescale proposal after the designer edited that transition's rows (audit 9.7)."""
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)

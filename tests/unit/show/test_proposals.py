@@ -40,12 +40,13 @@ from pathlib import Path
 import pytest
 
 from e8s.choreo.models import Placement
+from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, E8sError, LockedError, SchemaError, UnknownRefError
-from e8s.core.ids import SetId, SpotId
+from e8s.core.ids import SetId, SpotId, make_tid
 from e8s.show.backend import digest
 from e8s.show.changes import apply_change
-from e8s.show.collab_models import PlacementOp, Proposal, ProposalState
+from e8s.show.collab_models import CountsOp, PlacementOp, Proposal, ProposalState
 from e8s.show.events import events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import diff_show
@@ -291,6 +292,53 @@ def test_regression_preview_does_not_move_the_workspace() -> None:
     assert designer.revision == stale
     with pytest.raises(ConflictError):
         save_show(designer, load_show(designer), AT + 2 * STEP)
+
+
+def _rescale_session(rows: dict[SpotId, PathRow]) -> tuple[Workspace, Workspace]:
+    show = two_set_show()
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=show.set("2").counts, rows=rows)
+    _, agent, designer = open_session(show.replace(transitions=(spec,)), AT)
+    rescale = CountsOp(set_id=SetId("2"), counts=show.set("2").counts * 2, rescale=True)
+    propose(agent, [rescale], "", "p1", AT + STEP)
+    designer.refresh()
+    return agent, designer
+
+
+def test_rescale_merges_when_the_head_left_its_transition_alone() -> None:
+    _, designer = _rescale_session({SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)})
+    save_show(designer, apply_change(load_show(designer), [_move("T2", 7.0)]), AT + 2 * STEP)
+    assert not is_stale(designer, "p1")
+    accept(designer, "p1", AT + 3 * STEP)
+    landed = load_show(designer)
+    assert landed.transition(("1", "2")).rows[SpotId("T1")].start == 4
+    assert landed.set("2").get("T2").x == 7.0
+
+
+def test_rescale_conflicts_with_a_row_the_head_added() -> None:
+    _, designer = _rescale_session({})
+    added = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=load_show(designer).set("2").counts,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=1)},
+    )
+    save_show(designer, load_show(designer).replace(transitions=(added,)), AT + 2 * STEP)
+    assert is_stale(designer, "p1")
+    conflicts = preview_proposal(designer, "p1").conflicts
+    assert [(c.key.kind, c.key.path) for c in conflicts] == [("path_row", ("1-2", "T1"))]
+    assert "timed against the base's counts" in conflicts[0].reason
+    with pytest.raises(ConflictError) as info:
+        accept(designer, "p1", AT + 3 * STEP)
+    assert info.value.code == ErrorCode.PROPOSAL_STALE
+
+
+def test_rescale_conflicts_with_a_row_the_head_edited_to_the_rescaled_value() -> None:
+    _, designer = _rescale_session({SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)})
+    show = load_show(designer)
+    equal = show.transition(("1", "2")).replace(
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=4)}
+    )
+    save_show(designer, show.replace(transitions=(equal,)), AT + 2 * STEP)
+    assert is_stale(designer, "p1")
 
 
 def test_is_stale_agrees_with_the_merge_conflicts() -> None:
