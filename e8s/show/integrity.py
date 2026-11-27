@@ -6,11 +6,13 @@ Contains:
     RESERVED_ROOTS: the path prefixes kept for documents a later format defines, refused today
     require_structured_files(): checks changed text files decode as their readers decode them
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths, paths
-        under RESERVED_ROOTS and any name under `/cast/` but cast.json
+        under RESERVED_ROOTS, Windows device names in writes and any name under `/cast/` but
+        cast.json
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.digests: returns the content digest of each path's blob
-    require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
+    require_new_set_keys(): checks every set key and transition folder a commit stores in a
+        folder the base lacks
     require_distinct_folders(): refuses a new set folder matching another folder ignoring case
     require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
         and refuses a decoded show the encoder could not store again
@@ -20,11 +22,13 @@ Contains:
 import hashlib
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from functools import partial
 from types import MappingProxyType
 
 from e8s.core.error_codes import ErrorCode
+from e8s.core.error_context import bounded_repr
 from e8s.core.errors import SchemaError, StorageError
-from e8s.core.ids import check_id
+from e8s.core.ids import WINDOWS_DEVICE_NAMES, check_id, is_device_name
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_paths import CAST_DOC
 from e8s.show.documents import (
@@ -65,6 +69,9 @@ CONTROL_CATEGORY = "Cc"
 REQUIRED_DOCS = (SHOW_DOC, SHEET_DOC, TIMELINE_DOC)
 DOT_SEGMENTS = ("", ".", "..")
 FOLDER_DEPTH = 3
+FORMAT_CHECKED = "format-checked"
+PAIR_SIZE = 2
+FORMAT_CATEGORY = "Cf"
 
 
 def _bad_path(path: str) -> StorageError:
@@ -86,15 +93,40 @@ def _reserved_path(path: str, root: str) -> StorageError:
     )
 
 
+def _named_segments(root: str, segments: list[str]) -> list[str]:
+    """Returns the segments a path names freely; a set or transition folder is its set keys'."""
+    if len(segments) > 1 and root in (f"/{SETS_ROOT}/", f"/{TRANSITIONS_ROOT}/"):
+        return segments[1:]
+    return segments
+
+
+def _device_path(path: str, device: str) -> StorageError:
+    return StorageError(
+        f"path {bounded_repr(path)} names {bounded_repr(device)}, a Windows device name",
+        hint=f"rename that part: {', '.join(sorted(WINDOWS_DEVICE_NAMES))}, alone or before a"
+        " dot, open a device on Windows instead of a file",
+        context={"path": path, "segment": device},
+        code=ErrorCode.BAD_PATH,
+    )
+
+
 def _is_forbidden(char: str) -> bool:
-    return char == FORBIDDEN_CHARACTER or unicodedata.category(char) == CONTROL_CATEGORY
+    return char == FORBIDDEN_CHARACTER or unicodedata.category(char) in (
+        CONTROL_CATEGORY,
+        FORMAT_CATEGORY,
+    )
 
 
-def require_known_path(path: str) -> None:
-    """Refuses a path outside KNOWN_ROOTS, or one that only looks inside a root.
+def require_known_path(path: str, *, is_write: bool = True) -> None:
+    """Refuses a path outside KNOWN_ROOTS, one that only looks inside a root, or a device name.
+
+    A segment Windows opens as a device (`con`, `NUL.txt`, `com1.png`) is refused anywhere but
+    as a set or transition folder, whose set keys are checked, stored ones kept, on their own.
+    A deleted path skips the device check, so a file stored before the rule can be removed.
 
     Args:
         path: Absolute document path.
+        is_write: Whether the path is being written; False for a delete.
 
     >>> require_known_path("/sets/1/set.py")
     >>> try:
@@ -109,11 +141,15 @@ def require_known_path(path: str) -> None:
     root = next((r for r in KNOWN_ROOTS if path.startswith(r)), None)
     if root is None or any(_is_forbidden(c) for c in path):
         raise _bad_path(path)
-    if any(segment in DOT_SEGMENTS for segment in path[len(root) :].split("/")):
+    segments = path[len(root) :].split("/")
+    if any(segment in DOT_SEGMENTS for segment in segments):
         raise _bad_path(path)
+    device = next((s for s in _named_segments(root, segments) if is_device_name(s)), None)
+    if is_write and device is not None:
+        raise _device_path(path, device)
     if root == CAST_ROOT and path != CAST_DOC:
         raise StorageError(
-            f"{path} is not a cast document: {CAST_ROOT} holds only {CAST_DOC}",
+            f"{bounded_repr(path)} is not a cast document: {CAST_ROOT} holds only {CAST_DOC}",
             hint=f"store the cast in {CAST_DOC}; no format defines another name there",
             context={"path": path, "allowed": [CAST_DOC]},
             code=ErrorCode.BAD_PATH,
@@ -200,8 +236,30 @@ def _set_keys_in(path: str) -> list[str]:
     return []
 
 
+def _transition_folder(path: str) -> str | None:
+    parts = path.split("/")
+    if len(parts) <= FOLDER_DEPTH or parts[1] != TRANSITIONS_ROOT:
+        return None
+    return parts[2]
+
+
+def _require_pair_folders(before: Iterable[str], written: Iterable[str]) -> None:
+    """Refuses a transition folder new to the tree that does not name exactly two set keys."""
+    stored = {_transition_folder(path) for path in before}
+    new = {_transition_folder(path) for path in written} - stored
+    for folder in sorted(folder for folder in new if folder is not None):
+        keys = folder.split(PAIR_SEPARATOR)
+        if len(keys) != PAIR_SIZE or not all(keys):
+            raise SchemaError(
+                f"transition folder {bounded_repr(folder)} does not name two set keys",
+                hint=f"store a transition's files under /{TRANSITIONS_ROOT}/"
+                f"<key a>{PAIR_SEPARATOR}<key b>/",
+                context={"folder": folder},
+            )
+
+
 def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
-    """Checks every set key a commit stores in a folder the base tree lacks.
+    """Checks every set key and transition folder a commit stores in a folder the base lacks.
 
     Folders already stored are grandfathered, so v0.1 and v0.2 set IDs keep saving until stored IDs
     are migrated; a new folder, however the show was built, must pass check_id.
@@ -218,6 +276,7 @@ def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
     set key
     """
     stored = {key for path in before for key in _set_keys_in(path)}
+    _require_pair_folders(before, written)
     for key in sorted({key for path in written for key in _set_keys_in(path)} - stored):
         if check_id(key, kind="set key") != key:
             raise SchemaError(
@@ -278,6 +337,21 @@ def require_structured_files(
             require_structured(path, blob(after[path]))
 
 
+def _require_current_format(
+    digest: str, blob: Callable[[str], bytes], cache: DecodeCache | None
+) -> None:
+    """Checks show.json is in the current format version, once per digest with a cache."""
+    check = partial(_check_current_format, digest, blob)
+    if cache is None:
+        check()
+    else:
+        cache.get_or_decode(SHOW_DOC, f"{digest} {FORMAT_CHECKED}", check)
+
+
+def _check_current_format(digest: str, blob: Callable[[str], bytes]) -> None:
+    require_current_show_doc(blob(digest))
+
+
 def require_valid_digests(
     before: Mapping[str, str],
     after: Mapping[str, str],
@@ -289,8 +363,9 @@ def require_valid_digests(
     Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
     When any show document changes, the show.json the commit leaves must be in the current
     format version, else SchemaError code OLD_FORMAT: show.json versions the whole tree.
-    Documents whose digest sits in `cache` at the same path are reused; every changed
-    document is decoded fresh, and the show is validated whole either way.
+    Documents whose digest sits in `cache` at the same path are reused, so a commit loads and
+    decodes only the documents it changed; the show model is validated whole either way, so
+    every rule across documents is checked on every commit that changes a show document.
 
     Args:
         before: Path to blob digest before the commit.
@@ -306,7 +381,7 @@ def require_valid_digests(
     """
     changed = [p for p in set(before) | set(after) if before.get(p) != after.get(p)]
     for path in sorted(changed):
-        require_known_path(path)
+        require_known_path(path, is_write=path in after)
         if path in after:
             require_writable(path)
     require_new_set_keys(before, [p for p in changed if p in after])
@@ -315,7 +390,7 @@ def require_valid_digests(
     if not any(is_show_doc(p) for p in changed):
         return None
     if SHOW_DOC in after:
-        require_current_show_doc(blob(after[SHOW_DOC]))
+        _require_current_format(after[SHOW_DOC], blob, cache)
     _require_required_docs(after)
     require_cast_beside_roles(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)

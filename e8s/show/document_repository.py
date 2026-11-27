@@ -272,9 +272,9 @@ class DocumentRepository:
         >>> repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision=rev.id, at=at) == rev
         True
         """
-        for path in changes:
+        for path, data in changes.items():
             split_path(path)
-            require_known_path(path)
+            require_known_path(path, is_write=data is not None)
         if expected_revision == ROOT_REVISION:
             self._require_new_show_id(show_id)
         head = self._require_head(show_id, expected_revision)

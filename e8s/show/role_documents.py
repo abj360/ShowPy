@@ -33,6 +33,7 @@ from collections.abc import Collection, Iterable, Mapping
 from types import MappingProxyType
 
 from e8s.choreo.models import Set
+from e8s.core.error_context import bounded_repr
 from e8s.core.errors import SchemaError
 from e8s.core.ids import check_id
 from e8s.core.json_types import JsonValue
@@ -187,10 +188,20 @@ def _placement_order(path: str, raw: JsonObject) -> list[str]:
 
 
 def _listed(spots: list[str]) -> str:
-    """Joins the first LISTED_SPOTS spot IDs, each cut to SHOWN_ID_CHARS, and counts the rest."""
-    shown = [spot[:SHOWN_ID_CHARS] for spot in spots[:LISTED_SPOTS]]
+    """Joins the first LISTED_SPOTS keys, each cut to SHOWN_ID_CHARS and quoted; counts the rest.
+
+    Keys come from stored documents, so each is quoted with repr and its control characters
+    are escaped.
+    """
+    shown = [repr(spot[:SHOWN_ID_CHARS]) for spot in spots[:LISTED_SPOTS]]
     rest = len(spots) - len(shown)
     return ", ".join([*shown, f"(+{rest} more)"] if rest else shown)
+
+
+def _more(items: list[str]) -> str:
+    """Counts the items past the first LISTED_SPOTS, or returns nothing when none are left out."""
+    rest = len(items) - LISTED_SPOTS
+    return f" (+{rest} more)" if rest > 0 else ""
 
 
 def _require_stored_spot_id(path: str, spot: str) -> None:
@@ -238,7 +249,7 @@ def _role_rows(source: Source, path: str, order: list[str]) -> dict[str, JsonObj
         stray = sorted(row.keys() - fields)
         if stray:
             raise SchemaError(
-                f"{path} holds {', '.join(stray)} for spot {spot}, which it does not store",
+                f"{path} holds {_listed(stray)} for spot {spot!r}, which it does not store",
                 hint=f"store only {', '.join(sorted(fields))} in {path}",
                 context={"path": path, "spot": spot, "fields": stray},
             )
@@ -303,7 +314,7 @@ def require_known_cast_documents(paths: Iterable[str]) -> None:
     if unknown:
         raise SchemaError(
             f"{len(unknown)} documents lie under {CAST_ROOT}, which holds only {CAST_DOC}:"
-            f" {', '.join(unknown[:LISTED_SPOTS])}",
+            f" {', '.join(bounded_repr(p) for p in unknown[:LISTED_SPOTS])}{_more(unknown)}",
             hint=f"delete them; the format stores only {CAST_DOC} under {CAST_ROOT}",
             context={"documents": unknown, "count": len(unknown)},
         )

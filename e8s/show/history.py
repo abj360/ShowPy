@@ -9,16 +9,20 @@ Contains:
     changelog(): lists revisions since a revision as terse lines
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
+from e8s.core.errors import LockedError
 from e8s.core.ids import FormId, SpotId
 from e8s.core.json_types import JsonValue
 from e8s.core.units import angle_diff
 from e8s.core.util import approx_equal, natural_sort
 from e8s.show.diff_render import render_changes
+from e8s.show.files import require_writable
 from e8s.show.history_models import PathDiff, Revision, SetDiff
+from e8s.show.integrity import LazyBlobs, blob_digest
 from e8s.show.items import changes
 from e8s.show.models import Show
 from e8s.show.storage import ROOT_REVISION
@@ -128,7 +132,8 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
         at: Time stamp of the new revision.
 
     Returns:
-        revision: The new head; the head itself when nothing differs.
+        revision: The new head, whose `changed` lists each restored, re-added and deleted stored
+            path; the head itself when nothing differs.
 
     >>> from datetime import UTC
     >>> from e8s.show.memory_backend import InMemoryRepository
@@ -145,8 +150,37 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     target = ws.repo.get_revision(ws.show_id, revision_id)
     ws.refresh()
     old, head = ws.tree_at(target.id), ws.tree_at(ws.revision)
-    paths = {p for p in set(old) | set(head) if old.get(p) != head.get(p)}
-    return ws._commit_stored({p: old.get(p) for p in sorted(paths)}, at=at)
+    old_digests, head_digests = _digests(old), _digests(head)
+    paths = {
+        p for p in set(old_digests) | set(head_digests) if old_digests.get(p) != head_digests.get(p)
+    }
+    restored = sorted(paths)
+    for path in restored:
+        if path in old_digests:
+            _require_restorable(path, target.id)
+    return ws._commit_stored({p: old.get(p) for p in restored}, at=at)
+
+
+def _require_restorable(path: str, revision_id: str) -> None:
+    """Refuses a derived table an old revision stores, naming it and what is allowed."""
+    try:
+        require_writable(path)
+    except LockedError as err:
+        raise LockedError(
+            f"revision {revision_id[:SHORT_ID]} stores {path}, a derived table"
+            " that revert cannot restore",
+            hint=f"{path} is computed from the show; revert to a revision that stores no such"
+            " table, or edit forms.json, set.py or paths instead",
+            context={"path": path, "revision": revision_id},
+            code=err.code,
+        ) from err
+
+
+def _digests(tree: Mapping[str, bytes]) -> Mapping[str, str]:
+    """Returns each path's blob digest, so comparing trees reads no blob."""
+    if isinstance(tree, LazyBlobs):
+        return tree.digests
+    return {path: blob_digest(raw) for path, raw in tree.items()}
 
 
 def _line(revision: Revision) -> str:
