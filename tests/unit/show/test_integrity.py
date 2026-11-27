@@ -62,6 +62,8 @@ Contains:
         not name two set keys, and keeps a stored one
     test_regression_windows_device_names_in_paths_are_refused: refuses a path segment Windows
         opens as a device, and keeps look-alikes and stored set folders
+    test_regression_stored_device_named_file_can_be_deleted: deletes a stored device-named file
+        through a commit while refusing to write a new one
     test_one_spot_commit_decodes_only_changed_documents: loads only the edited set's documents
         and decodes one cache entry on a warm one-spot commit
     test_commit_check_still_refuses_every_invalid_tree: refuses each broken tree with a warm
@@ -104,6 +106,7 @@ from e8s.show.documents import (
     set_doc,
 )
 from e8s.show.file_repository import FileRepository
+from e8s.show.history_models import Revision
 from e8s.show.integrity import (
     KNOWN_ROOTS,
     LazyBlobs,
@@ -724,3 +727,17 @@ def test_regression_windows_device_names_in_paths_are_refused(path: str) -> None
     assert "device" in caught.value.hint
     for allowed in ("/exports/console.txt", "/exports/com10.txt", "/exports/x.con", CON_SET_DOC):
         require_known_path(allowed)
+
+
+def test_regression_stored_device_named_file_can_be_deleted() -> None:
+    repo, head = _repo()
+    stored = "/exports/CON.txt"
+    data = b"legacy"
+    tree = {**repo.backend.tree(SHOW_ID, head), stored: blob_digest(data)}
+    revision = Revision(id=blob_digest(b"seed"), parent=head, at=AT, changed=(stored,))
+    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(data): data})
+    with pytest.raises(StorageError) as caught:
+        _commit(repo, revision.id, {"/exports/NUL.txt": b"new"})
+    assert caught.value.code == ErrorCode.BAD_PATH
+    _commit(repo, revision.id, {stored: None})
+    assert stored not in repo.documents(SHOW_ID, repo.head(SHOW_ID))

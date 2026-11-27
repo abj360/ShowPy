@@ -6,7 +6,8 @@ Contains:
     RESERVED_ROOTS: the path prefixes kept for documents a later format defines, refused today
     require_structured_files(): checks changed text files decode as their readers decode them
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths, paths
-        under RESERVED_ROOTS, Windows device names and any name under `/cast/` but cast.json
+        under RESERVED_ROOTS, Windows device names in writes and any name under `/cast/` but
+        cast.json
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.digests: returns the content digest of each path's blob
@@ -116,14 +117,16 @@ def _is_forbidden(char: str) -> bool:
     )
 
 
-def require_known_path(path: str) -> None:
+def require_known_path(path: str, *, is_write: bool = True) -> None:
     """Refuses a path outside KNOWN_ROOTS, one that only looks inside a root, or a device name.
 
     A segment Windows opens as a device (`con`, `NUL.txt`, `com1.png`) is refused anywhere but
     as a set or transition folder, whose set keys are checked, stored ones kept, on their own.
+    A deleted path skips the device check, so a file stored before the rule can be removed.
 
     Args:
         path: Absolute document path.
+        is_write: Whether the path is being written; False for a delete.
 
     >>> require_known_path("/sets/1/set.py")
     >>> try:
@@ -142,7 +145,7 @@ def require_known_path(path: str) -> None:
     if any(segment in DOT_SEGMENTS for segment in segments):
         raise _bad_path(path)
     device = next((s for s in _named_segments(root, segments) if is_device_name(s)), None)
-    if device is not None:
+    if is_write and device is not None:
         raise _device_path(path, device)
     if root == CAST_ROOT and path != CAST_DOC:
         raise StorageError(
@@ -378,7 +381,7 @@ def require_valid_digests(
     """
     changed = [p for p in set(before) | set(after) if before.get(p) != after.get(p)]
     for path in sorted(changed):
-        require_known_path(path)
+        require_known_path(path, is_write=path in after)
         if path in after:
             require_writable(path)
     require_new_set_keys(before, [p for p in changed if p in after])
