@@ -11,6 +11,7 @@ Contains:
     test_every_event_kind_round_trips_through_json: rebuilds each event kind from its JSON
     test_events_since_the_root_of_a_legacy_repository: derives events from a v0.2 repository's
         first revision
+    test_event_ids_are_checked_on_decode: refuses an event ID that breaks the sheet ID rule
     test_events_since_replay_reproduces_head_after_random_edits: replays random edit sequences
         onto the base show and gets the head show
     test_regression_form_deletion_is_a_delete_form_event: derives and replays a form deletion
@@ -31,8 +32,9 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import Placement
 from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.choreo.recipe_models import LineRecipe
-from e8s.core.errors import LockedError
-from e8s.core.ids import FormId, SetId, SpotId, make_tid
+from e8s.core.errors import LockedError, SchemaError
+from e8s.core.ids import ID_MAX_LENGTH, FormId, SetId, SpotId, make_tid
+from e8s.core.json_types import JsonValue
 from e8s.geo.shapes import line
 from e8s.show.anchors import Anchor
 from e8s.show.changes import apply_change
@@ -170,6 +172,21 @@ def test_events_since_the_root_of_a_legacy_repository(tmp_path: Path) -> None:
     assert replayed.replace(revision=head) == ws.show_at(head)
     assert events_since(ws, ROOT_REVISION) == events
     assert events_since(ws, head) == []
+
+
+@pytest.mark.parametrize(
+    "event_id",
+    ["", " ", " e1", "e1 ", "e\n1", "e\x001", "e\u200b1", "e" * (ID_MAX_LENGTH + 1), "-e1", "con"],
+)
+def test_event_ids_are_checked_on_decode(event_id: str) -> None:
+    raw: dict[str, JsonValue] = {
+        "id": event_id,
+        "at": AT.isoformat(),
+        "kind": "highlight",
+        "payload": {"zone": "pit", "ttl_s": 10.0},
+    }
+    with pytest.raises(SchemaError, match="bad event id"):
+        decode_event(raw)
 
 
 def test_regression_form_deletion_is_a_delete_form_event() -> None:

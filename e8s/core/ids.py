@@ -6,6 +6,8 @@ Contains:
         SelectionNameField: model field types that run check_id on validation
     ShowIdField: model field type that runs check_sheet_id, because stored show IDs keep an
         inner `-`
+    EventIdField: model field type that runs check_sheet_id, because derived event IDs join a
+        revision prefix and a number with `-`
     TransitionId: names the transition between two sets; `str()` writes `12→13`
     LEGACY_IDS_KEY: validation context key whose True value lets ID fields take any non-empty text
     parse_ref(): reads `kind:id@version` into its parts, checking the id and version
@@ -157,5 +159,6 @@ RouteIdField = Annotated[RouteId, AfterValidator(_checked("route", check_id))]
 # Show IDs name repository folders, and stored shows keep IDs with an inner `-`, so the field
 # applies the sheet rule; refusing `-` in new show IDs belongs to the code that creates shows.
 ShowIdField = Annotated[ShowId, AfterValidator(_checked("show", check_sheet_id))]
+EventIdField = Annotated[str, AfterValidator(_checked("event", check_sheet_id))]
 NoteIdField = Annotated[NoteId, AfterValidator(_checked("note", check_id))]
 SelectionNameField = Annotated[SelectionName, AfterValidator(_checked("selection", check_id))]

@@ -33,6 +33,7 @@ from e8s.choreo.models import Placement
 from e8s.choreo.path_models import TransitionSpec
 from e8s.core.errors import SchemaError
 from e8s.core.ids import (
+    EventIdField,
     SetId,
 )
 from e8s.core.readonly import ReadOnlyMap
@@ -181,14 +182,14 @@ class CanvasEvent(FrozenModel):
     another kind's model is refused.
 
     Attributes:
-        id: Event ID.
+        id: Event ID, 1 to 64 ASCII letters, digits, `_`, `.` and inner `-`.
         at: When it happened.
         kind: What happened.
         payload: Typed body for the kind.
         revision: Revision that holds the edit; empty for pointers such as highlights.
     """
 
-    id: str
+    id: EventIdField
     at: datetime
     kind: EventKind
     payload: EventPayload
