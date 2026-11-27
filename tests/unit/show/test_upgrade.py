@@ -71,6 +71,9 @@ from tests.fixtures.upgrade_repos import (
 )
 
 RELEASES = ("v0.1.1", "v0.2.0", "v0.3.0", "v0.4.0")
+# One past the last revision whose ID does not recompute under the current scheme: v0.1.1 and
+# v0.2.0 wrote every ID under the old one, v0.3.0 and v0.4.0 only their second revision.
+LEGACY_BEFORE = {"v0.1.1": 4, "v0.2.0": 4, "v0.3.0": 3, "v0.4.0": 3}
 LEGACY_SHOW = "legacy-show"
 AFTER = "/renders/after.txt"
 UPGRADE_CALL = re.compile(r"e8s\.upgrade_repository\(.*?\)\)")
@@ -161,7 +164,7 @@ def test_regression_every_released_fixture_upgrades_with_ids_kept(
         blobs |= set(tree.values())
     folder = target / "shows" / show_folder(show_id)
     manifest = json.loads((folder / "show.json").read_bytes())
-    assert manifest == {"id": show_id, "legacy_before": len(history) + 1}
+    assert manifest == {"id": show_id, "legacy_before": LEGACY_BEFORE[release]}
     shown = report.shows[0]
     assert shown == ShowUpgrade(show=show_id, revisions=len(history), blobs_linked=len(blobs))
     assert report.skipped == ()

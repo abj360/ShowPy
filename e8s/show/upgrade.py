@@ -14,8 +14,9 @@ from pathlib import Path
 from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
+from e8s.core.json_types import JsonValue
 from e8s.show import durable_io
-from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt
+from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt, recomputes
 from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import mapped_io
@@ -208,13 +209,14 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
     show_id = listed.show_id
     revisions = reader.log(show_id)
     folder = target.show_folder(show_id)
-    manifest = {"id": show_id, "legacy_before": len(revisions) + FIRST_SEQ}
-    target.place(show_id, folder / MANIFEST_FILE, dump_json(manifest))
     budget = ReadBudget(show_id, LOG_READ_MAX_BYTES)
     blobs: set[str] = set()
     linked = 0
+    legacy = 0
     for seq, revision in enumerate(revisions, start=FIRST_SEQ):
         tree = reader.tree(show_id, revision.id)
+        if not recomputes(revision, tree):
+            legacy = seq
         for digest in sorted(set(tree.values()) - blobs):
             source = reader.root / show_id / OBJECT_DIR / digest
             linked += target.transfer(show_id, source, folder / OBJECT_DIR / digest)
@@ -224,6 +226,7 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
         budget.spend(len(record) + len(slot))
         target.place(show_id, folder / RECORD_DIR / f"{revision.id}.json", record)
         target.place(show_id, folder / LOG_DIR / f"{seq:0{SLOT_DIGITS}d}", slot)
+    target.place(show_id, folder / MANIFEST_FILE, dump_json(_manifest(show_id, legacy)))
     target.flush_show(folder)
     return ShowUpgrade(
         show=show_id,
@@ -232,6 +235,17 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
         blobs_copied=len(blobs) - linked,
         skipped=left_out(listed, _used_files(revisions, blobs)),
     )
+
+
+def _manifest(show_id: str, legacy: int) -> dict[str, JsonValue]:
+    """Builds a show's manifest; slots up to the last old-scheme one keep their IDs unchecked.
+
+    Only those slots hold IDs that do not recompute under the current scheme, so every later
+    copied record is verified on read like a native one. A history with none gets no key.
+    """
+    if not legacy:
+        return {"id": show_id}
+    return {"id": show_id, "legacy_before": legacy + FIRST_SEQ}
 
 
 def _used_files(revisions: list[Revision], blobs: set[str]) -> dict[str, set[str]]:

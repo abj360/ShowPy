@@ -15,6 +15,7 @@ Contains:
     parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
     require_legacy_bound(): raises CORRUPT when `legacy_before` passes the slot after the last
     require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
+    recomputes(): tells whether a revision's ID is the current scheme's hash of what it holds
     Record: holds a revision record's slot number, revision and tree
     parsed_record(): checks a parsed revision record against its name and returns it
     require_slot_record(): raises CORRUPT unless a slot's record holds its number and revision
@@ -216,13 +217,23 @@ class Record(NamedTuple):
     tree: dict[str, str]
 
 
+def recomputes(revision: Revision, tree: Mapping[str, str]) -> bool:
+    """Tells whether a revision's ID is the current scheme's hash of its parent, time and changes.
+
+    Args:
+        revision: The revision.
+        tree: Path to blob digest at the revision; a changed path it lacks was deleted.
+
+    Returns:
+        is_current: False for an ID of the older scheme, or one that names other content.
+    """
+    changes = {changed: tree.get(changed) for changed in revision.changed}
+    return document_repository.revision_id(revision.parent, revision.at, changes) == revision.id
+
+
 def _require_scheme_id(show_id: str, path: Path, record: Record, legacy_before: int) -> None:
     """Requires the ID to be recomputable from the record, except before `legacy_before`."""
-    revision = record.revision
-    if record.seq < legacy_before:
-        return
-    changes = {changed: record.tree.get(changed) for changed in revision.changed}
-    if document_repository.revision_id(revision.parent, revision.at, changes) != revision.id:
+    if record.seq >= legacy_before and not recomputes(record.revision, record.tree):
         raise corrupt(show_id, path, "record does not hash to its name")
 
 
