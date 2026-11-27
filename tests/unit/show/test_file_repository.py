@@ -19,8 +19,16 @@ Contains:
         its hash on read
     test_regression_commit_cleans_stale_temp_files: removes `.tmp-*` files left by crashed writers
         on the next commit
+    test_stale_temp_file_just_past_the_age_is_removed: removes a temp file older than
+        STALE_TEMP_AGE and keeps one just inside it
+    test_fresh_temp_file_of_another_writer_is_kept: keeps a temp file made an hour before the
+        commit's `at`
     test_regression_losing_commit_leaves_no_orphan_tree: removes the tree file of a commit that lost
         the race
+    test_retried_commit_that_loses_leaves_no_orphan_record: removes the record a crashed attempt of
+        the same commit left, once the retry loses its slot
+    test_losing_identical_commit_keeps_the_shared_record: keeps the record of a commit that lost
+        its slot to an identical commit
     test_regression_tree_record_refuses_duplicate_keys: maps a tree record repeating a key to
         CORRUPT
     test_regression_tree_record_refuses_nan: maps a tree record holding NaN to CORRUPT
@@ -111,10 +119,13 @@ import e8s.show.layout1 as layout1
 from e8s.core.canonical import MAX_NESTING
 from e8s.core.errors import ConflictError, StorageError, bounded_repr
 from e8s.show.backend import digest
-from e8s.show.document_repository import DocumentRepository
+from e8s.show.commit_writes import STALE_TEMP_AGE
+from e8s.show.document_repository import DocumentRepository, revision_id
+from e8s.show.file_backend import FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_MAX_BYTES, TREE_MAX_BYTES
+from e8s.show.show_folders import show_folder
 from e8s.show.workspace import open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
@@ -122,6 +133,7 @@ from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show_1"
 STALE_AGE_S = 7 * 24 * 3600
+HOUR_S = 3600
 DECOY_NAME = "decoy"
 SHOW_DOC = "/show/show.json"
 RACERS = 8
@@ -222,35 +234,112 @@ def test_regression_swapped_blob_is_reported_corrupt(tmp_path: Path) -> None:
         repo.read(SHOW_ID, SHOW_DOC)
 
 
-@pytest.mark.defect("UP-9.7-27")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-27")
+def _saved_v2(tmp_path: Path) -> tuple[FileRepository, str, Path]:
+    """Saves the two-set show into an empty root, which FileRepository keeps in layout 2."""
+    repo = FileRepository(tmp_path / "repo")
+    rev = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    return repo, rev.id, tmp_path / "repo"
+
+
+def _temp_file_aged(root: Path, name: str, age_s: float) -> Path:
+    path = root / "tmp" / name
+    path.write_bytes(b"partial")
+    os.utime(path, (AT.timestamp() - age_s, AT.timestamp() - age_s))
+    return path
+
+
+def _lost_commit(repo: FileRepository, parent: str, revision_id: str, blob: bytes) -> None:
+    loser = Revision(id=revision_id, parent=parent, at=AT, changed=("/renders/b.txt",))
+    tree = {"/renders/b.txt": digest(blob)}
+    with pytest.raises(ConflictError):
+        repo.backend.commit(SHOW_ID, loser, tree, {digest(blob): blob})
+
+
 def test_regression_commit_cleans_stale_temp_files(tmp_path: Path) -> None:
     """Removes `.tmp-*` files left by crashed writers on the next commit (audit 9.7 item 10)."""
-    repo, rev, base = _saved(tmp_path)
-    stale = base / "objects" / ".tmp-crashed"
-    stale.write_bytes(b"partial")
-    os.utime(stale, (AT.timestamp() - STALE_AGE_S, AT.timestamp() - STALE_AGE_S))
+    repo, rev, root = _saved_v2(tmp_path)
+    _temp_file_aged(root, ".tmp-crashed", STALE_AGE_S)
     _second_revision(repo, rev)
-    assert not list(base.rglob(".tmp-*"))
+    assert not list(root.rglob(".tmp-*"))
 
 
-@pytest.mark.defect("UP-9.7-28")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-28")
+def test_stale_temp_file_just_past_the_age_is_removed(tmp_path: Path) -> None:
+    """Removes a temp file older than STALE_TEMP_AGE and keeps one just inside it."""
+    repo, rev, root = _saved_v2(tmp_path)
+    past = _temp_file_aged(root, ".tmp-past", STALE_TEMP_AGE.total_seconds() + 1)
+    inside = _temp_file_aged(root, ".tmp-inside", STALE_TEMP_AGE.total_seconds() - 1)
+    _second_revision(repo, rev)
+    assert (past.exists(), inside.exists()) == (False, True)
+
+
+def test_fresh_temp_file_of_another_writer_is_kept(tmp_path: Path) -> None:
+    """Keeps a temp file another writer made an hour before the commit's `at`."""
+    repo, rev, root = _saved_v2(tmp_path)
+    fresh = _temp_file_aged(root, ".tmp-other-writer", HOUR_S)
+    _second_revision(repo, rev)
+    assert fresh.read_bytes() == b"partial"
+
+
 def test_regression_losing_commit_leaves_no_orphan_tree(tmp_path: Path) -> None:
     """Removes the tree file of a commit that lost the race (audit 9.7 item 10)."""
-    repo, rev, base = _saved(tmp_path)
+    repo, rev, root = _saved_v2(tmp_path)
     _second_revision(repo, rev)
-    loser_blob = b"loser"
-    loser = Revision(
-        id=LOSER_ID,
-        parent=rev,
-        at=AT,
-        changed=("/renders/b.txt",),
+    _lost_commit(repo, rev, LOSER_ID, b"loser")
+    folder = root / "shows" / show_folder(SHOW_ID)
+    assert not (folder / "records" / f"{LOSER_ID}.json").exists()
+
+
+def test_losing_identical_commit_keeps_the_shared_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keeps the record of a commit that lost its slot to an identical commit, which shares it."""
+    repo, rev, root = _saved_v2(tmp_path)
+    backend = FileBackend(root)
+    twin = FileBackend(root)
+    blob = b"same"
+    tree = {"/renders/b.txt": digest(blob)}
+    revision = Revision(
+        id=revision_id(rev, AT, tree), parent=rev, at=AT, changed=("/renders/b.txt",)
     )
-    tree = {"/renders/b.txt": digest(loser_blob)}
+    real_claim = backend._claim_slot
+
+    def claim_after_twin(show_id: str, claimed: Revision, seq: int) -> None:
+        twin.commit(show_id, claimed, tree, {digest(blob): blob})
+        real_claim(show_id, claimed, seq)
+
+    monkeypatch.setattr(backend, "_claim_slot", claim_after_twin)
     with pytest.raises(ConflictError):
-        repo.backend.commit(SHOW_ID, loser, tree, {digest(loser_blob): loser_blob})
-    assert not (base / "trees" / f"{loser.id}.json").exists()
+        backend.commit(SHOW_ID, revision, tree, {digest(blob): blob})
+    record = root / "shows" / show_folder(SHOW_ID) / "records" / f"{revision.id}.json"
+    assert record.is_file()
+    assert repo.head(SHOW_ID) == revision.id
+
+
+def test_retried_commit_that_loses_leaves_no_orphan_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Removes the record a crashed attempt left, once the retry of that commit loses its slot."""
+    repo, rev, root = _saved_v2(tmp_path)
+    blob = b"retried"
+    tree = {"/renders/b.txt": digest(blob)}
+    revision = Revision(
+        id=revision_id(rev, AT, tree), parent=rev, at=AT, changed=("/renders/b.txt",)
+    )
+    crashing = FileBackend(root)
+
+    def crash(*_args: object) -> None:
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(crashing, "_claim_slot", crash)
+        with pytest.raises(KeyboardInterrupt):
+            crashing.commit(SHOW_ID, revision, tree, {digest(blob): blob})
+    record = root / "shows" / show_folder(SHOW_ID) / "records" / f"{revision.id}.json"
+    assert record.is_file()
+    _second_revision(repo, rev)
+    with pytest.raises(ConflictError):
+        FileBackend(root).commit(SHOW_ID, revision, tree, {digest(blob): blob})
+    assert not record.exists()
 
 
 CORRUPT = "CORRUPT"

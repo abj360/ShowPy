@@ -29,6 +29,7 @@ Contains:
     write_temp(): writes bytes to a new temp file in a folder and returns its path
     link_new(): links a file under a new name, reporting whether the name was free
     remove_file(): removes a file when it exists
+    remove_stale_temps(): removes the temp files in a folder last modified before a cut-off
 """
 
 import errno
@@ -38,6 +39,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
 
@@ -308,3 +310,26 @@ def link_new(source: Path, target: Path) -> bool:
 def remove_file(path: Path) -> None:
     """Removes a file; a missing one is no error."""
     path.unlink(missing_ok=True)
+
+
+def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
+    """Removes the temp files in `folder` whose modification time is before `cutoff`.
+
+    A file that vanishes between the listing and the removal belongs to a writer that finished,
+    so it is skipped.
+
+    Args:
+        folder: Folder that holds the temp files; it must exist.
+        cutoff: Moment before which a temp file counts as left behind by a crashed writer.
+    """
+    cutoff_s = cutoff.timestamp()
+    with os.scandir(folder) as entries:
+        for entry in entries:
+            if not entry.name.startswith(TEMP_PREFIX):
+                continue
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff_s:
+                remove_file(Path(entry.path))

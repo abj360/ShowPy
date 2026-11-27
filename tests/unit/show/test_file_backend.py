@@ -343,8 +343,12 @@ def test_unlanded_or_unknown_revision_is_an_unknown_ref(tmp_path: Path) -> None:
     loser, tree, blobs = _change(landed[0].id, 99)
     with pytest.raises(ConflictError):
         backend.commit(SHOW_ID, loser, tree, blobs)
-    assert _record(tmp_path, loser.id).exists()
-    for unknown in (loser.id, UNKNOWN_ID, "../escape"):
+    assert not _record(tmp_path, loser.id).exists()
+    orphan, orphan_tree, _ = _change(landed[1].id, 98)
+    for planted, seq, planted_tree in ((loser, 2, tree), (orphan, 3, orphan_tree)):
+        record = {"revision": planted.to_json(), "seq": seq, "tree": planted_tree}
+        _record(tmp_path, planted.id).write_bytes(dump_json(record))
+    for unknown in (loser.id, orphan.id, UNKNOWN_ID, "../escape"):
         with pytest.raises(UnknownRefError):
             backend.log(SHOW_ID, since=unknown)
         with pytest.raises(UnknownRefError):
