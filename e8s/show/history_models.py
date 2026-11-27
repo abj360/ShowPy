@@ -9,6 +9,9 @@ Contains:
 
 from datetime import datetime
 
+from pydantic import field_validator
+
+from e8s.core.errors import SchemaError
 from e8s.core.ids import (
     FormId,
     RouteId,
@@ -63,7 +66,7 @@ class Revision(FrozenModel):
     Attributes:
         id: Content hash of parent, time and change.
         parent: Previous revision; empty for the first.
-        at: When it was saved; passed in, never read from the clock.
+        at: When it was saved, with a timezone; passed in, never read from the clock.
         changed: Stored paths written or deleted, sorted; set and transition folders are named
             by set key, so they can differ from workspace paths after a renumber.
     """
@@ -72,3 +75,14 @@ class Revision(FrozenModel):
     parent: str
     at: datetime
     changed: tuple[str, ...] = ()
+
+    @field_validator("at")
+    @classmethod
+    def _at_has_a_timezone(cls, value: datetime) -> datetime:
+        if value.utcoffset() is not None:
+            return value
+        raise SchemaError(
+            f"revision time {value.isoformat()} has no timezone, so revisions cannot be ordered",
+            hint="pass an aware time, such as datetime(2026, 1, 1, tzinfo=UTC)",
+            context={"at": value.isoformat()},
+        )
