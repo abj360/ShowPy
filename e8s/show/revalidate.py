@@ -411,6 +411,13 @@ def revalidate(previous: ValidationReport, before: Show, after: Show) -> Validat
     The result equals `validate_show(after)`, order included. Issues of items the edit did not
     reach are taken from `previous`; edits that cannot be bounded by item rerun the whole check.
 
+    That holds only when `previous` is `validate_show(before)` run with no sheet store and no
+    comments; the result has no sheet dependency or comment anchor issues either. A `previous`
+    from another show or another run is not detected. The one check: a transition rechecked
+    spot by spot falls back to a full validation when its kept issues do not start with its
+    path checks in `before`. Every other stale issue is returned as it is. Issues that name no
+    item, such as dependency and comment anchor issues, are never carried over from `previous`.
+
     >>> from e8s.choreo.models import PlacementPatch
     >>> from e8s.examples import two_set_show
     >>> from e8s.show.validate import validate_show
