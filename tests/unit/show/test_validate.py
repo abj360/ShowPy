@@ -54,6 +54,8 @@ Contains:
         placement of a spot marked inactive
     test_regression_validate_show_reports_a_nonzero_first_set_count: reports a first set that has
         counts
+    test_regression_first_set_count_issue_carries_the_set_timing_item: gives the first-set count
+        issue the timing item of the first set and skips non-finite counts
     test_regression_validate_show_reports_nan_counts_on_the_first_set: reports NaN counts on the
         first set by name
     test_regression_validate_show_reports_nan_waypoints: reports a path waypoint with a NaN
@@ -481,13 +483,24 @@ def test_regression_validate_show_reports_placements_of_inactive_spots() -> None
     assert _mentions(_edited(cast=cast.replace(spots=spots)), "T1")
 
 
-@pytest.mark.defect("UP-9.7-84")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-84")
 def test_regression_validate_show_reports_a_nonzero_first_set_count() -> None:
     """Reports a first set that has counts (audit 9.7 validation gaps)."""
     show = two_set_show()
     first = show.sets[0].replace(counts=3.5)
     assert _mentions(_edited(sets=(first, show.sets[1])), "3.5")
+
+
+def test_regression_first_set_count_issue_carries_the_set_timing_item() -> None:
+    """Gives the first-set count issue the timing item of the first set; NaN is NOT_FINITE's."""
+    show = two_set_show()
+    counted = _edited(sets=(show.sets[0].replace(counts=3.5), show.sets[1]))
+    (issue,) = [i for i in validate_show(counted).issues if i.code == "TIME_RANGE"]
+    assert issue.level == "error"
+    assert ItemKey.model_validate(issue.context["item"]) == ItemKey(
+        kind="set", path=("1",), role="timing"
+    )
+    nan_first = _edited(sets=(show.sets[0]._copied(update={"counts": math.nan}), show.sets[1]))
+    assert "TIME_RANGE" not in _codes(validate_show(nan_first))
 
 
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:

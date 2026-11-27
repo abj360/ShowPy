@@ -26,8 +26,11 @@ from e8s.core.ids import check_id, check_sheet_id, format_tid, parse_ref
 from e8s.core.types import FrozenModel
 from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import SheetStore, get_sheet
+from e8s.show.change_models import ItemKey
 from e8s.show.document_paths import is_storable_folder
+from e8s.show.item_table import TIMING
 from e8s.show.models import Show
+from e8s.show.set_keys import set_key
 from e8s.show.validate_refs import ERROR, WARNING, make_issue, reference_issues
 from e8s.time.validate import validate_timeline
 
@@ -274,6 +277,23 @@ def _sequence(show: Show) -> list[ValidationIssue]:
     return zero_counts + stale
 
 
+def _first_set_counts(show: Show) -> list[ValidationIssue]:
+    first = show.sets[0] if show.sets else None
+    if first is None or first.counts == 0 or not math.isfinite(first.counts):
+        return []
+    item = ItemKey(kind="set", path=(set_key(first),), role=TIMING)
+    return [
+        make_issue(
+            ERROR,
+            ErrorCode.TIME_RANGE,
+            f"set {first.id}",
+            f"the first set has counts {first.counts:g}, but no move leads into it",
+            "the first set starts the show; give it 0 counts",
+            {"item": item.to_json(), "counts": first.counts},
+        )
+    ]
+
+
 def _form_keys(show: Show) -> list[ValidationIssue]:
     return [
         ValidationIssue(
@@ -420,7 +440,8 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     too_long = _too_long(show)
     if not too_long:
         reports += _path_reports(show)
-    extra = too_long + _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
+    extra = too_long + _sequence(show) + _first_set_counts(show) + _form_keys(show)
+    extra += _selections(show) + _ids(show)
     extra += _non_finite(show) + reference_issues(show)
     reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
