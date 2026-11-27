@@ -175,19 +175,28 @@ class _RootCheck:
 
     def check_one_show(self, show_id: str) -> None:
         """Checks the folder of one show, which must exist under a plain shows folder."""
-        folder = self.root / SHOWS_DIR / show_folder(show_id)
+        try:
+            folder = self.root / SHOWS_DIR / show_folder(show_id)
+        except UnicodeEncodeError as error:
+            raise self._no_show(show_id) from error
         for path in (self.root / SHOWS_DIR, folder):
             info = lstat_info(show_id, path)
             if info is None:
-                raise UnknownRefError(
-                    f"repository at {self.root} holds no show {show_id!r}",
-                    hint="check the show ID, or call fsck(root) to check every show",
-                    context={"show": show_id, "root": str(self.root)},
-                )
+                raise self._no_show(show_id)
             if not is_plain_folder(path, info):
                 self.report(UNKNOWN_FILE, path, "is not a plain folder; fsck never follows a link")
                 return
         self.shows.append(scan_show(self.root, folder))
+
+    def _no_show(self, show_id: str) -> UnknownRefError:
+        return UnknownRefError(
+            f"repository at {self.root} holds no show {show_id!r}",
+            hint="check the show ID, or call fsck(root) to check every show",
+            context={
+                "show": show_id.encode(errors="backslashreplace").decode(),
+                "root": str(self.root),
+            },
+        )
 
 
 def scan_repository(root: Path, show_id: str | None, at: datetime | None) -> RepositoryScan:

@@ -37,6 +37,8 @@ Contains:
     test_fsck_reports_a_linked_show_folder: reports a symlinked show folder, whole root or one show
     test_fsck_follows_a_symlinked_root: checks a repository through a symlinked root
     test_fsck_of_one_show_checks_only_that_show: leaves other shows out and refuses an unknown one
+    test_regression_fsck_of_a_show_id_no_show_can_have_is_an_unknown_ref: refuses a show ID
+        that cannot be encoded with a teaching error, never a raw UnicodeEncodeError
     test_findings_are_sorted_by_show_code_and_path: orders findings deterministically
     test_fsck_refuses_a_time_without_a_zone: refuses a naive `at`
 """
@@ -516,6 +518,17 @@ def test_fsck_of_one_show_checks_only_that_show(tmp_path: Path) -> None:
     with pytest.raises(UnknownRefError) as caught:
         fsck(tmp_path, "no_such_show")
     assert caught.value.context["show"] == "no_such_show"
+
+
+@pytest.mark.parametrize("show_id", ["\ud800", "", "../x"], ids=["surrogate", "empty", "dots"])
+def test_regression_fsck_of_a_show_id_no_show_can_have_is_an_unknown_ref(
+    tmp_path: Path, show_id: str
+) -> None:
+    landed_revisions(tmp_path, 1)
+    with pytest.raises(UnknownRefError) as caught:
+        fsck(tmp_path, show_id)
+    assert json.loads(json.dumps(caught.value.to_dict()))["code"] == "UNKNOWN_REF"
+    assert "fsck(root)" in caught.value.hint
 
 
 def test_findings_are_sorted_by_show_code_and_path(tmp_path: Path) -> None:
