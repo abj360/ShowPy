@@ -39,8 +39,18 @@ LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
 PROBE_SUFFIX = ".link-probe"
 
 
-def place_file(temp_folder: Path, show_id: str, target: Path, data: bytes) -> bool:
-    """Writes `data` under `target` through a temp file; False when the name was taken.
+def _link_unless_unsupported(source: Path, target: Path) -> bool | None:
+    """Links `source` under `target`; None when the file system refuses hard links there."""
+    try:
+        return durable_io.link_new(source, target)
+    except OSError as error:
+        if error.errno in durable_io.NO_HARDLINK_ERRNOS:
+            return None
+        raise
+
+
+def place_file(temp_folder: Path, show_id: str, target: Path, data: bytes) -> bool | None:
+    """Writes `data` under `target` through a temp file and a hard link.
 
     Args:
         temp_folder: Existing folder that holds the temp file.
@@ -49,12 +59,13 @@ def place_file(temp_folder: Path, show_id: str, target: Path, data: bytes) -> bo
         data: Bytes to write.
 
     Returns:
-        is_placed: True when the name was free and now holds the bytes.
+        is_placed: True when the name was free and now holds the bytes, False when it was taken,
+            None when the file system refused the link, which placed nothing.
     """
     temp = durable_io.write_temp(temp_folder, data)
     try:
         with durable_io.mapped_io(show_id, target, is_link=True):
-            return durable_io.link_new(temp, target)
+            return _link_unless_unsupported(temp, target)
     finally:
         durable_io.remove_file(temp)
 
@@ -74,12 +85,7 @@ def links_work(temp_folder: Path, show_id: str) -> bool:
     linked = probe.with_name(probe.name + PROBE_SUFFIX)
     try:
         with durable_io.mapped_io(show_id, linked):
-            try:
-                return durable_io.link_new(probe, linked)
-            except OSError as error:
-                if error.errno in durable_io.NO_HARDLINK_ERRNOS:
-                    return False
-                raise
+            return _link_unless_unsupported(probe, linked) is True
     finally:
         durable_io.remove_file(linked)
         durable_io.remove_file(probe)
@@ -91,7 +97,8 @@ class FilePlacer:
     The first placement probes the file system once. Where it can hard-link, each file is written
     to a temp file and linked into place, so it appears whole. Where it cannot, each file is
     created in place with an exclusive create and written in one call, so readers reread a file
-    they find empty or cut short.
+    they find empty or cut short. A link refused later, as where a folder sits on another mount,
+    switches the placer to exclusive creates too.
 
     Attributes:
         temp_folder: Folder that holds the temp files and the probe.
@@ -122,7 +129,10 @@ class FilePlacer:
         if self._has_links is None:
             self._has_links = links_work(self.temp_folder, show_id)
         if self._has_links:
-            return place_file(self.temp_folder, show_id, target, data)
+            is_placed = place_file(self.temp_folder, show_id, target, data)
+            if is_placed is not None:
+                return is_placed
+            self._has_links = False
         with durable_io.mapped_io(show_id, target):
             return durable_io.create_new(target, data)
 

@@ -12,6 +12,8 @@ Contains:
         and without hard links
     test_failed_probe_fails_closed_and_is_tried_again: fails a commit whose probe link fails for
         another reason with IO, and probes again on the next commit
+    test_link_refused_after_the_probe_falls_back_to_exclusive_create: lands commits whose links
+        outside tmp/ fail with EXDEV, as across mounts, after one refused link
     test_lost_slot_race_is_the_same_conflict_without_hard_links: gives the loser the same
         ConflictError as with links and leaves the winner's slot as it was
     test_flush_order_is_the_same_without_hard_links: flushes each file before the next write and
@@ -224,6 +226,27 @@ def test_failed_probe_fails_closed_and_is_tried_again(
     backend.commit(SHOW_ID, revision, tree, blobs)
     assert calls[:2] == [(FLUSH,), (PLACE, "tmp")]
     assert backend.head(SHOW_ID) == revision.id
+
+
+def test_link_refused_after_the_probe_falls_back_to_exclusive_create(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_link = os.link
+    tried: list[Path] = []
+
+    def link_inside_tmp_only(source: str | Path, target: str | Path, **kwargs: bool) -> None:
+        tried.append(Path(target))
+        if Path(target).parent.name != "tmp":
+            raise OSError(errno.EXDEV, "Invalid cross-device link", str(target))
+        real_link(source, target, **kwargs)
+
+    monkeypatch.setattr(os, "link", link_inside_tmp_only)
+    backend = FileBackend(tmp_path)
+    landed = _landed(backend, COMMITS)
+    assert [path.parent.name for path in tried] == ["tmp", tmp_path.name]
+    assert FileBackend(tmp_path).log(SHOW_ID) == landed
+    assert read_layout(tmp_path) == 2
+    assert list((tmp_path / "tmp").iterdir()) == []
 
 
 def _lost_race(root: Path) -> tuple[ConflictError, bytes, bytes]:
