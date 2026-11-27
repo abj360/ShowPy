@@ -214,7 +214,7 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
     Raises:
         VersionError: The root holds layout 1, or a newer layout than this release reads.
         StorageError: The root is missing (IO), holds no repository (CORRUPT), cannot be read
-            (IO), or its path holds a NUL character (BAD_PATH).
+            (IO), or its path holds a NUL or an unencodable character (BAD_PATH).
 
     >>> import tempfile
     >>> from datetime import UTC, datetime

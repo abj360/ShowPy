@@ -159,7 +159,8 @@ def fsck(
     Raises:
         StorageError: A repair lacks `confirm=True` or `at`, or `confirm=True` comes without
             `repair=True` (NOT_CONFIRMED); the root is missing (IO), holds no repository
-            (CORRUPT), cannot be read (IO), or its path holds a NUL character (BAD_PATH).
+            (CORRUPT), cannot be read (IO), or its path holds a NUL or an unencodable character
+            (BAD_PATH).
         VersionError: The root holds layout 1, or a newer layout than this release reads.
         UnknownRefError: `show_id` names no show in the root.
 
