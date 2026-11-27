@@ -8,6 +8,7 @@ Contains:
     insert_subset(): inserts a sub-set such as 12A, keeping the total time
     remove_set(): deletes a set with its forms and paths, optionally keeping the total time
     replace_sets(): replaces a show's sets, syncing transitions and refusing locked edits
+    drop_joined_pairs(): drops the stale specs and pins on pairs an edit makes consecutive
     set_counts(): retimes a set and the transition into it
 """
 
@@ -102,26 +103,38 @@ def _pins_a_pair_in(record: Pin, pairs: set[TransitionId]) -> bool:
 
 
 def _sync_transitions(show: Show, before: set[TransitionId]) -> Show:
-    """Keeps the transitions between consecutive sets and drops pins on pairs the edit changed.
-
-    A pin on a pair the edit separates goes with its transition. A pin on a pair the edit makes
-    consecutive was stale, so it pinned nothing; it is dropped too, never left to pin a pair the
-    designer did not pin.
-    """
     pairs = set(show.transition_ids())
     counts = {s.id: s.counts for s in show.sets}
     kept = tuple(
         spec.replace(counts=counts[spec.id[1]]) for spec in show.transitions if spec.id in pairs
     )
-    changed = before ^ pairs
-    pins = tuple(p for p in show.pins if not _pins_a_pair_in(p, changed))
+    vanished = before - pairs
+    pins = tuple(p for p in show.pins if not _pins_a_pair_in(p, vanished))
     return show.replace(transitions=kept, pins=pins)
 
 
-def _without_joined_pins(show: Show, joined: set[TransitionId]) -> Show:
-    """Returns `show` without the stale pins on pairs an edit joins, which pin nothing."""
+def drop_joined_pairs(show: Show, joined: set[TransitionId]) -> Show:
+    """Drops the transition specs and pins that name a pair an edit has just made consecutive.
+
+    Before the edit such a spec or pin was stale: it described or pinned sets that were not
+    adjacent, so it must never take effect over the new pair.
+
+    Args:
+        show: Show to clean, before or after the edit.
+        joined: Pairs that are transitions after the edit and were not before it.
+
+    Returns:
+        show: The show without specs or pins on those pairs; `show` itself when it has none.
+
+    >>> from e8s.examples import two_set_show
+    >>> drop_joined_pairs(two_set_show(), {("1", "2")}).transitions
+    ()
+    """
     pins = tuple(p for p in show.pins if not _pins_a_pair_in(p, joined))
-    return show if pins == show.pins else show.replace(pins=pins)
+    specs = tuple(spec for spec in show.transitions if spec.id not in joined)
+    if pins == show.pins and specs == show.transitions:
+        return show
+    return show.replace(pins=pins, transitions=specs)
 
 
 def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: object) -> Show:
@@ -129,8 +142,9 @@ def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: obje
 
     Transitions between sets that are no longer consecutive are dropped, with the pins on pairs
     this edit separates, and each kept one takes the counts of the set it leads into. A stale
-    pin on a pair this edit makes consecutive is dropped without force, since it pinned nothing;
-    any other pin that was already stale stays for validate_show to report.
+    spec or pin on a pair this edit makes consecutive is dropped without force, since it
+    described or pinned other sets; any other stale spec or pin stays for validate_show to
+    report.
 
     Args:
         show: Show to edit.
@@ -147,9 +161,10 @@ def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: obje
     []
     """
     before = set(show.transition_ids())
-    edited = _sync_transitions(show.replace(sets=tuple(sets), **update), before)
-    joined = set(edited.transition_ids()) - before
-    require_unlocked(_without_joined_pins(show, joined), edited, force=force)
+    synced = _sync_transitions(show.replace(sets=tuple(sets), **update), before)
+    joined = set(synced.transition_ids()) - before
+    edited = drop_joined_pairs(synced, joined)
+    require_unlocked(drop_joined_pairs(show, joined), edited, force=force)
     return edited
 
 

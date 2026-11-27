@@ -31,6 +31,8 @@ Contains:
         that was already stale before the edit, for validate_show to report, and needs no force
     test_regression_remove_set_never_brings_a_stale_transition_pin_to_life: drops a stale
         transition pin whose sets the edit makes consecutive, without force
+    test_regression_remove_set_never_brings_a_stale_transition_spec_to_life: drops a stale
+        transition spec with locked rows whose sets the edit makes consecutive, with its pin
 """
 
 import sys
@@ -597,3 +599,19 @@ def test_regression_remove_set_never_brings_a_stale_transition_pin_to_life() -> 
     assert {i.code for i in validate_show(removed).issues}.isdisjoint(
         {"UNKNOWN_PIN", "BAD_TRANSITION", "PIN_MISMATCH"}
     )
+
+
+def test_regression_remove_set_never_brings_a_stale_transition_spec_to_life() -> None:
+    """Drops a stale 1→3 spec with locked rows and its pin when removing set 2 joins 1 and 3."""
+    show = add_set(two_set_show(), "3", 4.0)
+    locked = pin(show, "transition", "1→2").transition(("1", "2"))
+    stale_spec = locked.replace(id=("1", "3"))
+    assert any(row.locked for row in stale_spec.rows.values())
+    stale = show.replace(
+        transitions=(*show.transitions, stale_spec),
+        pins=(*show.pins, Pin(target="transition", id="1→3")),
+    )
+    removed = remove_set(stale, "2")
+    assert removed == remove_set(show, "2")
+    assert not any(row.locked for row in removed.transition(("1", "3")).rows.values())
+    assert validate_show(removed).issues == ()
