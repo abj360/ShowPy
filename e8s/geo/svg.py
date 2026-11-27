@@ -33,9 +33,10 @@ ARC_FLAG_SLOTS = (3, 4)
 TOKEN_HINT = "use SVG commands M L H V C S Q T A Z and plain ASCII numbers"
 ARC_FLAG_HINT = "write each arc flag as the single digit 0 or 1"
 # Radii that exactly reach the endpoint give one center, the chord midpoint. Radii scaled to fit,
-# or written back from such an arc, land a few ulps either side of fitting, and the general
-# formula then moves the center by the square root of that rounding error.
-ARC_FIT_TOL = 64 * sys.float_info.epsilon
+# or written back from such an arc, land under 4 ulps either side of fitting (worst measured), and
+# the general formula then moves the center by the square root of that rounding error. 16 ulps
+# covers that residue while the snap moves a center by at most sqrt(16 * eps) * r, about 6e-8 r.
+ARC_FIT_TOL = 16 * sys.float_info.epsilon
 
 
 @dataclass(frozen=True)
