@@ -52,6 +52,8 @@ Contains:
     test_regression_both_sides_rescaling_list_a_stored_row_once: lists a row the rescale rule and
         the head-retime rule both flag one time
     test_conflicts_come_in_key_order: orders the merge's and the rules' conflicts by item key
+    test_proposed_route_conflicts_with_a_plain_head_grow: refuses a fitting proposed route after
+        the head lengthened the set
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -414,3 +416,14 @@ def test_conflicts_come_in_key_order(rescale: bool) -> None:
         ("path_row", ("1-2", "T2")),
         ("transition", ("1-2",)),
     ]
+
+
+def test_proposed_route_conflicts_with_a_plain_head_grow() -> None:
+    """Refuses a route that still fits once the head lengthened the set: its timing is stale."""
+    base = two_set_show()
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base, routes={RouteId("r1"): _route(6.0)})),
+        lambda head: set_counts(head, "2", 12.0),
+    )
+    _assert_refused_everywhere(designer, "route", "r1")
