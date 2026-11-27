@@ -319,7 +319,8 @@ def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResu
         if conflict.key.sort_key() not in known:
             known.add(conflict.key.sort_key())
             conflicts.append(conflict)
-    return MergeResult(conflicts=tuple(conflicts)) if conflicts else result
+    ordered = tuple(sorted(conflicts, key=lambda c: c.key.sort_key()))
+    return MergeResult(conflicts=ordered) if ordered else result
 
 
 def _describe(conflict: MergeConflict) -> str:

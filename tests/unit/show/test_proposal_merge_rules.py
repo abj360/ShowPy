@@ -51,6 +51,7 @@ Contains:
         route of the retimed transition
     test_regression_both_sides_rescaling_list_a_stored_row_once: lists a row the rescale rule and
         the head-retime rule both flag one time
+    test_conflicts_come_in_key_order: orders the merge's and the rules' conflicts by item key
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -395,3 +396,21 @@ def test_regression_both_sides_rescaling_list_a_stored_row_once() -> None:
         accept(designer, "p1", AT + 3 * STEP)
     assert info.value.message.count("path_row 1-2/T1") == 1
     assert info.value.context["conflict_count"] == 1
+
+
+@pytest.mark.parametrize("rescale", [False, True])
+def test_conflicts_come_in_key_order(rescale: bool) -> None:
+    """Orders merge and rule conflicts by item key, whichever way the head retimed."""
+    base = two_set_show()
+    stored = {SpotId("T2"): PathRow(entity=SpotId("T2"), start=1.0)}
+    base = base.replace(transitions=(_spec(base, rows=stored),))
+    designer = _head_edits(
+        base,
+        PathsOp(spec=_spec(base)),
+        lambda head: set_counts(head, "2", 6.0, rescale=rescale),
+    )
+    conflicts = preview_proposal(designer, "p1").conflicts
+    assert [(c.key.kind, c.key.path) for c in conflicts] == [
+        ("path_row", ("1-2", "T2")),
+        ("transition", ("1-2",)),
+    ]
