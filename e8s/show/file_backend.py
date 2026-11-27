@@ -25,12 +25,15 @@ from e8s.show.backend import (
     unknown_revision_error,
 )
 from e8s.show.backend_checks import (
+    FIRST_SEQ,
     ReadBudget,
     Record,
     corrupt,
+    parsed_manifest,
     refuse_redirect,
     require_caller_ids,
     require_plain_folders,
+    stored_revision,
 )
 from e8s.show.commit_writes import (
     STALE_TEMP_AGE,
@@ -71,8 +74,6 @@ OBJECT_DIR = "objects"
 MANIFEST_FILE = "show.json"
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
-MANIFEST_KEYS = frozenset({"id", "legacy_before"})
-FIRST_SEQ = 1
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
 # A log call reads every slot after `since` and its record. The bytes it reads are capped at the
@@ -135,32 +136,11 @@ class FileBackend:
         except SchemaError as error:
             raise corrupt(show_id, path, f"{kind} is not valid JSON") from error
 
-    def _revision(self, show_id: str, path: Path, stored: JsonValue) -> Revision:
-        try:
-            revision = Revision._validated(stored)
-        except SchemaError as error:
-            raise corrupt(show_id, path, "stored revision is malformed") from error
-        ids = [revision.id] if revision.parent == ROOT_REVISION else [revision.id, revision.parent]
-        if not all(REVISION_ID_PATTERN.fullmatch(value) for value in ids):
-            raise corrupt(show_id, path, "stored revision ID is not a 64-digit hex id")
-        return revision
-
     def _manifest(self, show_id: str, folder: Path) -> tuple[str, int]:
         """Reads a manifest: the show ID its folder must encode and its `legacy_before` slot."""
         path = folder / MANIFEST_FILE
         stored = self._read(show_id, path, "manifest", MANIFEST_MAX_BYTES)
-        if not isinstance(stored, dict) or not {"id"} <= stored.keys() <= MANIFEST_KEYS:
-            raise corrupt(show_id, path, "manifest must hold id and may hold legacy_before")
-        listed, legacy_before = stored["id"], stored.get("legacy_before", FIRST_SEQ)
-        if not isinstance(listed, str) or show_folder(listed) != folder.name:
-            raise corrupt(show_id, path, "manifest names a show stored in another folder")
-        if (
-            not isinstance(legacy_before, int)
-            or isinstance(legacy_before, bool)
-            or legacy_before < 1
-        ):
-            raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
-        return listed, legacy_before
+        return parsed_manifest(show_id, path, stored)
 
     def _check_manifest(self, show_id: str) -> None:
         """Checks once per backend that no folder is a link and the manifest names this show."""
@@ -220,7 +200,7 @@ class FileBackend:
         stored = self._read(show_id, path, "slot", SLOT_MAX_BYTES, budget)
         if not isinstance(stored, dict) or stored.keys() != SLOT_KEYS:
             raise corrupt(show_id, path, f"slot must hold exactly {sorted(SLOT_KEYS)}")
-        return self._revision(show_id, path, stored)
+        return stored_revision(show_id, path, stored)
 
     def _remember(self, show_id: str, seq: int, revision_id: str) -> None:
         if seq >= self._seen.get(show_id, (0, ROOT_REVISION))[0]:
@@ -344,7 +324,7 @@ class FileBackend:
         seq, tree = stored["seq"], stored["tree"]
         if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
             raise corrupt(show_id, path, "record seq is not a positive integer")
-        revision = self._revision(show_id, path, stored["revision"])
+        revision = stored_revision(show_id, path, stored["revision"])
         if revision.id != revision_id:
             raise corrupt(show_id, path, "record holds another revision than its name")
         if not isinstance(tree, dict) or not all(

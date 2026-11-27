@@ -3,7 +3,10 @@ backend_checks.py --- the corruption error and the read checks the layout-2 file
 
 Contains:
     CORRUPT_HINT: tells the caller how to repair a damaged show folder
+    FIRST_SEQ: numbers the first slot of every show
     corrupt(): builds the StorageError for a stored file that fails a check
+    stored_revision(): checks a stored revision and returns it
+    parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
     Record: holds a revision record's slot number, revision and tree
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     refuse_redirect(): refuses a folder that is a symlink or a junction
@@ -16,14 +19,17 @@ from pathlib import Path
 from typing import NamedTuple
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import StorageError
+from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.show import durable_io
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import REVISION_ID_PATTERN
+from e8s.show.show_folders import show_folder
 from e8s.show.storage import ROOT_REVISION
 
 CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
+MANIFEST_KEYS = frozenset({"id", "legacy_before"})
+FIRST_SEQ = 1
 
 
 def corrupt(show_id: str, path: Path, reason: str) -> StorageError:
@@ -43,6 +49,48 @@ def corrupt(show_id: str, path: Path, reason: str) -> StorageError:
         context=context,
         code=ErrorCode.CORRUPT,
     )
+
+
+def stored_revision(show_id: str, path: Path, stored: JsonValue) -> Revision:
+    """Checks a revision read from a slot or a record and returns it.
+
+    Args:
+        show_id: Show the file belongs to, named in errors.
+        path: File the revision was read from.
+        stored: Parsed JSON of the revision.
+
+    Returns:
+        revision: The revision, whose ID and parent are 64-digit hex IDs.
+    """
+    try:
+        revision = Revision._validated(stored)
+    except SchemaError as error:
+        raise corrupt(show_id, path, "stored revision is malformed") from error
+    ids = [revision.id] if revision.parent == ROOT_REVISION else [revision.id, revision.parent]
+    if not all(REVISION_ID_PATTERN.fullmatch(value) for value in ids):
+        raise corrupt(show_id, path, "stored revision ID is not a 64-digit hex id")
+    return revision
+
+
+def parsed_manifest(show_id: str, path: Path, stored: JsonValue) -> tuple[str, int]:
+    """Checks a parsed manifest and returns the show ID it names and its `legacy_before` slot.
+
+    Args:
+        show_id: Show being read, named in errors; empty when it is not known yet.
+        path: The manifest file, whose folder must be the one its show ID encodes.
+        stored: Parsed JSON of the manifest.
+
+    Returns:
+        manifest: The listed show ID and the first slot whose revision ID is recomputable.
+    """
+    if not isinstance(stored, dict) or not {"id"} <= stored.keys() <= MANIFEST_KEYS:
+        raise corrupt(show_id, path, "manifest must hold id and may hold legacy_before")
+    listed, legacy_before = stored["id"], stored.get("legacy_before", FIRST_SEQ)
+    if not isinstance(listed, str) or show_folder(listed) != path.parent.name:
+        raise corrupt(show_id, path, "manifest names a show stored in another folder")
+    if not isinstance(legacy_before, int) or isinstance(legacy_before, bool) or legacy_before < 1:
+        raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
+    return listed, legacy_before
 
 
 class Record(NamedTuple):
