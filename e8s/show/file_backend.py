@@ -13,7 +13,6 @@ from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 
-from e8s.core.canonical import jcs
 from e8s.core.errors import ConflictError, UnknownRefError
 from e8s.core.json_types import JsonValue
 from e8s.show import durable_io
@@ -45,7 +44,9 @@ from e8s.show.commit_writes import (
     FilePlacer,
     flush_directories,
     place_or_check,
+    record_bytes,
     remove_lost_record,
+    slot_bytes,
     store_blobs,
     store_record,
     write_layout_file,
@@ -479,13 +480,13 @@ class FileBackend:
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
     ) -> None:
         """Places the revision record, or checks the one an identical commit placed first."""
-        record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
+        record = record_bytes(revision, seq, tree)
         store_record(self._placer, show_id, self._record_path(show_id, revision.id), record)
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
         self._require_no_gap(show_id, seq)
-        slot = jcs(revision.to_json()) + b"\n"
+        slot = slot_bytes(revision)
         path = self._slot_path(show_id, seq)
         check = partial(self._read_slot, show_id, seq)
         if not place_or_check(self._placer, show_id, path, slot, check):

@@ -5,6 +5,8 @@ Contains:
     STALE_TEMP_AGE: sets how old a temp file must be before a commit removes it
     LAYOUT_BYTES: holds the content of `layout.json` for the layout this backend writes
     write_layout_file(): places `layout.json` under a layout-2 root, after `tmp/` exists
+    slot_bytes(): encodes a slot: its revision as one line of canonical JSON
+    record_bytes(): encodes a revision record: the revision, its slot number and its tree
     flush_directories(): flushes each folder so the names placed in it survive power loss
     place_file(): writes bytes to a temp file and links it under a name that never gets replaced
     PROBE_SUFFIX: ends the name the hard-link probe links its temp file under
@@ -23,11 +25,13 @@ from datetime import timedelta
 from functools import partial
 from pathlib import Path
 
+from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.show import durable_io, durable_reads
 from e8s.show.backend_checks import corrupt, require_blob_digest
 from e8s.show.document_dump import dump_json
+from e8s.show.history_models import Revision
 from e8s.show.layout import (
     CURRENT_LAYOUT,
     LAYOUT_FILE,
@@ -295,3 +299,26 @@ def write_layout_file(root: Path, show_id: str, placer: FilePlacer) -> None:
     durable_io.make_folder(root / TEMP_DIR)
     check = partial(read_layout_file, root)
     place_or_check(placer, show_id, root / LAYOUT_FILE, LAYOUT_BYTES, check)
+
+
+def slot_bytes(revision: Revision) -> bytes:
+    """Encodes a slot: its revision as one line of canonical JSON, which readers require.
+
+    >>> from datetime import UTC, datetime
+    >>> at = datetime(2026, 11, 27, tzinfo=UTC)
+    >>> slot = slot_bytes(Revision(id="a" * 64, parent="", at=at))
+    >>> slot.splitlines() == [slot.rstrip()], slot != slot.rstrip()
+    (True, True)
+    """
+    return jcs(revision.to_json()) + b"\n"
+
+
+def record_bytes(revision: Revision, seq: int, tree: Mapping[str, str]) -> bytes:
+    """Encodes a revision record: the revision, the number of its slot and its tree.
+
+    >>> from datetime import UTC, datetime
+    >>> at = datetime(2026, 11, 27, tzinfo=UTC)
+    >>> b'"seq": 1' in record_bytes(Revision(id="a" * 64, parent="", at=at), 1, {})
+    True
+    """
+    return dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})

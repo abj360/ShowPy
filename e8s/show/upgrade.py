@@ -11,13 +11,12 @@ import stat
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.show import durable_io
 from e8s.show.assets import ASSET_DIR
 from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt, recomputes
-from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer
+from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer, record_bytes, slot_bytes
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import (
@@ -245,8 +244,7 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
             source = reader.root / show_id / OBJECT_DIR / digest
             linked += target.transfer(show_id, source, folder / OBJECT_DIR / digest)
             blobs.add(digest)
-        record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": tree})
-        slot = jcs(revision.to_json()) + b"\n"
+        record, slot = record_bytes(revision, seq, tree), slot_bytes(revision)
         budget.spend(len(record) + len(slot))
         target.place(show_id, folder / RECORD_DIR / f"{revision.id}.json", record)
         target.place(show_id, folder / LOG_DIR / f"{seq:0{SLOT_DIGITS}d}", slot)
