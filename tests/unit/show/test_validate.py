@@ -474,8 +474,6 @@ def test_regression_validate_show_reports_set_ids_that_cannot_be_stored() -> Non
     assert _mentions(_edited(sets=(show.sets[0], renamed)), "a/b")
 
 
-@pytest.mark.defect("UP-9.7-83")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-83")
 def test_regression_validate_show_reports_placements_of_inactive_spots() -> None:
     """Reports an on-field placement of a spot marked inactive (audit 9.7 validation gaps)."""
     cast = two_set_show().cast

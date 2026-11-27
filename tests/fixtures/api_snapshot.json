@@ -343,6 +343,7 @@
       "GEOMETRY": "'GEOMETRY'",
       "HOLD_NEGATIVE": "'HOLD_NEGATIVE'",
       "HOLD_OVERLAP": "'HOLD_OVERLAP'",
+      "INACTIVE_ON_FIELD": "'INACTIVE_ON_FIELD'",
       "IO": "'IO'",
       "KEY_MISMATCH": "'KEY_MISMATCH'",
       "LOCKED": "'LOCKED'",

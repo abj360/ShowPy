@@ -56,6 +56,8 @@ pub enum ErrorCode {
     HoldNegative,
     /// Two holds of a timeline share one count.
     HoldOverlap,
+    /// A spot marked inactive stands on the field in a set.
+    InactiveOnField,
     /// The file system fails while a file repository reads or writes.
     Io,
     /// A mapping key differs from the ID of the item it holds.
@@ -230,6 +232,7 @@ impl ErrorCode {
             Self::Geometry => "GEOMETRY",
             Self::HoldNegative => "HOLD_NEGATIVE",
             Self::HoldOverlap => "HOLD_OVERLAP",
+            Self::InactiveOnField => "INACTIVE_ON_FIELD",
             Self::Io => "IO",
             Self::KeyMismatch => "KEY_MISMATCH",
             Self::Locked => "LOCKED",

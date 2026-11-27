@@ -65,6 +65,8 @@ class ErrorCode(StrEnum):
     """A hold sits before count 0 or lasts a negative number of counts."""
     HOLD_OVERLAP = "HOLD_OVERLAP"
     """Two holds of a timeline share one count."""
+    INACTIVE_ON_FIELD = "INACTIVE_ON_FIELD"
+    """A spot marked inactive stands on the field in a set."""
     IO = "IO"
     """The file system fails while a file repository reads or writes."""
     KEY_MISMATCH = "KEY_MISMATCH"

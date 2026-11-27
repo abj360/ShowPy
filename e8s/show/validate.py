@@ -31,6 +31,7 @@ from e8s.show.document_paths import is_storable_folder
 from e8s.show.item_table import TIMING
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
+from e8s.show.validate_placements import placement_issues
 from e8s.show.validate_refs import ERROR, WARNING, make_issue, reference_issues
 from e8s.time.validate import validate_timeline
 
@@ -442,7 +443,7 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
         reports += _path_reports(show)
     extra = too_long + _sequence(show) + _first_set_counts(show) + _form_keys(show)
     extra += _selections(show) + _ids(show)
-    extra += _non_finite(show) + reference_issues(show)
+    extra += _non_finite(show) + reference_issues(show) + placement_issues(show)
     reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
     if store is not None:
