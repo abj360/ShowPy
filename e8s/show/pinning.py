@@ -2,6 +2,8 @@
 pinning.py --- designer locks: records pins and sets the flags they cover
 
 Contains:
+    covers_placement(): tells whether any held pin covers a spot's placement in a set
+    covers_form(): tells whether any held pin covers a form
     pin_key(): returns the stored spelling of a pin ID
     pin(): locks a spot, form, set or transition and records why
     unpin(): removes a lock, keeping flags other pins still cover
@@ -36,14 +38,27 @@ def _require_target(show: Show, target: PinTarget, target_id: str) -> None:
         )
 
 
-def _covers_placement(held: Sequence[Pin], set_id: str, entity: str) -> bool:
+def covers_placement(held: Sequence[Pin], set_id: str, entity: str) -> bool:
+    """Tells whether an entity pin on the spot or a set pin on the set covers the placement.
+
+    >>> from e8s.show.models import Pin
+    >>> covers_placement((Pin(target="set", id="2"),), "2", "T1")
+    True
+    """
     return any(
         (p.target == "entity" and p.id == entity) or (p.target == "set" and p.id == set_id)
         for p in held
     )
 
 
-def _covers_form(show: Show, held: Sequence[Pin], form_id: str) -> bool:
+def covers_form(show: Show, held: Sequence[Pin], form_id: str) -> bool:
+    """Tells whether a form pin on the form or a set pin on a set listing it covers the form.
+
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.models import Pin
+    >>> covers_form(two_set_show(), (Pin(target="form", id="row"),), "row")
+    True
+    """
     # a set pin may name a set that no longer exists; forms_of_set would raise on it
     return any(
         (p.target == "form" and p.id == form_id)
@@ -57,7 +72,7 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     sets = []
     for current in show.sets:
         updates = {
-            p.entity: PlacementPatch(pinned=_covers_placement(held, current.id, p.entity))
+            p.entity: PlacementPatch(pinned=covers_placement(held, current.id, p.entity))
             for p in current.placements
             if (scope.target == "entity" and p.entity == scope.id)
             or (scope.target == "set" and current.id == scope.id)
@@ -68,7 +83,7 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
 
 def _flag_forms(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     forms = {
-        k: f.replace(locked=_covers_form(show, held, k))
+        k: f.replace(locked=covers_form(show, held, k))
         if (scope.target == "form" and k == scope.id)
         or (scope.target == "set" and f.set == scope.id)
         else f

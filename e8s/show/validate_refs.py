@@ -29,9 +29,9 @@ from e8s.core.json_types import JsonValue
 from e8s.core.selection import Selection
 from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey
-from e8s.show.document_paths import transition_folder
+from e8s.show.item_table import pin_path, set_keys_by_id
 from e8s.show.models import Pin, Show
-from e8s.show.pinning import _covers_form, _covers_placement
+from e8s.show.pinning import covers_form, covers_placement
 from e8s.show.set_keys import set_key
 from e8s.show.set_queries import index
 
@@ -42,6 +42,7 @@ WARNING: Level = "warning"
 FORMS_ROLE = "forms"
 DRILL_ROLE = "drill"
 MAX_NAMED_UNFLAGGED = 5
+PIN_KIND = "pin"
 ALL_SPOTS = "all"
 
 
@@ -150,22 +151,6 @@ def _set_issues(show: Show, owner: Set) -> Iterator[ValidationIssue]:
             )
 
 
-def _pin_item_id(keys: Mapping[str, str], record: Pin) -> str:
-    if record.target == "set":
-        return keys.get(record.id, record.id)
-    if record.target != "transition":
-        return record.id
-    try:
-        first, second = parse_tid(record.id)
-    except SchemaError:
-        return record.id
-    return transition_folder((keys.get(first, first), keys.get(second, second)))
-
-
-def _pin_item(keys: Mapping[str, str], record: Pin) -> ItemKey:
-    return ItemKey(kind="pin", path=(record.target, _pin_item_id(keys, record)))
-
-
 def _pin_exists(show: Show, record: Pin) -> bool:
     if record.target == "entity":
         return record.id in show.cast.ids()
@@ -191,7 +176,8 @@ def _unresolved_pin(record: Pin, item: ItemKey, code: ErrorCode, hint: str) -> V
     )
 
 
-def _bad_transition_pin(record: Pin, item: ItemKey) -> ValidationIssue:
+def _bad_transition_pin(record: Pin) -> ValidationIssue:
+    item = ItemKey(kind=PIN_KIND, path=(record.target, record.id))
     return make_issue(
         ERROR,
         ErrorCode.BAD_TRANSITION,
@@ -211,7 +197,7 @@ def _unflagged_placements(show: Show, record: Pin) -> list[str]:
         for placement in owner.placements:
             if record.target == "entity" and placement.entity != record.id:
                 continue
-            if _covers_placement(held, owner.id, placement.entity) and not placement.pinned:
+            if covers_placement(held, owner.id, placement.entity) and not placement.pinned:
                 found.append(f"{owner.id} {placement.entity}")
     return found
 
@@ -221,7 +207,7 @@ def _unflagged_forms(show: Show, record: Pin) -> list[str]:
     forms = {k: f for k, f in show.forms.items() if k == record.id}
     if record.target == "set":
         forms = dict(forms_of_set(show, record.id))
-    return [k for k, f in forms.items() if _covers_form(show, held, k) and not f.locked]
+    return [k for k, f in forms.items() if covers_form(show, held, k) and not f.locked]
 
 
 def _unflagged_rows(show: Show, record: Pin) -> list[str]:
@@ -249,14 +235,19 @@ def _pin_mismatch(record: Pin, item: ItemKey, unflagged: list[str]) -> Validatio
     )
 
 
+def _parses(tid: str) -> bool:
+    try:
+        parse_tid(tid)
+    except SchemaError:
+        return False
+    return True
+
+
 def _pin_issues(show: Show, record: Pin, keys: Mapping[str, str]) -> Iterator[ValidationIssue]:
-    item = _pin_item(keys, record)
-    if record.target == "transition":
-        try:
-            parse_tid(record.id)
-        except SchemaError:
-            yield _bad_transition_pin(record, item)
-            return
+    if record.target == "transition" and not _parses(record.id):
+        yield _bad_transition_pin(record)
+        return
+    item = ItemKey(kind=PIN_KIND, path=pin_path(keys, record))
     if not _pin_exists(show, record):
         yield _unresolved_pin(record, item, ErrorCode.UNKNOWN_PIN, "unpin it or restore the item")
         return
@@ -349,6 +340,6 @@ def reference_issues(show: Show) -> list[ValidationIssue]:
     """
     issues = [i for key, form in show.forms.items() for i in _form_issues(show, key, form)]
     issues += [i for owner in show.sets for i in _set_issues(show, owner)]
-    keys: dict[str, str] = {owner.id: set_key(owner) for owner in show.sets}
+    keys = set_keys_by_id(show)
     issues += [i for record in show.pins for i in _pin_issues(show, record, keys)]
     return issues + list(_override_issues(show))

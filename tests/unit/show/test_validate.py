@@ -70,6 +70,8 @@ Contains:
         a transition-pinned pair
     test_regression_transition_pin_reports_an_existing_unlocked_row: reports a transition pin whose
         stored row is not locked
+    test_bad_transition_pin_issue_names_the_raw_pin_id: names an unparsable transition pin by its
+        raw ID
 """
 
 import math
@@ -638,3 +640,9 @@ def test_regression_transition_pin_reports_an_existing_unlocked_row() -> None:
     show = with_rows({"T2": PathRow(entity=SpotId("T2"), start=2.0)})
     (issue,) = _issues(show.replace(pins=(Pin(target="transition", id="1->2"),)), "PIN_MISMATCH")
     assert "T2" in issue.message
+
+
+def test_bad_transition_pin_issue_names_the_raw_pin_id() -> None:
+    """Names an unparsable transition pin by its raw ID, since no set keys can be read from it."""
+    show = two_set_show().replace(pins=(Pin(target="transition", id="garbage"),))
+    assert _item_of(show, "BAD_TRANSITION") == ItemKey(kind="pin", path=("transition", "garbage"))
