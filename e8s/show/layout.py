@@ -9,6 +9,7 @@ Contains:
     HOUSEKEEPING_NAMES: lists the entries operating systems add to a folder, which a root skips
     TEMP_DIR: names the folder under a layout-2 root that holds every writer's temp files
     read_layout(): reports the layout version of a repository root
+    read_layout_file(): reads and checks the layout file itself, refusing a missing one
 """
 
 import os
@@ -163,6 +164,27 @@ def read_layout(root: Path) -> int:
     """
     try:
         return _stored_layout(root)
+    except OSError as error:
+        raise _io_error(root, error) from error
+
+
+def read_layout_file(root: Path) -> int:
+    """Reads and checks a root's layout file itself; a missing file is CORRUPT, never layout 2.
+
+    Args:
+        root: Folder that holds the repository.
+
+    Returns:
+        layout: The layout number the file names.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     _ = (Path(folder) / LAYOUT_FILE).write_text('{"format": "e8.repository", "layout": 2}')
+    ...     read_layout_file(Path(folder))
+    2
+    """
+    try:
+        return _declared_layout(root, root / LAYOUT_FILE)
     except OSError as error:
         raise _io_error(root, error) from error
 

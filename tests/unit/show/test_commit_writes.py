@@ -22,11 +22,17 @@ Contains:
         shows/ and the show folder before the first slot in both paths
     test_regression_failed_flush_keeps_a_visible_file: keeps a blob another commit landed on and a
         slot a reader saw when their flush fails, so nothing goes missing and no gap opens
+    test_regression_name_freed_by_a_failed_writer_is_placed_again: places the layout file,
+        manifest, slot, blob or record again when the writer that took its name failed and
+        removed it
+    test_name_freed_on_every_attempt_fails_with_a_retryable_io: raises IO with a hint to write
+        again once the name was freed on every attempt, never landing without the file
 """
 
 import errno
 import os
 import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,6 +63,7 @@ PLACE = "place"
 FLUSH = "flush"
 FOLDER = "dir"
 COMMIT_POINT = "commit point"
+PLACE_ATTEMPTS = 3
 
 
 def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
@@ -419,3 +426,82 @@ def test_regression_failed_flush_keeps_a_visible_file(
     _without_hard_links(monkeypatch)
     history = VISIBLE_FILES[case](tmp_path, monkeypatch)
     assert len(history) == 2
+
+
+def _freed_by_a_failed_writer(monkeypatch: pytest.MonkeyPatch, name: str, times: int) -> list[Path]:
+    """Lets another writer take `name` just before each exclusive create of it, then free it.
+
+    The other writer creates the file, this writer's exclusive create finds the name taken, and
+    the other writer's write fails, which removes the file. This happens `times` times.
+    """
+    real_open_new = durable_io.open_new
+    freed: list[Path] = []
+
+    def open_new(target: Path) -> int | None:
+        if target.name != name or len(freed) == times:
+            return real_open_new(target)
+        taken = real_open_new(target)
+        assert taken is not None
+        os.close(taken)
+        assert real_open_new(target) is None
+        durable_io.remove_file(target)
+        freed.append(target)
+        return None
+
+    monkeypatch.setattr(durable_io, "open_new", open_new)
+    return freed
+
+
+def _second_files() -> dict[str, str]:
+    """Names each file kind by the name the first or second of two commits gives it."""
+    first, _, _ = _change("", 0)
+    second, tree, _ = _change(first.id, 1)
+    return {
+        "layout": "layout.json",
+        "manifest": "show.json",
+        "slot": f"{2:0{SLOT_DIGITS}d}",
+        "blob": tree[RENDER],
+        "record": f"{second.id}.json",
+    }
+
+
+def _require_whole(root: Path, landed: list[Revision]) -> None:
+    reader = FileBackend(root)
+    assert read_layout(root) == 2
+    assert reader.shows() == [SHOW_ID]
+    assert reader.log(SHOW_ID) == landed
+    for revision in landed:
+        assert reader.blob(SHOW_ID, reader.tree(SHOW_ID, revision.id)[RENDER])
+
+
+@pytest.mark.parametrize("kind", sorted(_second_files()))
+def test_regression_name_freed_by_a_failed_writer_is_placed_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Places a file again when the writer that took its name failed and removed it."""
+    _without_hard_links(monkeypatch)
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    freed = _freed_by_a_failed_writer(monkeypatch, _second_files()[kind], 1)
+    landed = _landed(FileBackend(tmp_path), 2)
+    assert len(freed) == 1
+    _require_whole(tmp_path, landed)
+
+
+@pytest.mark.parametrize("kind", sorted(_second_files()))
+def test_name_freed_on_every_attempt_fails_with_a_retryable_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    _without_hard_links(monkeypatch)
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    name = _second_files()[kind]
+    backend = FileBackend(tmp_path)
+    freed = _freed_by_a_failed_writer(monkeypatch, name, PLACE_ATTEMPTS)
+    with pytest.raises(StorageError) as caught:
+        _landed(backend, 2)
+    assert caught.value.code == "IO"
+    assert "again" in caught.value.hint
+    assert len(freed) == PLACE_ATTEMPTS
+    assert not any(path.exists() for path in freed)
+    done = FileBackend(tmp_path).log(SHOW_ID)
+    rest = _landed(backend, 2 - len(done), done[-1].id if done else "", len(done))
+    _require_whole(tmp_path, done + rest)

@@ -41,6 +41,7 @@ from e8s.show.commit_writes import (
     STALE_TEMP_AGE,
     FilePlacer,
     flush_directories,
+    place_or_check,
     remove_lost_record,
     store_blobs,
     store_record,
@@ -439,7 +440,9 @@ class FileBackend:
         for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
             durable_io.make_folder(folder / name)
         if show_id not in self._manifests:
-            if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
+            check = partial(self._manifest, show_id, folder)
+            manifest, data = folder / MANIFEST_FILE, dump_json({"id": show_id})
+            if place_or_check(self._placer, show_id, manifest, data, check):
                 self._manifests[show_id] = FIRST_SEQ
             else:
                 self._check_manifest(show_id)
@@ -453,10 +456,6 @@ class FileBackend:
             return
         write_layout_file(self.root, show_id, self._placer)
         self._has_layout = True
-
-    def _place(self, show_id: str, target: Path, data: bytes) -> bool:
-        """Writes `data` under a name never replaced; False when the name was taken."""
-        return self._placer.place(show_id, target, data)
 
     def _store_blobs(self, show_id: str, blobs: Mapping[str, bytes]) -> None:
         """Stores each blob, keeping one already there only when it holds the same bytes."""
@@ -474,6 +473,7 @@ class FileBackend:
         self._require_no_gap(show_id, seq)
         slot = jcs(revision.to_json()) + b"\n"
         path = self._slot_path(show_id, seq)
-        if not self._place(show_id, path, slot):
+        check = partial(self._read_slot, show_id, seq)
+        if not place_or_check(self._placer, show_id, path, slot, check):
             raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
         flush_directories(path.parent, is_commit_point=True)

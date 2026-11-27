@@ -21,6 +21,8 @@ Contains:
     test_read_layout_maps_a_too_long_name_to_io: raises IO
     test_read_layout_maps_an_unreadable_root_to_io: raises IO
     test_read_layout_maps_an_unreadable_layout_file_to_io: raises IO
+    test_read_layout_file_refuses_a_missing_file_and_maps_os_errors_to_io: raises CORRUPT where
+        read_layout would report an empty root, and IO for an unreadable file
     test_regression_root_holding_only_ds_store_is_empty: reads a root holding only .DS_Store as an
         empty root of the current layout
     test_regression_unreadable_lost_and_found_is_skipped: reads past a lost+found it cannot open
@@ -32,6 +34,7 @@ Contains:
         first commit linked after its name was looked up
 """
 
+import errno
 import json
 import os
 import shutil
@@ -50,6 +53,7 @@ from e8s.show.layout import (
     LAYOUT_FORMAT,
     TEMP_DIR,
     read_layout,
+    read_layout_file,
 )
 
 FIXTURE_REPO = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.4.0" / "repo"
@@ -228,6 +232,25 @@ def test_read_layout_maps_an_unreadable_layout_file_to_io(tmp_path: Path) -> Non
     finally:
         path.chmod(0o600)
     assert caught.value.code == ErrorCode.IO
+
+
+def test_read_layout_file_refuses_a_missing_file_and_maps_os_errors_to_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    with pytest.raises(StorageError) as missing:
+        read_layout_file(tmp_path)
+    assert missing.value.code == ErrorCode.CORRUPT
+    path = _write_layout(tmp_path, _layout_json(2))
+    assert read_layout_file(tmp_path) == CURRENT_LAYOUT
+
+    def deny(*_args: object, **_kwargs: object) -> int:
+        raise PermissionError(errno.EACCES, "Permission denied", str(path))
+
+    monkeypatch.setattr(os, "open", deny)
+    with pytest.raises(StorageError) as denied:
+        read_layout_file(tmp_path)
+    assert denied.value.code == ErrorCode.IO
 
 
 def test_regression_root_holding_only_ds_store_is_empty(tmp_path: Path) -> None:

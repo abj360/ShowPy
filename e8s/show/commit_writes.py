@@ -10,17 +10,21 @@ Contains:
     PROBE_SUFFIX: ends the name the hard-link probe links its temp file under
     links_work(): probes once whether the file system under the temp folder can hard-link
     FilePlacer: places files by hard link, or by exclusive create where links do not work
+    PLACE_ATTEMPTS: caps how often a name freed by another writer's failed write is placed again
+    place_or_check(): places a file, or checks the one another writer placed, placing it again
+        when that writer freed the name
     store_blobs(): places each blob, keeping one already there only when it holds the same bytes
     remove_lost_record(): removes the record of a commit that lost its slot to another revision
     store_record(): places a revision record, or checks the one an identical commit placed first
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
 
-from e8s.core.errors import VersionError
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import StorageError, VersionError
 from e8s.show import durable_io
 from e8s.show.backend_checks import corrupt, require_blob_digest
 from e8s.show.document_dump import dump_json
@@ -30,6 +34,7 @@ from e8s.show.layout import (
     LAYOUT_FORMAT,
     TEMP_DIR,
     read_layout,
+    read_layout_file,
 )
 from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
 from e8s.show.torn_reads import is_short_of, read_settled
@@ -37,6 +42,9 @@ from e8s.show.torn_reads import is_short_of, read_settled
 STALE_TEMP_AGE = timedelta(hours=24)
 LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
 PROBE_SUFFIX = ".link-probe"
+# A writer that takes a name and fails its write frees the name again. Placing it again covers
+# that; a name freed on every attempt means writers keep failing, and the commit stops.
+PLACE_ATTEMPTS = 3
 
 
 def _link_unless_unsupported(source: Path, target: Path) -> bool | None:
@@ -137,6 +145,69 @@ class FilePlacer:
             return durable_io.create_new(target, data)
 
 
+def _freed_name_error(show_id: str, target: Path) -> StorageError:
+    return StorageError(
+        f"{target.name} was freed {PLACE_ATTEMPTS} times by writers whose writes failed",
+        hint="write again; if this repeats, check the free space and health of the repository",
+        context={"show": show_id, "path": str(target), "attempts": PLACE_ATTEMPTS},
+        code=ErrorCode.IO,
+    )
+
+
+def place_or_check(
+    placer: FilePlacer,
+    show_id: str,
+    target: Path,
+    data: bytes,
+    check: Callable[[], object],
+    *,
+    is_known_taken: bool = False,
+) -> bool:
+    """Places `data` under `target`, or checks the file another writer placed there.
+
+    A writer that creates a file in place and then fails its write removes the file, which frees
+    the name another writer found taken. A check that fails while the name is free again places
+    the file again, up to PLACE_ATTEMPTS times; then the commit fails with IO.
+
+    Args:
+        placer: Places new files.
+        show_id: Show the write belongs to, named in errors.
+        target: Name of the file.
+        data: Bytes to place.
+        check: Reads and checks the file under `target`, raising StorageError when it is missing
+            or wrong.
+        is_known_taken: Whether the name was just seen taken, so the check runs first.
+
+    Returns:
+        is_placed: True when this call placed the file, False when it checked another writer's.
+    """
+    should_place = not is_known_taken
+    for _ in range(PLACE_ATTEMPTS):
+        if should_place and placer.place(show_id, target, data):
+            return True
+        should_place = True
+        try:
+            check()
+        except StorageError:
+            if durable_io.lstat_mode(show_id, target) is not None:
+                raise
+            continue
+        return False
+    raise _freed_name_error(show_id, target)
+
+
+def _read_stored(show_id: str, target: Path, kind: str, cap: int, data: bytes) -> bytes:
+    """Reads a stored file, rereading it while it is a shorter start of `data`."""
+    fail = partial(corrupt, show_id)
+    read = partial(durable_io.read_capped, target, kind, cap, fail, allows_growth=True)
+    return read_settled(read, is_short_of(data))
+
+
+def _check_blob(show_id: str, target: Path, data: bytes) -> None:
+    stored = _read_stored(show_id, target, "blob", BLOB_MAX_BYTES, data)
+    require_blob_digest(show_id, target, stored)
+
+
 def store_blobs(
     placer: FilePlacer, show_id: str, objects: Path, blobs: Mapping[str, bytes]
 ) -> None:
@@ -152,13 +223,9 @@ def store_blobs(
     """
     for digest, data in blobs.items():
         target = objects / digest
-        if durable_io.lstat_mode(show_id, target) is None and placer.place(show_id, target, data):
-            continue
-        fail = partial(corrupt, show_id)
-        read = partial(
-            durable_io.read_capped, target, "blob", BLOB_MAX_BYTES, fail, allows_growth=True
-        )
-        require_blob_digest(show_id, target, read_settled(read, is_short_of(data)))
+        is_taken = durable_io.lstat_mode(show_id, target) is not None
+        check = partial(_check_blob, show_id, target, data)
+        place_or_check(placer, show_id, target, data, check, is_known_taken=is_taken)
 
 
 def store_record(placer: FilePlacer, show_id: str, path: Path, record: bytes) -> None:
@@ -172,15 +239,12 @@ def store_record(placer: FilePlacer, show_id: str, path: Path, record: bytes) ->
         path: Name of the record file.
         record: Encoded record bytes.
     """
-    if placer.place(show_id, path, record):
-        return
-    fail = partial(corrupt, show_id)
-    read = partial(
-        durable_io.read_capped, path, "revision record", TREE_MAX_BYTES, fail, allows_growth=True
-    )
-    stored = read_settled(read, is_short_of(record))
-    if stored != record:
-        raise corrupt(show_id, path, "revision record differs from this commit")
+
+    def check() -> None:
+        if _read_stored(show_id, path, "revision record", TREE_MAX_BYTES, record) != record:
+            raise corrupt(show_id, path, "revision record differs from this commit")
+
+    place_or_check(placer, show_id, path, record, check)
 
 
 def remove_lost_record(path: Path, winner_id: str, revision_id: str) -> None:
@@ -222,5 +286,5 @@ def write_layout_file(root: Path, show_id: str, placer: FilePlacer) -> None:
             context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(root)},
         )
     durable_io.make_folder(root / TEMP_DIR)
-    if not placer.place(show_id, root / LAYOUT_FILE, LAYOUT_BYTES):
-        read_layout(root)
+    check = partial(read_layout_file, root)
+    place_or_check(placer, show_id, root / LAYOUT_FILE, LAYOUT_BYTES, check)
