@@ -181,7 +181,7 @@ class _RootCheck:
         """Checks the folder of one show, which must exist under a plain shows folder."""
         try:
             folder = self.root / SHOWS_DIR / show_folder(show_id)
-        except UnicodeEncodeError as error:
+        except StorageError as error:
             raise self._no_show(show_id) from error
         for path in (self.root / SHOWS_DIR, folder):
             info = lstat_info(show_id, path)
