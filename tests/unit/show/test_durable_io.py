@@ -6,8 +6,9 @@ test_durable_io.py --- tests the flushes a layout-2 commit makes before its slot
 Contains:
     test_commit_flushes_each_file_and_directory_before_its_slot: flushes blobs, record and their
         directories before the slot, which gets a full flush
-    test_first_commit_flushes_every_directory_it_creates_before_the_slot: flushes the layout entry's
-        folder, shows/ and the show folder after the first files and before the slot
+    test_first_commit_flushes_every_directory_it_creates_before_the_slot: probes hard links, then
+        flushes the layout entry's folder, shows/ and the show folder after the first files and
+        before the slot
     test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commit: flushes the same
         folders in a process that did not create them
     test_failed_macos_flush_fails_the_commit_with_io: maps a failing fcntl flush to IO and lands no
@@ -162,7 +163,8 @@ def test_first_commit_flushes_every_directory_it_creates_before_the_slot(
     calls = _record_calls(monkeypatch)
     revision, tree, blobs = _change("", 1)
     FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
-    assert calls[:8] == [
+    assert calls[:2] == [(FILE_ENTRY,), (LINK_ENTRY, "tmp")]
+    assert calls[2:10] == [
         (FILE_ENTRY,),
         (LINK_ENTRY, tmp_path.name),
         (FILE_ENTRY,),

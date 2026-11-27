@@ -47,8 +47,8 @@ Contains:
     test_regression_malformed_records_are_corrupt: maps malformed, directory-shaped and deeply
         nested tree files to CORRUPT
     test_regression_trailing_newline_in_id_is_refused: refuses an ID followed by a newline
-    test_regression_link_failures_carry_no_hardlinks_code: maps os.link refusals to NO_HARDLINKS
-        with show, path and errno context
+    test_regression_link_failures_carry_no_hardlinks_code: maps os.link refusals on a layout-1 root
+        to NO_HARDLINKS with show, path and errno context
     test_regression_temp_file_failure_is_io_not_no_hardlinks: keeps a failing temp write out of
         NO_HARDLINKS
     test_regression_long_names_are_name_too_long: maps ENAMETOOLONG on writes and reads
@@ -499,13 +499,16 @@ def _commit_error(tmp_path: Path) -> StorageError:
 def test_regression_link_failures_carry_no_hardlinks_code(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: OSError
 ) -> None:
-    """Maps os.link refusals to NO_HARDLINKS with show, path and errno context."""
+    """Maps os.link refusals on a layout-1 root to NO_HARDLINKS with show, path and errno."""
+    repo, rev, _ = _saved(tmp_path)
 
     def refuse(*_args: object) -> None:
         raise error
 
     monkeypatch.setattr(os, "link", refuse)
-    caught = _commit_error(tmp_path)
+    with pytest.raises(StorageError) as raised:
+        _second_revision(repo, rev)
+    caught = raised.value
     assert caught.code == "NO_HARDLINKS"
     assert set(caught.context) == {"show", "path", "errno"}
     assert caught.context["show"] == SHOW_ID
