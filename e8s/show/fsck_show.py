@@ -20,8 +20,10 @@ from pathlib import Path
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
+from e8s.show.backend import MAX_REVISIONS
 from e8s.show.backend_checks import (
     FIRST_SEQ,
+    ReadBudget,
     Record,
     corrupt,
     parsed_json,
@@ -34,6 +36,7 @@ from e8s.show.backend_checks import (
 from e8s.show.durable_reads import listed_entries, lstat_mode, read_capped
 from e8s.show.file_backend import (
     LOG_DIR,
+    LOG_READ_MAX_BYTES,
     MANIFEST_FILE,
     MANIFEST_MAX_BYTES,
     OBJECT_DIR,
@@ -97,6 +100,7 @@ class _ShowCheck:
         self.unreadable: set[str] = set()
         self.is_proven = True
         self.last_seq = 0
+        self.budget = ReadBudget("", LOG_READ_MAX_BYTES)
 
     def report(self, code: str, path: Path, message: str) -> None:
         self.problems.append((code, path, message))
@@ -122,7 +126,7 @@ class _ShowCheck:
         self._check_manifest(is_present=MANIFEST_FILE in entries, has_slots=bool(seqs))
         self._check_legacy_before()
         self._report_gaps(seqs)
-        self._check_chain(seqs)
+        self._check_history(seqs)
         self._list_leftovers(RECORD_DIR, RECORD_NAME, self.records)
         self._list_leftovers(OBJECT_DIR, BLOB_NAME, self.blobs)
 
@@ -221,6 +225,27 @@ class _ShowCheck:
                 )
             expected = seq + 1
 
+    def _check_history(self, seqs: list[int]) -> None:
+        """Walks the slot chain within the caps every read keeps, reporting a history past them.
+
+        Reads refuse a show with more than MAX_REVISIONS slots or more than LOG_READ_MAX_BYTES of
+        slots and records, so fsck reports such a show once and stops walking it.
+        """
+        log = self.folder / LOG_DIR
+        if self.last_seq > MAX_REVISIONS:
+            self.is_proven = False
+            message = f"history of {self.last_seq} slots passes {MAX_REVISIONS}, which reads refuse"
+            self.report(BAD_RECORD, log, message)
+            return
+        self.budget = ReadBudget(self.show_id, LOG_READ_MAX_BYTES)
+        try:
+            self._check_chain(seqs)
+        except StorageError as error:
+            if error.code != ErrorCode.TOO_LARGE:
+                raise
+            self.is_proven = False
+            self.report(BAD_RECORD, log, f"{error.message}, which reads refuse")
+
     def _check_chain(self, seqs: list[int]) -> None:
         """Reads each slot and its record in order, checking parents, trees and blobs."""
         parent: str | None = ROOT_REVISION
@@ -261,8 +286,12 @@ class _ShowCheck:
         fail = partial(corrupt, self.show_id)
         read = partial(read_capped, path, "slot", SLOT_MAX_BYTES, fail, allows_growth=True)
         try:
-            return parsed_slot(self.show_id, path, read_settled(read, is_unfinished_line))
+            raw = read_settled(read, is_unfinished_line)
+            self.budget.spend(len(raw))
+            return parsed_slot(self.show_id, path, raw)
         except StorageError as error:
+            if error.code == ErrorCode.TOO_LARGE:
+                raise
             self.is_proven = False
             if error.code != ErrorCode.TORN_SLOT:
                 self.report(BAD_RECORD, path, error.message)
@@ -296,10 +325,13 @@ class _ShowCheck:
         fail = partial(corrupt, self.show_id)
         try:
             raw = read_capped(path, "revision record", TREE_MAX_BYTES, fail, allows_growth=True)
+            self.budget.spend(len(raw))
             stored = parsed_json(self.show_id, path, "revision record", raw)
             record = parsed_record(self.show_id, path, stored, revision.id, self.legacy_before)
             require_slot_record(self.show_id, self._slot_path(seq), seq, revision, record)
         except StorageError as error:
+            if error.code == ErrorCode.TOO_LARGE:
+                raise
             self.is_proven = False
             self.report(BAD_RECORD, path, error.message)
             return None

@@ -19,6 +19,8 @@ Contains:
         tree gained a path its revision did not change, which reads still accept
     test_regression_fsck_reports_a_legacy_before_past_the_head: reports a manifest whose
         legacy_before would skip the ID check of every slot, which hid a swapped record
+    test_fsck_reports_a_history_past_the_caps_reads_keep: reports a show with more slots than
+        MAX_REVISIONS, or more slot and record bytes than LOG_READ_MAX_BYTES, and stops its chain
     test_fsck_reports_slot_gap: reports one missing slot below the head
     test_regression_fsck_reports_a_two_slot_gap_below_the_head: reports a run of two deleted slots
         as one gap naming both, and two runs as two gaps
@@ -52,6 +54,7 @@ from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError, VersionError
 from e8s.examples import two_set_show
+from e8s.show import fsck_show
 from e8s.show.backend import digest
 from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import DocumentRepository
@@ -291,6 +294,26 @@ def test_regression_fsck_reports_a_legacy_before_past_the_head(
     assert not any(f.code == "UNREACHABLE" for f in report.findings)
     assert not report.ok
     assert gc(tmp_path, at=AT + 3 * DAY, confirm=True).removed == ()
+
+
+@pytest.mark.parametrize(
+    ("cap", "slots_within"),
+    [("MAX_REVISIONS", 0), ("LOG_READ_MAX_BYTES", 2), ("LOG_READ_MAX_BYTES", 3)],
+)
+def test_fsck_reports_a_history_past_the_caps_reads_keep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cap: str, slots_within: int
+) -> None:
+    """The bytes cap runs out at the third slot, or at its record; the third record is damaged."""
+    landed = landed_revisions(tmp_path, 3)
+    record_path(tmp_path, landed[2]).write_bytes(b"{}")
+    slots = sum(len(slot_path(tmp_path, seq).read_bytes()) for seq in range(1, slots_within + 1))
+    records = sum(len(record_path(tmp_path, revision).read_bytes()) for revision in landed[:2])
+    monkeypatch.setattr(fsck_show, cap, 2 if cap == "MAX_REVISIONS" else slots + records)
+    report = fsck(tmp_path)
+    log = relative(tmp_path, show_path(tmp_path) / "log")
+    assert [(f.code, f.path) for f in report.findings] == [("BAD_RECORD", log)]
+    assert "reads refuse" in report.findings[0].message
+    assert not report.ok
 
 
 def test_fsck_reports_slot_gap(tmp_path: Path) -> None:
