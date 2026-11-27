@@ -1,0 +1,66 @@
+name: nightly-alert
+
+# workflow_run is safe here: the job checks out nothing, runs no code or artifact from the
+# triggering run, and reads only its metadata, passed to the script through env.
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [nightly, nightly-core]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Alerts for one workflow run one at a time, so two failures never open two issues.
+concurrency:
+  group: nightly-alert-${{ github.event.workflow_run.workflow_id }}
+  cancel-in-progress: false
+
+jobs:
+  # Opens one issue per failing nightly workflow on main, or comments on the open one, and
+  # closes it when a later run of that workflow is green. Run data reaches the script only
+  # through env, never through an expression inside it.
+  alert:
+    name: report nightly failures
+    if: >-
+      ${{ github.event.workflow_run.head_branch == 'main' &&
+      (github.event.workflow_run.conclusion == 'failure' ||
+      github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read # lists the failed jobs of the triggering run
+      issues: write # opens, comments on and closes the nightly failure issue
+    steps:
+      - name: Open, update or close the nightly failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LABEL: nightly-failure
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          export TITLE="nightly failure: $WORKFLOW"
+          issue=$(gh issue list --label "$LABEL" --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == env.TITLE) | .number][0] // empty')
+          if [ "$CONCLUSION" = success ]; then
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --comment "$WORKFLOW is green again on main: $RUN_URL"
+            fi
+            exit 0
+          fi
+          failed=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped")
+              | "- \(.name) (\(.conclusion)): \(.html_url)"')
+          body=$(printf '%s failed on main.\n\nRun: %s\n\nFailed jobs:\n%s\n' \
+            "$WORKFLOW" "$RUN_URL" "${failed:-- none listed; open the run}")
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh label create "$LABEL" --force --color B60205 \
+              --description "A nightly workflow failed on main"
+            gh issue create --title "$TITLE" --label "$LABEL" --body "$body"
+          fi
