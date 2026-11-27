@@ -12,6 +12,7 @@ Contains:
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.cached(): returns the tree reading each blob through a bounded cache
     LazyBlobs.digests: returns the content digest of each path's blob
+    changed_paths(): lists the paths whose blob differs between two trees, reading no blob
     require_new_set_keys(): checks every set key and transition folder a commit stores in a
         folder the base lacks
     require_distinct_folders(): refuses a new set folder matching another folder ignoring case
@@ -221,6 +222,29 @@ class LazyBlobs(Mapping[str, bytes]):
     def digests(self) -> Mapping[str, str]:
         """Returns a read-only view of each path's blob digest, so callers can key caches by it."""
         return MappingProxyType(self._digests)
+
+
+def _digests(tree: Mapping[str, bytes]) -> Mapping[str, str]:
+    if isinstance(tree, LazyBlobs):
+        return tree.digests
+    return {path: blob_digest(raw) for path, raw in tree.items()}
+
+
+def changed_paths(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> list[str]:
+    """Lists the paths written or deleted between two trees, sorted, comparing digests alone.
+
+    Args:
+        before: Tree of the older state.
+        after: Tree of the newer state.
+
+    Returns:
+        paths: Paths present in only one tree or holding different bytes.
+
+    >>> changed_paths({"/a": b"1", "/b": b"2"}, {"/a": b"1", "/b": b"3", "/c": b"4"})
+    ['/b', '/c']
+    """
+    old, new = _digests(before), _digests(after)
+    return sorted(p for p in old.keys() | new.keys() if old.get(p) != new.get(p))
 
 
 def _require_required_docs(after: Mapping[str, str]) -> None:
