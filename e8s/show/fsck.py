@@ -148,7 +148,9 @@ def fsck(
         confirm: Whether the caller confirms the removal; a repair without it raises, and so
             does confirm without repair.
         at: The caller's time, with a time zone; temp files modified within STALE_TEMP_AGE
-            before it are not reported, and a repair needs it. None reports every temp file.
+            before it are not reported, and a repair needs it. None reports every temp file. The
+            file system's clock dates the files, so an `at` more than STALE_TEMP_AGE ahead of it
+            lets a repair remove a file a paused writer is still filling; pass the current time.
 
     Returns:
         report: Every finding, sorted by show, code and path, whether the root passes, and the

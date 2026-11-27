@@ -151,7 +151,9 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
 
     Args:
         root: Repository root folder; a symlinked root is followed.
-        at: The caller's time, with a time zone; the cut-off is STALE_TEMP_AGE before it.
+        at: The caller's time, with a time zone; the cut-off is STALE_TEMP_AGE before it. The file
+            system's clock dates the files, so an `at` more than STALE_TEMP_AGE ahead of it lets
+            gc remove the files of a commit still in flight; pass the current time.
         confirm: Whether to remove the files; without it gc only reports what it would remove.
 
     Returns:
