@@ -23,9 +23,12 @@ Contains:
         closes every descriptor when a folder holds either name once opened
     test_regression_listing_looks_up_entries_a_listing_reports_without_inodes: gives each entry
         its device and inode where the listing, as on Windows, reports them as 0
+    test_listing_looks_up_a_link_without_following_it: keeps a symlink's own lstat result when
+        the listing reports inode 0 and the entry is looked up again
 """
 
 import os
+import stat
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -243,3 +246,17 @@ def test_regression_listing_looks_up_entries_a_listing_reports_without_inodes(
     for name, info in listed.items():
         assert (info.st_dev, info.st_ino) == (expected[name].st_dev, expected[name].st_ino)
         assert info.st_ino != 0
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
+@pytest.mark.parametrize("by_descriptor", [False, True], ids=["by_path", "by_descriptor"])
+def test_listing_looks_up_a_link_without_following_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, by_descriptor: bool
+) -> None:
+    (tmp_path / "target").write_bytes(b"x")
+    (tmp_path / "link").symlink_to(tmp_path / "target")
+    expected = os.lstat(tmp_path / "link")
+    list_like_windows(monkeypatch, by_descriptor=by_descriptor)
+    info = dict(listed_entries(tmp_path))["link"]
+    assert stat.S_ISLNK(info.st_mode)
+    assert (info.st_dev, info.st_ino) == (expected.st_dev, expected.st_ino)
