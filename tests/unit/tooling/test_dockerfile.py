@@ -16,7 +16,7 @@ Contains:
     test_docker_image_holds_every_path_the_nightly_core_tests_read: the same for the fuzz crate
         and the nightly core workflow that tests/unit/tooling/test_nightly_core.py reads
     test_docker_image_holds_every_path_the_nightly_failure_tests_read: the same for the nightly,
-        nightly core and nightly alert workflows that test_nightly_failures.py reads
+        nightly core and nightly report workflows that test_nightly_failures.py reads
     test_regression_missing_dockerfile_fails_in_a_source_checkout: a moved or renamed Dockerfile
         fails the check instead of skipping it
     test_docker_path_check_flags_a_missing_and_an_ignored_path: proves the check can fail
@@ -44,7 +44,7 @@ NIGHTLY_FAILURE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly
 NIGHTLY_WORKFLOWS = {
     ".github/workflows/nightly.yml",
     ".github/workflows/nightly-core.yml",
-    ".github/workflows/nightly-alert.yml",
+    ".github/workflows/report-nightly.yml",
 }
 RUNTIME_STAGE = "runtime"
 BUILDER_STAGE = "builder"

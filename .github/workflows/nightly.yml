@@ -46,3 +46,17 @@ jobs:
       - name: bench
         if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s bench -- --tier L
+
+  # Reports the check job's result on main only. A fork's pull_request run cannot reach this
+  # job: its github.ref is never refs/heads/main, and its token is read-only.
+  report:
+    name: report the nightly result
+    needs: [nightly]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    permissions:
+      actions: read # lets the report list the jobs of this run
+      issues: write # lets the report open, comment on and close the nightly failure issue
+    uses: $/.github/workflows/report-nightly.yml
+    with:
+      workflow: ${{ github.workflow }}
+      result: ${{ needs.nightly.result }}
