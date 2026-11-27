@@ -84,7 +84,8 @@ def flush_directories(*folders: Path, is_commit_point: bool = False) -> None:
 
     Args:
         folders: Folders whose entries were just created.
-        is_commit_point: Whether the last entry makes a commit visible, so it gets a full flush.
+        is_commit_point: Whether the entries make a commit visible, so every folder gets a full
+            flush.
     """
     for folder in folders:
         durable_io.flush_directory(folder, is_commit_point=is_commit_point)

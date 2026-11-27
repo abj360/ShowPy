@@ -4,25 +4,29 @@
 test_durable_io.py --- tests the flushes a layout-2 commit makes before its slot lands
 
 Contains:
-    test_failed_macos_flush_fails_the_commit_with_io: maps a failing fcntl flush to IO and lands
-        no slot
-    test_failed_directory_flush_fails_the_commit_with_io: maps a failing directory fsync to IO and
-        lands no slot
-    test_first_commit_flushes_every_directory_it_creates_before_the_slot: flushes the layout
-        entry's folder, shows/ and the show folder after the first files and before the slot
-    test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commit: flushes the
-        same folders in a process that did not create them
     test_commit_flushes_each_file_and_directory_before_its_slot: flushes blobs, record and their
         directories before the slot, which gets a full flush
-    test_regression_commit_on_a_symlinked_root_lands: commits and reads back through a root that
-        is a symlink
+    test_first_commit_flushes_every_directory_it_creates_before_the_slot: flushes the layout entry's
+        folder, shows/ and the show folder after the first files and before the slot
+    test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commit: flushes the same
+        folders in a process that did not create them
+    test_failed_macos_flush_fails_the_commit_with_io: maps a failing fcntl flush to IO and lands no
+        slot
+    test_failed_directory_flush_fails_the_commit_with_io: maps a failing directory fsync to IO and
+        lands no slot
+    test_a_failed_chain_flush_is_retried_by_the_next_commit: flushes the chain again after a failed
+        first flush
+    test_regression_commit_on_a_symlinked_root_lands: commits and reads back through a root that is
+        a symlink
     test_directory_flush_is_skipped_on_windows: opens no directory on Windows
-    test_directory_flush_opens_without_following_links_and_syncs: opens the folder with
-        O_NOFOLLOW and syncs its descriptor
-    test_macos_flushes_files_and_directories_with_a_barrier_and_the_slot_directory_fully: picks
-        the fcntl command per flush on macOS
+    test_directory_flush_opens_without_following_links_and_syncs: opens the folder with O_NOFOLLOW
+        and syncs its descriptor
+    test_macos_flushes_files_and_directories_with_a_barrier_and_the_slot_directory_fully: picks the
+        fcntl command per flush on macOS
     test_full_flush_command_is_the_one_the_os_defines: matches F_FULLFSYNC to the fcntl module
-    test_other_systems_flush_every_file_with_fsync: calls fsync for blobs, records and slots
+    test_a_failing_fcntl_flush_raises_instead_of_being_swallowed: raises OSError for a closed
+        descriptor
+    test_other_systems_flush_every_file_with_fsync: calls fsync on the descriptor
 """
 
 import errno
@@ -57,6 +61,11 @@ def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, by
     tree = {RENDER: digest(data)}
     revision = Revision(id=revision_id(parent, AT, tree), parent=parent, at=AT, changed=(RENDER,))
     return revision, tree, {digest(data): data}
+
+
+def _fake_directory_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(os, "open", lambda *_args, **_kwargs: 99)
+    monkeypatch.setattr(os, "close", lambda _descriptor: None)
 
 
 def _record_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
@@ -171,12 +180,32 @@ def test_failed_directory_flush_fails_the_commit_with_io(
     monkeypatch.setattr(durable_io, "IS_MACOS", False)
     monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
     monkeypatch.setattr(durable_io, "flush_file", lambda _descriptor: None)
+    _fake_directory_open(monkeypatch)
     monkeypatch.setattr(os, "fsync", failing_fsync)
     revision, tree, blobs = _change("", 1)
     with pytest.raises(StorageError) as caught:
         FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
     assert caught.value.code == "IO"
     assert not list((tmp_path / "shows").glob("*/log/*"))
+
+
+def test_a_failed_chain_flush_is_retried_by_the_next_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_flush_directory = durable_io.flush_directory
+
+    def failing_flush_directory(*_args: object, **_kwargs: object) -> None:
+        raise OSError(errno.EIO, "Input/output error")
+
+    backend = FileBackend(tmp_path)
+    revision, tree, blobs = _change("", 1)
+    monkeypatch.setattr(durable_io, "flush_directory", failing_flush_directory)
+    with pytest.raises(StorageError):
+        backend.commit(SHOW_ID, revision, tree, blobs)
+    monkeypatch.setattr(durable_io, "flush_directory", real_flush_directory)
+    calls = _record_calls(monkeypatch)
+    backend.commit(SHOW_ID, revision, tree, blobs)
+    assert (DIRECTORY_ENTRY, show_folder(SHOW_ID), "") in calls
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs privilege on Windows")
@@ -230,6 +259,7 @@ def test_macos_flushes_files_and_directories_with_a_barrier_and_the_slot_directo
     monkeypatch.setattr(durable_io, "IS_MACOS", True)
     monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
     monkeypatch.setattr(durable_io, "fcntl_flush", lambda _fd, command: commands.append(command))
+    _fake_directory_open(monkeypatch)
     flush_file(0)
     flush_directory(tmp_path)
     flush_directory(tmp_path, is_commit_point=True)
@@ -241,6 +271,15 @@ def test_full_flush_command_is_the_one_the_os_defines() -> None:
     if not hasattr(fcntl, "F_FULLFSYNC"):
         pytest.skip("fcntl has no F_FULLFSYNC on this system")
     assert durable_io.F_FULLFSYNC == fcntl.F_FULLFSYNC
+
+
+def test_a_failing_fcntl_flush_raises_instead_of_being_swallowed() -> None:
+    pytest.importorskip("fcntl")
+    closed = os.open(os.devnull, os.O_RDONLY)
+    os.close(closed)
+    with pytest.raises(OSError, match="Bad file descriptor") as caught:
+        durable_io.fcntl_flush(closed, durable_io.F_FULLFSYNC)
+    assert caught.value.errno == errno.EBADF
 
 
 def test_other_systems_flush_every_file_with_fsync(monkeypatch: pytest.MonkeyPatch) -> None:
