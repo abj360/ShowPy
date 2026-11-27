@@ -54,6 +54,7 @@ LINK_ENTRY = "link"
 DIRECTORY_ENTRY = "dir"
 BARRIER_FSYNC = 85
 COMMIT_POINT = "commit point"
+FAKE_DIRECTORY_DESCRIPTOR = -99
 
 
 def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
@@ -63,9 +64,30 @@ def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, by
     return revision, tree, {digest(data): data}
 
 
-def _fake_directory_open(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(os, "open", lambda *_args, **_kwargs: 99)
-    monkeypatch.setattr(os, "close", lambda _descriptor: None)
+def _fake_directory_open(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Path, int]]:
+    """Fakes only the opens of folders, so no real folder is opened and files still are.
+
+    Returns:
+        opened: Path and flags of each faked folder open, in call order.
+    """
+    opened: list[tuple[Path, int]] = []
+    real_open, real_close = os.open, os.close
+
+    def fake_open(
+        path: str | Path, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+    ) -> int:
+        if not Path(path).is_dir():
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        opened.append((Path(path), flags))
+        return FAKE_DIRECTORY_DESCRIPTOR
+
+    def fake_close(descriptor: int) -> None:
+        if descriptor != FAKE_DIRECTORY_DESCRIPTOR:
+            real_close(descriptor)
+
+    monkeypatch.setattr(os, "open", fake_open)
+    monkeypatch.setattr(os, "close", fake_close)
+    return opened
 
 
 def _record_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
@@ -174,17 +196,24 @@ def test_failed_macos_flush_fails_the_commit_with_io(
 def test_failed_directory_flush_fails_the_commit_with_io(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def failing_fsync(_descriptor: int) -> None:
+    failed: list[int] = []
+    real_fsync = os.fsync
+
+    def failing_directory_fsync(descriptor: int) -> None:
+        if descriptor != FAKE_DIRECTORY_DESCRIPTOR:
+            real_fsync(descriptor)
+            return
+        failed.append(descriptor)
         raise OSError(errno.EIO, "Input/output error")
 
     monkeypatch.setattr(durable_io, "IS_MACOS", False)
     monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
-    monkeypatch.setattr(durable_io, "flush_file", lambda _descriptor: None)
     _fake_directory_open(monkeypatch)
-    monkeypatch.setattr(os, "fsync", failing_fsync)
+    monkeypatch.setattr(os, "fsync", failing_directory_fsync)
     revision, tree, blobs = _change("", 1)
     with pytest.raises(StorageError) as caught:
         FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert failed == [FAKE_DIRECTORY_DESCRIPTOR]
     assert caught.value.code == "IO"
     assert not list((tmp_path / "shows").glob("*/log/*"))
 
@@ -234,20 +263,13 @@ def test_directory_flush_is_skipped_on_windows(
 def test_directory_flush_opens_without_following_links_and_syncs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    opened: list[tuple[Path, int]] = []
     synced: list[int] = []
     monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
     monkeypatch.setattr(durable_io, "IS_MACOS", False)
-
-    def fake_open(path: Path, flags: int) -> int:
-        opened.append((path, flags))
-        return 99
-
-    monkeypatch.setattr(os, "open", fake_open)
+    opened = _fake_directory_open(monkeypatch)
     monkeypatch.setattr(os, "fsync", synced.append)
-    monkeypatch.setattr(os, "close", lambda _descriptor: None)
     flush_directory(tmp_path)
-    assert synced == [99]
+    assert synced == [FAKE_DIRECTORY_DESCRIPTOR]
     assert opened[0][0] == tmp_path
     assert opened[0][1] & getattr(os, "O_NOFOLLOW", 0) == getattr(os, "O_NOFOLLOW", 0)
 
