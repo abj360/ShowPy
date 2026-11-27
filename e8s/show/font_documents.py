@@ -2,25 +2,19 @@
 font_documents.py --- stores the fonts of a show's text forms as documents in its own tree
 
 Contains:
-    FONTS_ROOT: names the folder that holds font documents
-    FONT_DOCUMENT_PATTERN: matches a font document path, named by the SHA-256 of its bytes
     font_changes(): lists the writes and deletes that make the tree hold the fonts a show needs
     load_fonts(): returns the bundled fonts plus the fonts stored in a workspace's tree
 """
 
-import re
 from collections.abc import Mapping
 
 from e8s.choreo.form_models import TextRecipe
-from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import FontError, MissingFontError, SchemaError
-from e8s.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from e8s.show.integrity import blob_digest
+from e8s.core.errors import MissingFontError
+from e8s.geo.fonts import FontRegistry, bundled_fonts, register_font
+from e8s.show.font_paths import FONTS_ROOT, require_font_document
 from e8s.show.models import Show
 from e8s.show.workspace import Workspace
 
-FONTS_ROOT = "/assets/fonts/"
-FONT_DOCUMENT_PATTERN = re.compile(rf"{FONTS_ROOT}([0-9a-f]{{64}})\.json")
 URI_PREFIX = "asset:sha256:"
 
 
@@ -31,27 +25,8 @@ def _stored_paths(tree: Mapping[str, bytes]) -> list[str]:
 def _registry_from_tree(tree: Mapping[str, bytes]) -> FontRegistry:
     registry = bundled_fonts()
     for path in _stored_paths(tree):
-        match = FONT_DOCUMENT_PATTERN.fullmatch(path)
-        if match is None:
-            raise SchemaError(
-                f"{path} is not a font document name",
-                hint=f"name font documents {FONTS_ROOT}<sha256 hex>.json",
-                context={"path": path},
-            )
         data = tree[path]
-        if len(data) > MAX_FONT_BYTES:
-            raise FontError(
-                f"{path} is {len(data)} bytes, over {MAX_FONT_BYTES}",
-                hint=f"store fonts of at most {MAX_FONT_BYTES} bytes",
-                context={"path": path},
-            )
-        if blob_digest(data) != match.group(1):
-            raise FontError(
-                f"{path} does not hash to its name",
-                hint="restore the font document from an earlier revision",
-                context={"path": path},
-                code=ErrorCode.FONT_HASH_MISMATCH,
-            )
+        require_font_document(path, data)
         registry, _ = register_font(registry, data, if_name_taken="keep")
     return registry
 

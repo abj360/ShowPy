@@ -32,7 +32,8 @@ from e8s.examples import two_set_show
 from e8s.geo.fonts import bundled_fonts, register_font
 from e8s.show.document_paths import role_docs, set_doc
 from e8s.show.document_repository import encode_cache_of
-from e8s.show.font_documents import FONTS_ROOT, load_fonts
+from e8s.show.font_documents import load_fonts
+from e8s.show.font_paths import FONTS_ROOT
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
