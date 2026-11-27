@@ -315,7 +315,10 @@ def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResu
     found += _head_retime_conflicts(base, head, theirs)
     if result.show is not None and not found:
         found = _overrun_conflicts(head, result.show)
-    conflicts += [c for c in found if c.key.sort_key() not in known]
+    for conflict in found:
+        if conflict.key.sort_key() not in known:
+            known.add(conflict.key.sort_key())
+            conflicts.append(conflict)
     return MergeResult(conflicts=tuple(conflicts)) if conflicts else result
 
 
