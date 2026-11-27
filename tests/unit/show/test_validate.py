@@ -72,16 +72,21 @@ Contains:
         stored row is not locked
     test_bad_transition_pin_issue_names_the_raw_pin_id: names an unparsable transition pin by its
         raw ID
+    test_pin_mismatch_names_every_unflagged_item_of_each_pin: names, per pin, its unflagged
+        placements in show order, then its unlocked forms
+    test_regression_entity_pin_check_visits_only_unflagged_placements: checks each entity pin
+        against its unflagged placements alone
 """
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 import pytest
 
 from e8s.cast.spots import add_spot
 from e8s.choreo.form_models import Form
+from e8s.choreo.forms import line_form
 from e8s.choreo.models import Placement, PlacementPatch, Set
 from e8s.choreo.path_models import (
     FacingMode,
@@ -97,12 +102,14 @@ from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
 from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import InMemorySheetStore
+from e8s.show import validate_refs
 from e8s.show._notes_document import Note, NotesDocument
 from e8s.show.anchors import Anchor
 from e8s.show.change_models import ItemKey
 from e8s.show.collab_models import Comment
+from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
-from e8s.show.pinning import pin
+from e8s.show.pinning import covers_placement, pin
 from e8s.show.validate import (
     validate_dependencies,
     validate_paths,
@@ -646,3 +653,49 @@ def test_bad_transition_pin_issue_names_the_raw_pin_id() -> None:
     """Names an unparsable transition pin by its raw ID, since no set keys can be read from it."""
     show = two_set_show().replace(pins=(Pin(target="transition", id="garbage"),))
     assert _item_of(show, "BAD_TRANSITION") == ItemKey(kind="pin", path=("transition", "garbage"))
+
+
+def _mismatch_messages(show: Show) -> dict[tuple[str, str], str]:
+    issues = _issues(show, "PIN_MISMATCH")
+    return {(str(i.context["target"]), str(i.context["id"])): i.message for i in issues}
+
+
+def test_pin_mismatch_names_every_unflagged_item_of_each_pin() -> None:
+    """Names, per pin, its unflagged placements in show order, then its unlocked forms."""
+    row = line_form("row", ["T1", "T2"], (0, 12), (2, 12), set_id=SET_TWO)
+    pins = (
+        Pin(target="entity", id="T1"),
+        Pin(target="set", id=SET_TWO),
+        Pin(target="form", id="row"),
+    )
+    show = two_set_show().replace(forms={"row": row}, pins=pins)
+    assert _mismatch_messages(show) == {
+        ("entity", "T1"): "the entity pin on T1 leaves 2 locked item(s) unflagged: 1 T1, 2 T1",
+        ("set", SET_TWO): "the set pin on 2 leaves 5 locked item(s) unflagged:"
+        " 2 T1, 2 T2, 2 T3, 2 T4, row",
+        ("form", "row"): "the form pin on row leaves 1 locked item(s) unflagged: row",
+    }
+
+
+def test_regression_entity_pin_check_visits_only_unflagged_placements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks each entity pin against its unflagged placements alone, not every set's spots."""
+    show = two_set_show()
+    for number in range(3, 21):
+        show = add_set(show, str(number), 8.0)
+    for spot in show.cast.ids():
+        show = pin(show, "entity", spot)
+    first = show.sets[0].replace(
+        placements=tuple(p.replace(pinned=False) for p in show.sets[0].placements)
+    )
+    show = show.replace(sets=(first, *show.sets[1:]))
+    calls: list[str] = []
+
+    def counted(held: Sequence[Pin], set_id: str, entity: str) -> bool:
+        calls.append(entity)
+        return covers_placement(held, set_id, entity)
+
+    monkeypatch.setattr(validate_refs, "covers_placement", counted)
+    assert len(_mismatch_messages(show)) == len(show.pins)
+    assert sorted(calls) == sorted(show.cast.ids())

@@ -14,8 +14,9 @@ Contains:
 """
 
 import math
+from collections import defaultdict
 from collections.abc import Iterator, Mapping
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from e8s.cast.select import select
 from e8s.choreo.form_models import Form
@@ -151,13 +152,55 @@ def _set_issues(show: Show, owner: Set) -> Iterator[ValidationIssue]:
             )
 
 
-def _pin_exists(show: Show, record: Pin) -> bool:
+class _PinScope(NamedTuple):
+    """Indexes what the pin check reads, built once per show so each pin costs only its own items.
+
+    Attributes:
+        keys: Set ID to storage key.
+        cast_ids: Every spot ID in the cast.
+        set_ids: Every set ID in the show.
+        placements: Each unpinned placement as (set ID, spot ID), under its set's ID and under its
+            spot's ID, in show order.
+        forms: Each unlocked form key under its own key and under its set's ID.
+    """
+
+    keys: Mapping[str, str]
+    cast_ids: frozenset[str]
+    set_ids: frozenset[str]
+    placements: Mapping[str, list[tuple[str, str]]]
+    forms: Mapping[str, list[str]]
+
+
+def _pin_scope(show: Show) -> _PinScope:
+    placements: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for owner in show.sets:
+        for placement in owner.placements:
+            if placement.pinned:
+                continue
+            for name in dict.fromkeys((owner.id, placement.entity)):
+                placements[name].append((owner.id, placement.entity))
+    forms: dict[str, list[str]] = defaultdict(list)
+    for key, form in show.forms.items():
+        if form.locked:
+            continue
+        for name in dict.fromkeys((key, form.set)):
+            forms[name].append(key)
+    return _PinScope(
+        keys=set_keys_by_id(show),
+        cast_ids=frozenset(show.cast.ids()),
+        set_ids=frozenset(show.set_ids()),
+        placements=placements,
+        forms=forms,
+    )
+
+
+def _pin_exists(show: Show, record: Pin, scope: _PinScope) -> bool:
     if record.target == "entity":
-        return record.id in show.cast.ids()
+        return record.id in scope.cast_ids
     if record.target == "form":
         return record.id in show.forms
     if record.target == "set":
-        return record.id in show.set_ids()
+        return record.id in scope.set_ids
     try:
         show.transition(parse_tid(record.id))
     except E8sError:
@@ -188,26 +231,18 @@ def _bad_transition_pin(record: Pin) -> ValidationIssue:
     )
 
 
-def _unflagged_placements(show: Show, record: Pin) -> list[str]:
+def _unflagged_placements(record: Pin, scope: _PinScope) -> list[str]:
     held = (record,)
-    found: list[str] = []
-    for owner in show.sets:
-        if record.target == "set" and owner.id != record.id:
-            continue
-        for placement in owner.placements:
-            if record.target == "entity" and placement.entity != record.id:
-                continue
-            if covers_placement(held, owner.id, placement.entity) and not placement.pinned:
-                found.append(f"{owner.id} {placement.entity}")
-    return found
+    return [
+        f"{set_id} {entity}"
+        for set_id, entity in scope.placements.get(record.id, ())
+        if covers_placement(held, set_id, entity)
+    ]
 
 
-def _unflagged_forms(show: Show, record: Pin) -> list[str]:
+def _unflagged_forms(show: Show, record: Pin, scope: _PinScope) -> list[str]:
     held = (record,)
-    forms = {k: f for k, f in show.forms.items() if k == record.id}
-    if record.target == "set":
-        forms = dict(forms_of_set(show, record.id))
-    return [k for k, f in forms.items() if covers_form(show, held, k) and not f.locked]
+    return [key for key in scope.forms.get(record.id, ()) if covers_form(show, held, key)]
 
 
 def _unflagged_rows(show: Show, record: Pin) -> list[str]:
@@ -216,11 +251,13 @@ def _unflagged_rows(show: Show, record: Pin) -> list[str]:
     return [entity for entity, row in rows.items() if not row.locked]
 
 
-def _unflagged(show: Show, record: Pin) -> list[str]:
+def _unflagged(show: Show, record: Pin, scope: _PinScope) -> list[str]:
     if record.target == "transition":
         return _unflagged_rows(show, record)
-    found = [] if record.target == "form" else _unflagged_placements(show, record)
-    return found + (_unflagged_forms(show, record) if record.target in ("form", "set") else [])
+    found = [] if record.target == "form" else _unflagged_placements(record, scope)
+    if record.target in ("form", "set"):
+        found += _unflagged_forms(show, record, scope)
+    return found
 
 
 def _pin_mismatch(record: Pin, item: ItemKey, unflagged: list[str]) -> ValidationIssue:
@@ -243,15 +280,15 @@ def _parses(tid: str) -> bool:
     return True
 
 
-def _pin_issues(show: Show, record: Pin, keys: Mapping[str, str]) -> Iterator[ValidationIssue]:
+def _pin_issues(show: Show, record: Pin, scope: _PinScope) -> Iterator[ValidationIssue]:
     if record.target == "transition" and not _parses(record.id):
         yield _bad_transition_pin(record)
         return
-    item = ItemKey(kind=PIN_KIND, path=pin_path(keys, record))
-    if not _pin_exists(show, record):
+    item = ItemKey(kind=PIN_KIND, path=pin_path(scope.keys, record))
+    if not _pin_exists(show, record, scope):
         yield _unresolved_pin(record, item, ErrorCode.UNKNOWN_PIN, "unpin it or restore the item")
         return
-    unflagged = _unflagged(show, record)
+    unflagged = _unflagged(show, record, scope)
     if unflagged:
         yield _pin_mismatch(record, item, unflagged)
 
@@ -340,6 +377,7 @@ def reference_issues(show: Show) -> list[ValidationIssue]:
     """
     issues = [i for key, form in show.forms.items() for i in _form_issues(show, key, form)]
     issues += [i for owner in show.sets for i in _set_issues(show, owner)]
-    keys = set_keys_by_id(show)
-    issues += [i for record in show.pins for i in _pin_issues(show, record, keys)]
+    if show.pins:
+        scope = _pin_scope(show)
+        issues += [i for record in show.pins for i in _pin_issues(show, record, scope)]
     return issues + list(_override_issues(show))
