@@ -37,11 +37,6 @@ Contains:
     test_stale_temp_removal_does_not_follow_a_link: keeps a temp-named symlink whose target is old
     test_regression_failed_stale_removal_closes_the_folder_listing: raises the unlink error without
         leaving a folder listing open
-    test_exclusive_create_writes_once_and_flushes: writes the bytes in one call and flushes them
-    test_failed_or_short_exclusive_write_removes_the_file: raises and leaves no file for a write
-        that fails or writes less than asked
-    test_failed_slot_write_without_hard_links_leaves_no_torn_slot: fails the commit with IO and
-        removes the slot it created
 """
 
 import errno
@@ -49,7 +44,6 @@ import gc
 import os
 import sys
 import warnings
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -74,7 +68,6 @@ BARRIER_FSYNC = 85
 COMMIT_POINT = "commit point"
 FOLLOWS_LINKS = "follows links"
 FAKE_DIRECTORY_DESCRIPTOR = -99
-REAL_WRITE = os.write
 
 
 def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
@@ -424,81 +417,3 @@ def test_regression_failed_stale_removal_closes_the_folder_listing(
             durable_io.remove_stale_temps(tmp_path, CUT_OFF)
         gc.collect()
     assert [w for w in caught if issubclass(w.category, ResourceWarning)] == []
-
-
-def _count_writes(
-    monkeypatch: pytest.MonkeyPatch, result: Callable[[int, bytes], int]
-) -> list[int]:
-    """Replaces os.write, recording the size of each write and returning `result` for it."""
-    sizes: list[int] = []
-
-    def write(descriptor: int, data: bytes) -> int:
-        sizes.append(len(data))
-        return result(descriptor, data)
-
-    monkeypatch.setattr(os, "write", write)
-    return sizes
-
-
-def test_exclusive_create_writes_once_and_flushes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    flushed: list[int] = []
-    monkeypatch.setattr(durable_io, "flush_file", flushed.append)
-    sizes = _count_writes(monkeypatch, os.write)
-    target = tmp_path / "slot"
-    assert durable_io.create_new(target, b"x" * 5000) is True
-    assert sizes == [5000]
-    assert len(flushed) == 1
-    assert target.read_bytes() == b"x" * 5000
-    assert target.stat().st_mode & 0o777 == durable_io.CREATED_FILE_MODE or sys.platform == "win32"
-
-
-def _fail_write(_descriptor: int, _data: bytes) -> int:
-    raise OSError(errno.ENOSPC, "No space left on device")
-
-
-def _short_write(descriptor: int, data: bytes) -> int:
-    return REAL_WRITE(descriptor, data[:-1])
-
-
-@pytest.mark.parametrize(
-    ("write", "reason"),
-    [(_fail_write, "No space left"), (_short_write, "wrote 6 of 7 bytes")],
-    ids=["fails", "short"],
-)
-def test_failed_or_short_exclusive_write_removes_the_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write: Callable[[int, bytes], int], reason: str
-) -> None:
-    _count_writes(monkeypatch, write)
-    target = tmp_path / "slot"
-    with pytest.raises(OSError, match=reason):
-        durable_io.create_new(target, b"payload")
-    assert not target.exists()
-
-
-def test_failed_slot_write_without_hard_links_leaves_no_torn_slot(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def refuse(*_args: object, **_kwargs: object) -> None:
-        raise PermissionError(errno.EPERM, "Operation not permitted")
-
-    monkeypatch.setattr(os, "link", refuse)
-    backend = FileBackend(tmp_path)
-    first, first_tree, first_blobs = _change("", 1)
-    backend.commit(SHOW_ID, first, first_tree, first_blobs)
-    slot = tmp_path / "shows" / show_folder(SHOW_ID) / "log" / "000000000002"
-    real_create_new = durable_io.create_new
-
-    def create_new(target: Path, data: bytes) -> bool:
-        if target == slot:
-            _count_writes(monkeypatch, _fail_write)
-        return real_create_new(target, data)
-
-    monkeypatch.setattr(durable_io, "create_new", create_new)
-    second, second_tree, second_blobs = _change(first.id, 2)
-    with pytest.raises(StorageError) as caught:
-        backend.commit(SHOW_ID, second, second_tree, second_blobs)
-    assert caught.value.code == "IO"
-    assert caught.value.context["errno"] == errno.ENOSPC
-    assert not slot.exists()

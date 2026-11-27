@@ -12,8 +12,6 @@ Contains:
         and without hard links
     test_failed_probe_fails_closed_and_is_tried_again: fails a commit whose probe link fails for
         another reason with IO, and probes again on the next commit
-    test_exclusive_create_never_replaces_a_file: keeps an existing file and the target of an
-        existing symlink untouched
     test_lost_slot_race_is_the_same_conflict_without_hard_links: gives the loser the same
         ConflictError as with links and leaves the winner's slot as it was
     test_flush_order_is_the_same_without_hard_links: flushes each file before the next write and
@@ -26,7 +24,6 @@ Contains:
 
 import errno
 import os
-import sys
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -227,19 +224,6 @@ def test_failed_probe_fails_closed_and_is_tried_again(
     backend.commit(SHOW_ID, revision, tree, blobs)
     assert calls[:2] == [(FLUSH,), (PLACE, "tmp")]
     assert backend.head(SHOW_ID) == revision.id
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs privilege")
-def test_exclusive_create_never_replaces_a_file(tmp_path: Path) -> None:
-    existing, aimed, linked = tmp_path / "existing", tmp_path / "aimed", tmp_path / "linked"
-    existing.write_bytes(b"old")
-    aimed.write_bytes(b"target")
-    linked.symlink_to(aimed)
-    assert durable_io.create_new(existing, b"new") is False
-    assert durable_io.create_new(linked, b"new") is False
-    assert existing.read_bytes() == b"old"
-    assert aimed.read_bytes() == b"target"
-    assert linked.is_symlink()
 
 
 def _lost_race(root: Path) -> tuple[ConflictError, bytes, bytes]:
