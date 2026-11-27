@@ -64,6 +64,15 @@ def _identity(info: os.stat_result) -> tuple[int, int, int, int]:
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
 
 
+def _confirm_alone() -> StorageError:
+    return StorageError(
+        "fsck got confirm=True without repair=True, so it would repair nothing",
+        hint="pass repair=True, confirm=True and at to repair, or neither to check only",
+        context={"confirm": True, "repair": False},
+        code=ErrorCode.NOT_CONFIRMED,
+    )
+
+
 def _is_still_torn(item: Repairable, cutoff: datetime) -> bool:
     """Tells whether a file is still the same regular, torn file older than the cut-off, and safe.
 
@@ -136,7 +145,8 @@ def fsck(
         root: Repository root folder.
         show_id: The one show to check; None checks the whole root.
         repair: Whether to remove the torn files the check finds.
-        confirm: Whether the caller confirms the removal; a repair without it raises.
+        confirm: Whether the caller confirms the removal; a repair without it raises, and so
+            does confirm without repair.
         at: The caller's time, with a time zone; temp files modified within STALE_TEMP_AGE
             before it are not reported, and a repair needs it. None reports every temp file.
 
@@ -145,8 +155,9 @@ def fsck(
             paths a repair removed.
 
     Raises:
-        StorageError: A repair lacks `confirm=True` or `at` (NOT_CONFIRMED); the root is missing
-            (IO), holds no repository (CORRUPT), or cannot be read (IO).
+        StorageError: A repair lacks `confirm=True` or `at`, or `confirm=True` comes without
+            `repair=True` (NOT_CONFIRMED); the root is missing (IO), holds no repository
+            (CORRUPT), or cannot be read (IO).
         VersionError: The root holds layout 1, or a newer layout than this release reads.
         UnknownRefError: `show_id` names no show in the root.
 
@@ -164,6 +175,8 @@ def fsck(
     (True, ())
     """
     require_zoned(at)
+    if confirm and not repair:
+        raise _confirm_alone()
     if repair and (not confirm or at is None):
         raise _repair_refused(confirm=confirm, at=at)
     scan = scan_repository(root, show_id, at)

@@ -9,6 +9,7 @@ Contains:
     test_torn_slot_hint_names_a_repair_that_works: runs the call the TORN_SLOT hint names, after
         which the show reads and commits again
     test_fsck_repair_needs_confirm_and_at: refuses a repair without confirm=True or `at`
+    test_fsck_refuses_confirm_without_repair: refuses confirm=True without repair=True
     test_fsck_repair_keeps_a_torn_slot_a_writer_may_still_fill: keeps a torn slot younger than a
         day before `at`
     test_fsck_repair_never_removes_a_torn_slot_that_is_not_last: keeps a torn slot before another
@@ -129,7 +130,17 @@ def test_fsck_repair_needs_confirm_and_at(
     assert caught.value.code == ErrorCode.NOT_CONFIRMED
     assert "confirm=True" in caught.value.hint
     assert snapshot(tmp_path) == before
-    assert fsck(tmp_path, confirm=True).repaired == ()
+
+
+@pytest.mark.parametrize("at", [AT, None], ids=["at", "no_at"])
+def test_fsck_refuses_confirm_without_repair(tmp_path: Path, at: datetime | None) -> None:
+    """confirm=True alone reads like a repair request; it repairs nothing, so it is refused."""
+    _torn_last_slot(tmp_path)
+    before = snapshot(tmp_path)
+    with pytest.raises(StorageError) as caught:
+        fsck(tmp_path, confirm=True, at=at)
+    assert caught.value.code == ErrorCode.NOT_CONFIRMED
+    assert "repair=True" in caught.value.hint
     assert snapshot(tmp_path) == before
 
 

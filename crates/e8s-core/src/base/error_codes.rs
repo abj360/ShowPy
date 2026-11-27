@@ -90,7 +90,7 @@ pub enum ErrorCode {
     NotAMember,
     /// A text-only operation gets a form of another kind.
     NotATextForm,
-    /// A repository repair is asked for without confirm=True or without the caller's time `at`.
+    /// A repository repair lacks confirm=True or the caller's time `at`, or confirm lacks repair.
     NotConfirmed,
     /// A similarity fit or a stored show field holds a NaN or infinite number.
     NotFinite,
