@@ -79,7 +79,7 @@ BESIDE_STEPS: Final[Mapping[int, tuple[BesideStep, ...]]] = ReadOnlyMap(
 
 
 class DroppedFields(FrozenModel):
-    """Holds the stored fields of one object that the current format no longer has, as stored.
+    """Holds the fields of one object that the current format no longer has, as migration met them.
 
     A host that still needs them keeps them itself; the migrated show does not hold them.
 
@@ -89,8 +89,10 @@ class DroppedFields(FrozenModel):
             the document itself.
         stored_id: The object's ID as stored, before any rename the report lists; None when the
             object has no ID.
-        fields: Each dropped field name mapped to its stored JSON value, unchanged: selector text
-            in v1 grammar and IDs before any rename; `MigrationReport.renamed` maps those IDs.
+        fields: Each dropped field name mapped to its JSON value as the earlier sub-steps left
+            it: the stored value when no earlier sub-step rewrites it, else the newer shape that
+            sub-step wrote (a tagged facing value, a v2 path row). IDs are always as stored,
+            before any rename; `MigrationReport.renamed` maps them.
 
     >>> DroppedFields(document="/show/show.json", location="cast.spots[0]", stored_id="T1",
     ...               fields={"claimable": "crew"}).fields["claimable"]
