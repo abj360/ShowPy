@@ -78,7 +78,7 @@ from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import DocumentRepository, revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.fsck import fsck, removed_torn_files
-from e8s.show.fsck_show import Repairable, is_torn_manifest
+from e8s.show.fsck_findings import Repairable, is_torn_manifest
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder

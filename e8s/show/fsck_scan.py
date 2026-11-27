@@ -25,7 +25,7 @@ from e8s.show.commit_writes import LAYOUT_BYTES, STALE_TEMP_AGE
 from e8s.show.durable_io import TEMP_PREFIX, is_stale_temp, mapped_io
 from e8s.show.durable_reads import listed_entries, lstat_info, read_capped
 from e8s.show.file_backend import SHOWS_DIR
-from e8s.show.fsck_show import (
+from e8s.show.fsck_findings import (
     STALE_TEMP,
     TORN_FILE,
     UNKNOWN_FILE,
@@ -34,8 +34,8 @@ from e8s.show.fsck_show import (
     ShowScan,
     finding,
     is_plain_folder,
-    scan_show,
 )
+from e8s.show.fsck_show import scan_show
 from e8s.show.layout import (
     CURRENT_LAYOUT,
     HOUSEKEEPING_NAMES,

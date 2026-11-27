@@ -20,8 +20,8 @@ from e8s.show.backend_checks import corrupt
 from e8s.show.commit_writes import STALE_TEMP_AGE
 from e8s.show.durable_io import flush_directory, mapped_io, remove_file
 from e8s.show.durable_reads import lstat_info, read_capped
+from e8s.show.fsck_findings import FAILING_CODES, Repairable, relative_path
 from e8s.show.fsck_scan import RepositoryScan, scan_repository
-from e8s.show.fsck_show import FAILING_CODES, Repairable, relative_path
 from e8s.show.storage_models import FsckFinding, FsckReport
 
 
