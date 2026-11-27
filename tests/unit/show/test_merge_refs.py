@@ -6,8 +6,10 @@ test_merge_refs.py --- tests the dangling-reference check run on merged shows
 Contains:
     test_regression_dangling_conflicts_name_the_item_the_merge_breaks: reports a form member that
         only the merge leaves outside the cast, keyed by the form
-    test_regression_dangling_conflicts_leave_a_side_s_own_errors_to_validation: reports nothing
-        for an error one side already held
+    test_regression_dangling_conflicts_leave_errors_the_base_or_head_held: reports nothing for an
+        error the base or the head already held
+    test_regression_dangling_conflicts_report_a_proposal_s_own_dangling_member: reports a dangling
+        member the proposal itself brings
 """
 
 from e8s.cast.spots import delete_spots
@@ -36,16 +38,27 @@ def test_regression_dangling_conflicts_name_the_item_the_merge_breaks() -> None:
     theirs = _with_form(base, ["T3", DELETED_SPOT])
     listing = ours.sets[1].replace(forms=(FORM_ID,))
     merged = ours._copied(update={"forms": theirs.forms, "sets": (ours.sets[0], listing)})
-    conflicts = dangling_conflicts(ours, theirs, merged)
+    conflicts = dangling_conflicts(base, ours, merged)
     assert [c.key for c in conflicts] == [ItemKey(kind="form", path=(FORM_ID,))]
     assert any(DELETED_SPOT in c.reason for c in conflicts)
 
 
-def test_regression_dangling_conflicts_leave_a_side_s_own_errors_to_validation() -> None:
-    """Reports nothing for a dangling member that one side already held before the merge."""
+def _ghost_member(show: Show) -> Show:
+    form = show.forms[FormId(FORM_ID)].replace(members=("T3", "ZZ"))
+    return show._copied(update={"forms": {FORM_ID: form}})
+
+
+def test_regression_dangling_conflicts_leave_errors_the_base_or_head_held() -> None:
+    """Reports nothing for a dangling member the base or the head already held."""
+    broken = _ghost_member(_with_form(two_set_show(), ["T3", "T4"]))
+    assert dangling_conflicts(broken, two_set_show(), broken) == []
+    assert dangling_conflicts(two_set_show(), broken, broken) == []
+
+
+def test_regression_dangling_conflicts_report_a_proposal_s_own_dangling_member() -> None:
+    """Reports a dangling member the proposal brings, though no head edit caused it."""
     base = two_set_show()
-    theirs = _with_form(base, ["T3", "T4"])
-    broken = theirs._copied(
-        update={"forms": {FORM_ID: theirs.forms[FormId(FORM_ID)].replace(members=("T3", "ZZ"))}}
-    )
-    assert dangling_conflicts(base, broken, broken) == []
+    broken = _ghost_member(_with_form(base, ["T3", "T4"]))
+    (conflict,) = dangling_conflicts(base, base, broken)
+    assert conflict.key == ItemKey(kind="form", path=(FORM_ID,))
+    assert "ZZ" in conflict.reason

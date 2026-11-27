@@ -41,6 +41,8 @@ Contains:
         changes an item pinned on the head
     test_regression_accept_refuses_an_op_naming_a_spot_the_head_deleted: refuses, as a stale
         proposal, a placement, form or paths op naming a spot the head deleted since the base
+    test_regression_accept_refuses_a_proposal_naming_a_spot_never_in_the_cast: refuses a form op
+        whose member was never in the cast, with is_stale and preview agreeing
 """
 
 from datetime import UTC, datetime, timedelta
@@ -411,6 +413,7 @@ def test_regression_stored_proposal_is_parsed_as_strict_json(raw: bytes) -> None
 
 
 DELETED_SPOT = "T4"
+GHOST_SPOT = "ZZ"
 DELETED_SPOT_OPS: dict[str, ChangeOp] = {
     "placement": _move(DELETED_SPOT, -1.0),
     "form": FormOp(form=line_form("f1", ["T3", DELETED_SPOT], (0.0, 0.0), (4.0, 0.0), set_id="2")),
@@ -437,4 +440,19 @@ def test_regression_accept_refuses_an_op_naming_a_spot_the_head_deleted(op: Chan
         accept(designer, "p1", AT + 3 * STEP)
     assert caught.value.code == ErrorCode.PROPOSAL_STALE
     assert DELETED_SPOT in caught.value.message
+    assert repo.head(SHOW_ID) == head
+
+
+def test_regression_accept_refuses_a_proposal_naming_a_spot_never_in_the_cast() -> None:
+    """Refuses a form op whose member was never in the cast; is_stale and preview agree."""
+    repo, agent, designer = open_session(two_set_show(), AT)
+    form = line_form("f1", ["T3", GHOST_SPOT], (0.0, 0.0), (4.0, 0.0), set_id="2")
+    propose(agent, [FormOp(form=form)], "", "p1", AT + STEP)
+    designer.refresh()
+    head = repo.head(SHOW_ID)
+    assert is_stale(designer, "p1")
+    assert [c.key.kind for c in preview_proposal(designer, "p1").conflicts] == ["form"]
+    with pytest.raises(ConflictError) as caught:
+        accept(designer, "p1", AT + 2 * STEP)
+    assert GHOST_SPOT in caught.value.message
     assert repo.head(SHOW_ID) == head

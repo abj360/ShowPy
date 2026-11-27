@@ -317,7 +317,7 @@ def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResu
     if result.show is not None and not found:
         found = _overrun_conflicts(head, result.show)
     if result.show is not None:
-        found += dangling_conflicts(head, theirs, result.show)
+        found += dangling_conflicts(base, head, result.show)
     for conflict in found:
         if conflict.key.sort_key() not in known:
             known.add(conflict.key.sort_key())
@@ -420,7 +420,8 @@ def accept(ws: Workspace, proposal_id: str, at: datetime) -> Revision:
 
     The change is applied to the show at the proposal's base and merged with the head, so edits
     made since land beside it. If an item changed differently on both sides, or the merge leaves
-    a reference dangling (a form member or path row naming a spot the head deleted),
+    a reference dangling that the base and head did not hold (a form member or path row naming a
+    spot outside the cast),
     ConflictError with code PROPOSAL_STALE lists the items. A proposal made before any show was
     saved merges with the head as its base. Pins and locks on the head still hold: unpin first to
     accept edits to pinned items. The stored proposal records the head it was merged onto.
