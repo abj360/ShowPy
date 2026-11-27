@@ -12,6 +12,8 @@ Contains:
     lstat_mode(): returns the lstat mode of a path, or None when it is absent
     listed_entries(): lists a folder's entries with their lstat results, sorted by name
     is_redirect(): tells whether a path is a symlink or a Windows junction
+    COMPARE_PIECE_BYTES: sets how many bytes of each file one step of a comparison reads
+    has_same_bytes(): tells whether two regular files hold the same bytes, reading in pieces
 """
 
 import errno
@@ -177,3 +179,69 @@ def is_redirect(path: Path, mode: int) -> bool:
     Python 3.12 stopped reporting a junction as a symlink, so a junction needs its own check.
     """
     return stat.S_ISLNK(mode) or os.path.isjunction(path)
+
+
+# Two files up to BLOB_MAX_BYTES each are compared a mebibyte at a time, never held whole.
+COMPARE_PIECE_BYTES = 2**20
+
+
+class _RefusedError(Exception):
+    """Marks a file a comparison will not open: a link, or not a regular file."""
+
+
+def _refused(_path: Path, _reason: str) -> _RefusedError:
+    return _RefusedError()
+
+
+def _is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
+    return (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
+
+
+def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
+    while True:
+        piece = first.read(COMPARE_PIECE_BYTES)
+        if piece != second.read(COMPARE_PIECE_BYTES):
+            return False
+        if not piece:
+            return True
+
+
+def has_same_bytes(first: Path, second: Path) -> bool:
+    """Tells whether two regular files hold the same bytes, comparing them a piece at a time.
+
+    One file under two names holds the same bytes and is not read; files of different sizes
+    differ. A link, a folder, a missing file or a file swapped for one of those after the lookup
+    never matches. At most COMPARE_PIECE_BYTES of each file are in memory at once.
+
+    Args:
+        first: One file.
+        second: The other file.
+
+    Returns:
+        is_same: True only when both are regular files with equal bytes.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     a, b = Path(folder) / "a", Path(folder) / "b"
+    ...     _ = a.write_bytes(b"x"), b.write_bytes(b"x")
+    ...     has_same_bytes(a, b)
+    True
+    """
+    infos = [lstat_info("", path) for path in (first, second)]
+    if not all(info is not None and stat.S_ISREG(info.st_mode) for info in infos):
+        return False
+    one, other = (info for info in infos if info is not None)
+    if _is_same_file(one, other):
+        return True
+    if one.st_size != other.st_size:
+        return False
+    try:
+        with (
+            os.fdopen(_open_no_follow(first, _refused), "rb") as left,
+            os.fdopen(_open_no_follow(second, _refused), "rb") as right,
+        ):
+            if not all(stat.S_ISREG(os.fstat(f.fileno()).st_mode) for f in (left, right)):
+                return False
+            return _pieces_match(left, right)
+    except (_RefusedError, FileNotFoundError):
+        return False

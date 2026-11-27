@@ -7,14 +7,12 @@ Contains:
 
 import stat
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 
 from e8s.show import durable_io
-from e8s.show.backend_checks import corrupt
 from e8s.show.commit_writes import STALE_TEMP_AGE
 from e8s.show.durable_io import mapped_io
-from e8s.show.durable_reads import lstat_info, read_capped
+from e8s.show.durable_reads import has_same_bytes, lstat_info
 from e8s.show.file_backend import LOG_DIR, SLOT_DIGITS
 from e8s.show.fsck import require_zoned
 from e8s.show.fsck_findings import (
@@ -25,7 +23,6 @@ from e8s.show.fsck_findings import (
     relative_path,
 )
 from e8s.show.fsck_scan import RepositoryScan, scan_repository
-from e8s.show.layout1 import BLOB_MAX_BYTES
 from e8s.show.storage_models import GcReport
 
 
@@ -64,15 +61,8 @@ def _put_back(aside: Path, origin: Path) -> None:
     """Moves a set-aside file back; when a writer placed its name again, drops the copy."""
     if durable_io.move_new(aside, origin):
         return
-    if lstat_info("", origin) is not None and _same_bytes(aside, origin):
+    if has_same_bytes(aside, origin):
         durable_io.remove_file(aside)
-
-
-def _same_bytes(first: Path, second: Path) -> bool:
-    read = partial(
-        read_capped, kind="set-aside file", cap=BLOB_MAX_BYTES, fail=partial(corrupt, "")
-    )
-    return bool(read(first) == read(second))
 
 
 def _set_aside_and_remove(show: ShowScan, leftover: Leftover, cutoff: datetime) -> bool:
