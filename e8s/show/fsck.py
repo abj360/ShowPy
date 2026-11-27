@@ -8,6 +8,7 @@ Contains:
     fsck(): checks a repository root, or one show in it, and on request repairs torn files
 """
 
+import os
 import stat
 from collections.abc import Iterable
 from datetime import datetime
@@ -59,8 +60,15 @@ def _repair_refused(*, confirm: bool, at: datetime | None) -> StorageError:
     )
 
 
+def _identity(info: os.stat_result) -> tuple[int, int, int, int]:
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
 def _is_still_torn(item: Repairable, cutoff: datetime) -> bool:
-    """Tells whether a file is still a regular, torn file older than the cut-off, and safe."""
+    """Tells whether a file is still the same regular, torn file older than the cut-off, and safe.
+
+    The file is looked up again after its checks: one replaced or changed meanwhile is kept.
+    """
     info = lstat_info("", item.path)
     if info is None or not stat.S_ISREG(info.st_mode) or info.st_mtime >= cutoff.timestamp():
         return False
@@ -68,14 +76,18 @@ def _is_still_torn(item: Repairable, cutoff: datetime) -> bool:
         data = read_capped(item.path, "torn file", item.cap, partial(corrupt, ""))
     except StorageError:
         return False
-    return item.is_torn(data) and item.is_safe()
+    if not (item.is_torn(data) and item.is_safe()):
+        return False
+    after = lstat_info("", item.path)
+    return after is not None and _identity(after) == _identity(info)
 
 
 def removed_torn_files(root: Path, items: Iterable[Repairable], cutoff: datetime) -> list[str]:
     """Removes each torn file that still passes its checks, then flushes its folder.
 
     Each file is looked up and read again just before it is removed: it must still be a regular
-    file last modified before `cutoff`, still torn, and still safe to remove. A writer that is
+    file last modified before `cutoff`, still torn, still safe to remove, and still the same file
+    (device, inode, size and modification time) after those checks. A writer that is
     paused, not crashed, can hold a torn file for a moment, so the cut-off keeps every file
     younger than STALE_TEMP_AGE.
 

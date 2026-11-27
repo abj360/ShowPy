@@ -20,6 +20,8 @@ Contains:
         slot, which then takes a commit
     test_fsck_repair_keeps_a_torn_manifest_whose_show_has_slots: keeps the manifest of a show
         with slots
+    test_regression_repair_keeps_a_file_replaced_after_its_check: keeps a torn file another
+        writer replaced between the repair's checks and its removal
     test_fsck_repair_keeps_a_torn_file_something_relies_on_after_the_check: keeps a torn slot once
         a later slot exists, and a torn manifest once its show has a slot
     test_repair_rechecks_each_file_just_before_removing_it: keeps a file that finished, grew,
@@ -249,6 +251,23 @@ def test_repair_rechecks_each_file_just_before_removing_it(tmp_path: Path) -> No
     ]
     assert removed_torn_files(tmp_path, items, cutoff) == ["torn"]
     assert sorted(p.name for p in tmp_path.iterdir()) == ["finished", "too_big", "unsafe"]
+
+
+def test_regression_repair_keeps_a_file_replaced_after_its_check(tmp_path: Path) -> None:
+    """After the last check another writer puts a new file, as torn and as old, in its place."""
+    torn = tmp_path / "torn"
+    torn.write_bytes(b"comp")
+    age_by(torn, 2 * DAY)
+
+    def replaced() -> bool:
+        torn.unlink()
+        torn.write_bytes(b"co")
+        age_by(torn, 2 * DAY)
+        return True
+
+    item = Repairable(torn, 64, is_short_of(b"complete"), replaced)
+    assert removed_torn_files(tmp_path, [item], AT - DAY) == []
+    assert torn.read_bytes() == b"co"
 
 
 def _slot_after(root: Path) -> None:
