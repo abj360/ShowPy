@@ -77,6 +77,7 @@ import multiprocessing
 import os
 import sys
 import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -817,7 +818,8 @@ def test_log_reads_at_most_the_byte_budget(tmp_path: Path, monkeypatch: pytest.M
     assert caught.value.context["show"] == SHOW_ID
 
 
-def test_every_read_error_names_the_show(tmp_path: Path) -> None:
+def test_every_read_error_names_the_show(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
     landed = _landed(FileBackend(tmp_path), 2)
     _slot(tmp_path, 2).write_bytes(b"{")
     _record(tmp_path, landed[0].id).write_bytes(b"[]")
@@ -833,7 +835,10 @@ def test_every_read_error_names_the_show(tmp_path: Path) -> None:
         assert caught.value.context["show"] == SHOW_ID, name
 
 
-def test_regression_shows_errors_never_carry_an_empty_show(tmp_path: Path) -> None:
+def test_regression_shows_errors_never_carry_an_empty_show(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
     _landed(FileBackend(tmp_path), 1)
     manifest = _folder(tmp_path) / "show.json"
     manifest.write_bytes(b"{")

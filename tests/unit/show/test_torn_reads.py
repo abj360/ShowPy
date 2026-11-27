@@ -43,6 +43,7 @@ AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 SHOW_ID = "torn"
 RENDER = "/renders/a.txt"
 REREADS = 3
+PAUSES_S = [0.001, 0.01, 0.1]
 REPAIR_CALL = "fsck(root, repair=True, confirm=True)"
 # A capped read checks the descriptor's type with one fstat, then takes its size with the next.
 SIZE_FSTAT = 2
@@ -97,8 +98,11 @@ def _record_opens(monkeypatch: pytest.MonkeyPatch, path: Path) -> list[Path]:
     return opens
 
 
-def test_regression_torn_slot_is_reported_with_the_repair_command(tmp_path: Path) -> None:
+def test_regression_torn_slot_is_reported_with_the_repair_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Raises TORN_SLOT for an empty slot, naming the fsck call that removes a torn last slot."""
+    _record_pauses(monkeypatch, lambda: None)
     _landed(FileBackend(tmp_path), 2)
     _slot(tmp_path, 2).write_bytes(b"")
     with pytest.raises(StorageError) as caught:
@@ -129,8 +133,7 @@ def test_torn_slot_is_reread_three_times_then_reported(
     with pytest.raises(StorageError) as caught:
         backend.log(SHOW_ID)
     assert caught.value.code == "TORN_SLOT"
-    assert len(pauses) == REREADS
-    assert all(seconds > 0 for seconds in pauses)
+    assert pauses == PAUSES_S
     assert len(opens) == 1 + REREADS
 
 

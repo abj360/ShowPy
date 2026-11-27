@@ -36,6 +36,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -108,7 +109,10 @@ OTHER_CONTENT = {
 
 
 @pytest.mark.parametrize("content", OTHER_CONTENT.values(), ids=OTHER_CONTENT.keys())
-def test_read_layout_refuses_other_content(tmp_path: Path, content: str) -> None:
+def test_read_layout_refuses_other_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
     _write_layout(tmp_path, content)
     with pytest.raises(StorageError) as caught:
         read_layout(tmp_path)
