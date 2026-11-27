@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Final
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
+from e8s.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
 from e8s.core.strict_json import parse_strict_json
 from e8s.core.util import close_matches
 from e8s.show.change_models import MergeConflict, MergeResult
@@ -115,7 +115,11 @@ def proposals(ws: Workspace) -> list[Proposal]:
     >>> proposals(open_workspace(InMemoryRepository(), "show-1"))
     []
     """
-    tree = ws.tree_at(ws.revision)
+    return _stored(ws, ws.revision)
+
+
+def _stored(ws: Workspace, revision: str) -> list[Proposal]:
+    tree = ws.tree_at(revision)
     paths = sorted(p for p in tree if p.startswith(PROPOSALS_ROOT) and p.endswith(PROPOSAL_SUFFIX))
     return [_decode(bytes(tree[p]), p) for p in paths]
 
@@ -131,10 +135,14 @@ def get_proposal(ws: Workspace, proposal_id: str) -> Proposal:
     ...     print(exc.context["proposal"])
     p1
     """
+    return _proposal_at(ws, proposal_id, ws.revision)
+
+
+def _proposal_at(ws: Workspace, proposal_id: str, revision: str) -> Proposal:
     path = _proposal_path(proposal_id)
-    tree = ws.tree_at(ws.revision)
+    tree = ws.tree_at(revision)
     if path not in tree:
-        close = close_matches(proposal_id, [p.id for p in proposals(ws)])
+        close = close_matches(proposal_id, [p.id for p in _stored(ws, revision)])
         raise UnknownRefError(
             f"no proposal {proposal_id}",
             hint=f"did you mean {', '.join(close)}?" if close else "proposals() lists them",
@@ -165,6 +173,17 @@ def _base_show(ws: Workspace, proposal: Proposal, head: Show) -> Show:
 def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResult:
     base = _base_show(ws, proposal, head)
     return merge(base, head, apply_change(base, proposal.change, force=True))
+
+
+def _show_at_head(ws: Workspace, head_revision: str) -> Show:
+    head = ws.show_at(head_revision)
+    if head is None:
+        raise StorageError(
+            f"show {ws.show_id} has no revisions yet",
+            hint="save a show first with save_show()",
+            context={"show": ws.show_id},
+        )
+    return head
 
 
 def _describe(conflict: MergeConflict) -> str:
@@ -202,10 +221,11 @@ def preview_proposal(ws: Workspace, proposal_id: str) -> ProposalPreview:
 
     The preview compares the head with the merge of the proposal into it, so edits made since
     the proposal's base are not ghosts. A proposal that no longer merges previews its conflicts
-    and nothing else.
+    and nothing else. The workspace stays at its revision, so a later write from it still
+    conflicts if the head moved.
 
     Args:
-        ws: Workspace; it moves to the head.
+        ws: Workspace; unchanged.
         proposal_id: ID of the proposal to preview.
 
     Returns:
@@ -228,9 +248,9 @@ def preview_proposal(ws: Workspace, proposal_id: str) -> ProposalPreview:
     >>> [p.entity for p in preview.placements["2"]], preview.blocked, preview.conflicts
     (['T1'], (), ())
     """
-    ws.refresh()
-    proposal = get_proposal(ws, proposal_id)
-    head = load_show(ws)
+    head_revision = ws.repo.head(ws.show_id)
+    proposal = _proposal_at(ws, proposal_id, head_revision)
+    head = _show_at_head(ws, head_revision)
     result = _merge_onto_head(ws, proposal, head)
     if result.show is None:
         return ProposalPreview(proposal_id=proposal.id, conflicts=result.conflicts)

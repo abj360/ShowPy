@@ -280,6 +280,19 @@ def test_preview_of_a_conflicting_proposal_lists_only_its_conflicts() -> None:
     assert preview.model_copy(update={"conflicts": ()}) == type(preview)(proposal_id="p1")
 
 
+def test_regression_preview_does_not_move_the_workspace() -> None:
+    """Keeps the caller's base revision, so a stale write after a preview still conflicts."""
+    _, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [_move("T1", -1.0)], "shift", "p1", AT + STEP)
+    stale = designer.revision
+    assert stale != designer.repo.head(SHOW_ID)
+    preview = preview_proposal(designer, "p1")
+    assert preview.placements[SetId("2")][0].x == -1.0
+    assert designer.revision == stale
+    with pytest.raises(ConflictError):
+        save_show(designer, load_show(designer), AT + 2 * STEP)
+
+
 def test_is_stale_agrees_with_the_merge_conflicts() -> None:
     _, agent, designer = open_session(two_set_show(), AT)
     propose(agent, [_move("T1", -1.0)], "shift", "p1", AT + STEP)
