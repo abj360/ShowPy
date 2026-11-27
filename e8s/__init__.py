@@ -605,6 +605,9 @@ if TYPE_CHECKING:
         conflict_error,
         digest,
     )
+    from e8s.show.blame import (
+        blame,
+    )
     from e8s.show.change_models import (
         ChangeSet,
         IdChanges,
@@ -658,6 +661,9 @@ if TYPE_CHECKING:
     from e8s.show.file_repository import (
         FileRepository,
     )
+    from e8s.show.font_documents import (
+        load_fonts,
+    )
     from e8s.show.history import (
         changelog,
         diff_paths,
@@ -669,6 +675,9 @@ if TYPE_CHECKING:
         PathDiff,
         Revision,
         SetDiff,
+    )
+    from e8s.show.id_changes import (
+        id_changes,
     )
     from e8s.show.interchange import (
         export_json,
@@ -1091,6 +1100,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "attach_audio": ("e8s.time.timeline", "attach_audio"),
     "balance": ("e8s.choreo.set_analysis", "balance"),
     "bezier": ("e8s.geo.shapes", "bezier"),
+    "blame": ("e8s.show.blame", "blame"),
     "blank_sheet": ("e8s.sheet.templates", "blank_sheet"),
     "block": ("e8s.geo.spacing", "block"),
     "block_form": ("e8s.choreo.forms", "block_form"),
@@ -1202,6 +1212,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "gym_floor": ("e8s.sheet.surfaces", "gym_floor"),
     "highlight": ("e8s.show.collab", "highlight"),
     "hold": ("e8s.choreo.paths", "hold"),
+    "id_changes": ("e8s.show.id_changes", "id_changes"),
     "import_fonts": ("e8s.show.interchange", "import_fonts"),
     "import_json": ("e8s.show.interchange", "import_json"),
     "import_positions": ("e8s.show.interchange", "import_positions"),
@@ -1225,6 +1236,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line": ("e8s.geo.shapes", "line"),
     "line_form": ("e8s.choreo.forms", "line_form"),
     "load_font": ("e8s.geo.fonts", "load_font"),
+    "load_fonts": ("e8s.show.font_documents", "load_fonts"),
     "load_paths": ("e8s.show.paths_store", "load_paths"),
     "load_show": ("e8s.show.show_io", "load_show"),
     "lock": ("e8s.choreo.paths", "lock"),
@@ -1684,6 +1696,7 @@ __all__ = [
     "attach_audio",
     "balance",
     "bezier",
+    "blame",
     "blank_sheet",
     "block",
     "block_form",
@@ -1795,6 +1808,7 @@ __all__ = [
     "gym_floor",
     "highlight",
     "hold",
+    "id_changes",
     "import_fonts",
     "import_json",
     "import_positions",
@@ -1818,6 +1832,7 @@ __all__ = [
     "line",
     "line_form",
     "load_font",
+    "load_fonts",
     "load_paths",
     "load_show",
     "lock",
