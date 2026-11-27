@@ -34,6 +34,7 @@ from e8s.show.document_dump import dump_dumped_json as dump_dumped_json
 from e8s.show.document_dump import dump_headed_json as dump_headed_json
 from e8s.show.document_dump import dump_json as dump_json
 from e8s.show.document_dump import dump_show_doc as dump_show_doc
+from e8s.show.document_paths import CAST_DOC, docs_for_order, is_set_document
 from e8s.show.document_paths import FORMS_NAME as FORMS_NAME
 from e8s.show.document_paths import LEGACY_NOTES_DOC as LEGACY_NOTES_DOC
 from e8s.show.document_paths import NOTES_DOC as NOTES_DOC
@@ -43,7 +44,6 @@ from e8s.show.document_paths import SCRIPT_NAME as SCRIPT_NAME
 from e8s.show.document_paths import SET_ORDER_FIELD as SET_ORDER_FIELD
 from e8s.show.document_paths import SHEET_DOC as SHEET_DOC
 from e8s.show.document_paths import TIMELINE_DOC as TIMELINE_DOC
-from e8s.show.document_paths import docs_for_order
 from e8s.show.document_paths import forms_doc as forms_doc
 from e8s.show.document_paths import is_show_doc as is_show_doc
 from e8s.show.document_paths import is_storable_folder as is_storable_folder
@@ -266,7 +266,7 @@ def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
     {}
     """
     if not is_older_tree(docs):
-        return _role_changes(docs) if holds_layout1_documents(docs) else {}
+        return _role_changes(docs) if _holds_listed_layout1(docs) else {}
     encoded, folders, _ = _migrated_parts(docs)
     moving = [p for p in docs if not is_show_doc(p) and _set_folder(p) in folders]
     changes: dict[str, bytes | None] = {p: d for p, d in encoded.items() if docs.get(p) != d}
@@ -286,14 +286,33 @@ def _role_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
     return {p: d for p, d in encoded.items() if docs.get(p) != d}
 
 
+def _holds_listed_layout1(docs: Mapping[str, bytes]) -> bool:
+    """Tells whether a tree stores layout-1 documents of a set it lists, ignoring unlisted sets.
+
+    A set document of a set the show does not list stays as it is (nothing reads it), so it must
+    not keep a re-encoded tree looking like layout 1.
+    """
+    if not holds_layout1_documents(docs):
+        return False
+    if CAST_DOC not in docs:
+        return True
+    order = without_header(load_object(raw_source(docs), SHOW_DOC)).get(SET_ORDER_FIELD, [])
+    listed = {key for key in order if isinstance(key, str)} if isinstance(order, list) else set()
+    return holds_layout1_documents(
+        {p for p in docs if not is_set_document(p) or p.split("/")[2] in listed}
+    )
+
+
 def needs_rewrite(docs: Mapping[str, bytes]) -> bool:
     """Tells whether the first save rewrites stored documents: an older format or layout 1.
+
+    Layout-1 documents of a set the show does not list are ignored, since the rewrite keeps them.
 
     >>> from e8s.examples import two_set_show
     >>> needs_rewrite(encode_show(two_set_show())), needs_rewrite({})
     (False, False)
     """
-    return is_older_tree(docs) or holds_layout1_documents(docs)
+    return is_older_tree(docs) or _holds_listed_layout1(docs)
 
 
 def is_older_tree(docs: Mapping[str, bytes]) -> bool:
