@@ -15,6 +15,10 @@ Contains:
     test_torn_last_slot_is_never_read_as_the_end_of_history: fails a cold and a warm head and a
         log closed instead of reporting the slot before it as the head
     test_commit_after_a_torn_slot_fails_closed: refuses to commit on the parent of a torn slot
+    test_files_finished_during_a_pause_are_read_whole: rereads a manifest, a layout file, a blob
+        and a record another writer finishes during the first pause, and reads them whole
+    test_file_that_grows_while_read_is_reread: rereads a slot that grows during the read instead
+        of refusing it
 """
 
 import os
@@ -28,9 +32,11 @@ import pytest
 from e8s.core.canonical import jcs
 from e8s.core.errors import StorageError
 from e8s.show.backend import digest
+from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.history_models import Revision
+from e8s.show.layout import read_layout
 from e8s.show.show_folders import show_folder
 
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
@@ -38,6 +44,8 @@ SHOW_ID = "torn"
 RENDER = "/renders/a.txt"
 REREADS = 3
 REPAIR_CALL = "fsck(root, repair=True, confirm=True)"
+# A capped read checks the descriptor's type with one fstat, then takes its size with the next.
+SIZE_FSTAT = 2
 
 
 def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
@@ -188,3 +196,98 @@ def test_commit_after_a_torn_slot_fails_closed(
         backend.commit(SHOW_ID, revision, tree, blobs)
     assert caught.value.code == "TORN_SLOT"
     assert _slot(tmp_path, 2).read_bytes() == b""
+
+
+def _folder(root: Path) -> Path:
+    return root / "shows" / show_folder(SHOW_ID)
+
+
+def _cut_manifest(root: Path) -> Path:
+    _landed(FileBackend(root), 1)
+    return _folder(root) / "show.json"
+
+
+def _read_manifest(root: Path) -> object:
+    return FileBackend(root).head(SHOW_ID)
+
+
+def _cut_layout(root: Path) -> Path:
+    _landed(FileBackend(root), 1)
+    return root / "layout.json"
+
+
+def _read_layout(root: Path) -> object:
+    return read_layout(root)
+
+
+def _next_change(root: Path) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
+    landed = _landed(FileBackend(root), 1)
+    return _change(landed[0].id, 1)
+
+
+def _cut_blob(root: Path) -> Path:
+    _, _, blobs = _next_change(root)
+    [(name, data)] = blobs.items()
+    blob = _folder(root) / "objects" / name
+    blob.write_bytes(data)
+    return blob
+
+
+def _cut_record(root: Path) -> Path:
+    revision, tree, _ = _next_change(root)
+    record = _folder(root) / "records" / f"{revision.id}.json"
+    record.write_bytes(dump_json({"revision": revision.to_json(), "seq": 2, "tree": tree}))
+    return record
+
+
+def _commit_next(root: Path) -> object:
+    revision, tree, blobs = _change(FileBackend(root).head(SHOW_ID), 1)
+    FileBackend(root).commit(SHOW_ID, revision, tree, blobs)
+    return FileBackend(root).head(SHOW_ID) == revision.id or None
+
+
+IN_PLACE_FILES: dict[str, tuple[Callable[[Path], Path], Callable[[Path], object]]] = {
+    "manifest": (_cut_manifest, _read_manifest),
+    "layout": (_cut_layout, _read_layout),
+    "blob": (_cut_blob, _commit_next),
+    "record": (_cut_record, _commit_next),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(IN_PLACE_FILES))
+def test_files_finished_during_a_pause_are_read_whole(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    prepare, read = IN_PLACE_FILES[kind]
+    path = prepare(tmp_path)
+    full = path.read_bytes()
+    path.write_bytes(full[: len(full) // 2])
+    pauses = _record_pauses(monkeypatch, lambda: path.write_bytes(full))
+    assert read(tmp_path) is not None
+    assert path.read_bytes() == full
+    assert len(pauses) == 1
+
+
+def test_file_that_grows_while_read_is_reread(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    landed = _landed(FileBackend(tmp_path), 2)
+    slot = _slot(tmp_path, 2)
+    full = slot.read_bytes()
+    slot.write_bytes(full[:10])
+    real_fstat = os.fstat
+    slot_fstats: list[int] = []
+
+    def growing_fstat(descriptor: int) -> os.stat_result:
+        """Lets the writer finish the slot just after the reader takes its size."""
+        result = real_fstat(descriptor)
+        if os.path.samestat(result, slot.stat()):
+            slot_fstats.append(descriptor)
+            if len(slot_fstats) == SIZE_FSTAT:
+                slot.write_bytes(full)
+        return result
+
+    monkeypatch.setattr(os, "fstat", growing_fstat)
+    pauses = _record_pauses(monkeypatch, lambda: None)
+    assert FileBackend(tmp_path).log(SHOW_ID) == landed
+    assert len(pauses) == 1

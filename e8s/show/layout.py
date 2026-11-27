@@ -13,6 +13,7 @@ Contains:
 
 import os
 import stat
+from functools import partial
 from pathlib import Path
 
 from e8s.core.error_codes import ErrorCode
@@ -20,6 +21,7 @@ from e8s.core.errors import SchemaError, StorageError, VersionError
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.durable_io import read_capped
 from e8s.show.layout1 import LINK_DIR, ROOT_LINK
+from e8s.show.torn_reads import is_unfinished_json, read_settled
 
 LAYOUT_FILE = "layout.json"
 LAYOUT_FORMAT = "e8.repository"
@@ -106,9 +108,15 @@ def _unversioned_layout(root: Path) -> int:
 
 
 def _declared_layout(root: Path, path: Path) -> int:
-    raw = read_capped(
-        path, "layout file", LAYOUT_MAX_BYTES, lambda _, reason: _corrupt(root, reason)
+    read = partial(
+        read_capped,
+        path,
+        "layout file",
+        LAYOUT_MAX_BYTES,
+        lambda _, reason: _corrupt(root, reason),
+        allows_growth=True,
     )
+    raw = read_settled(read, is_unfinished_json)
     try:
         document = parse_strict_json(raw, document="layout file")
     except SchemaError as error:

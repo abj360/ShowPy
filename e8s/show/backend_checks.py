@@ -11,6 +11,7 @@ Contains:
     stored_revision(): checks a stored revision and returns it
     parsed_slot(): checks the bytes of a slot and returns its revision, or raises TORN_SLOT
     parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
+    require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
     Record: holds a revision record's slot number, revision and tree
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     refuse_redirect(): refuses a folder that is a symlink or a junction
@@ -29,6 +30,7 @@ from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import durable_io
 from e8s.show.history_models import Revision
+from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import REVISION_ID_PATTERN
 from e8s.show.show_folders import show_folder
 from e8s.show.storage import ROOT_REVISION
@@ -150,6 +152,12 @@ def parsed_manifest(show_id: str, path: Path, stored: JsonValue) -> tuple[str, i
     if not isinstance(legacy_before, int) or isinstance(legacy_before, bool) or legacy_before < 1:
         raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
     return listed, legacy_before
+
+
+def require_blob_digest(show_id: str, path: Path, data: bytes) -> None:
+    """Raises CORRUPT unless a stored blob's bytes hash to its file name."""
+    if blob_digest(data) != path.name:
+        raise corrupt(show_id, path, "blob bytes do not match their digest")
 
 
 class Record(NamedTuple):

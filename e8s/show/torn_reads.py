@@ -10,10 +10,15 @@ Contains:
     TORN_READ_RETRIES: counts the rereads before a file that still looks torn is reported
     read_settled(): reads a file again after each pause while it looks torn
     is_unfinished_line(): tells whether bytes lack the newline that ends a finished slot
+    is_unfinished_json(): tells whether bytes do not yet parse as one JSON document
+    is_short_of(): builds a check that tells whether bytes are a shorter start of the expected bytes
 """
 
 import time
 from collections.abc import Callable
+
+from e8s.core.errors import SchemaError
+from e8s.core.strict_json import parse_strict_json
 
 # A writer creates the file and fills it with its next call, so the first pause covers a writer
 # that is scheduled at once and the last one a writer paused by a busy machine.
@@ -54,3 +59,39 @@ def is_unfinished_line(data: bytes) -> bool:
     (True, False)
     """
     return not data.endswith(b"\n")
+
+
+def is_unfinished_json(data: bytes) -> bool:
+    """Tells whether bytes do not parse as one JSON document, as every shorter part of one fails.
+
+    A stored JSON file holds one object, and no shorter part of an object parses, so a file its
+    writer has not finished never passes; a finished but damaged file fails too, and is reported
+    once the rereads run out.
+
+    >>> is_unfinished_json(b'{"id": "a"'), is_unfinished_json(b'{"id": "a"}')
+    (True, False)
+    """
+    try:
+        parse_strict_json(data, document="stored file")
+    except SchemaError:
+        return True
+    return False
+
+
+def is_short_of(expected: bytes) -> Callable[[bytes], bool]:
+    """Builds a check that tells whether bytes are a shorter start of `expected`.
+
+    A writer that places a file this commit also places writes the same bytes, so a stored copy
+    that is a shorter start of them is one that writer has not finished.
+
+    Args:
+        expected: Bytes the finished file holds.
+
+    Returns:
+        is_short: Tells whether bytes read are a proper prefix of `expected`.
+
+    >>> is_short = is_short_of(b"abc")
+    >>> is_short(b"ab"), is_short(b"abc"), is_short(b"ax")
+    (True, False, False)
+    """
+    return lambda data: len(data) < len(expected) and expected.startswith(data)
