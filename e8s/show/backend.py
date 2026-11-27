@@ -2,10 +2,12 @@
 backend.py --- the storage backend protocol and the helpers every backend shares
 
 Contains:
+    MAX_REVISIONS: caps how many revisions one show's history may hold
     SHORT_ID: sets how many characters of a revision ID messages show
     RepositoryBackend: stores revisions, trees and blobs; commits compare-and-swap on the head
     digest(): returns the SHA-256 hex digest blobs and assets are addressed by
     revisions_after(): lists the revisions of a log after one revision, failing on an unknown one
+    history_too_long_error(): builds the StorageError for a history over MAX_REVISIONS
     unknown_revision_error(): builds the UnknownRefError for a revision a show does not hold
     conflict_error(): builds the ConflictError that lists the revisions that landed meanwhile
 """
@@ -13,8 +15,10 @@ Contains:
 from collections.abc import Mapping
 from typing import Protocol
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     ConflictError,
+    StorageError,
     UnknownRefError,
     bounded_repr,
     join_listed,
@@ -27,6 +31,19 @@ from e8s.show.integrity import (
 from e8s.show.storage import ROOT_REVISION
 
 SHORT_ID = 7
+# One show is read whole by log(), and the storage benchmarks run at 1,000 revisions, so 100
+# times that bounds the memory of a log read without refusing any real show.
+MAX_REVISIONS = 100_000
+
+
+def history_too_long_error(show_id: str, cap: int) -> StorageError:
+    """Builds the StorageError for a show whose history is longer than `cap` revisions."""
+    return StorageError(
+        f"history of {show_id} is longer than {cap} revisions",
+        hint="save the current state as a new show and continue there",
+        context={"show": show_id, "cap": cap},
+        code=ErrorCode.TOO_LARGE,
+    )
 
 
 def digest(data: bytes) -> str:

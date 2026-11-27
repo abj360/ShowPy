@@ -1,0 +1,19 @@
+# Cases whose output differs from v0.4.0 by the maintainer's decision, not by a ledger defect.
+# Each is compared with the outputs in `expect` (gated keys hold float lists, other keys JSON
+# values), never with the oracle, and the parity table prints it as `intended` with its reason.
+# Add an entry in the commit that makes the difference, and only for a case that a
+# tests/parity/cases_<area>.py defines; a case is flipped.toml's or this file's, never both.
+#
+# [[case]]
+# name = "<area>.<case>"
+# reason = "<one line>"
+# expect = { "<key>" = <value> }
+
+[[case]]
+name = "core.non_finite_inputs_raise_e8s_errors"
+reason = "public APIs raise E8sError subclasses, not ValueError or OverflowError"
+expect = { facing_vector = [
+  { error = "SchemaError", code = "SCHEMA" },
+  { error = "SchemaError", code = "SCHEMA" },
+  { error = "SchemaError", code = "SCHEMA" },
+], format_number = [{ error = "SchemaError", code = "SCHEMA" }] }

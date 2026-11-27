@@ -50,7 +50,7 @@ from e8s.show.document_paths import (
     set_doc,
 )
 from e8s.show.document_sources import JsonObject, Source, load_object, shape_error
-from e8s.show.items import DRILL, ENTITY_FIELD, FACING, ITEM_TABLE, LABELS, PIN
+from e8s.show.item_table import DRILL, ENTITY_FIELD, FACING, ITEM_TABLE, LABELS, PIN
 from e8s.show.migrate import SHOW_DOC
 
 PLACEMENT_MODEL = "Placement"

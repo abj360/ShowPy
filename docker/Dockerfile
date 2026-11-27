@@ -58,7 +58,9 @@ COPY noxfile.py Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 COPY tests ./tests
 COPY scripts ./scripts
-COPY .github/workflows/ci.yml .github/workflows/wheels.yml ./.github/workflows/
+COPY fuzz ./fuzz
+COPY .github/workflows/ci.yml .github/workflows/wheels.yml .github/workflows/nightly-core.yml \
+    ./.github/workflows/
 RUN chown -R 10001:10001 /app
 USER 10001
 
