@@ -32,9 +32,16 @@ Contains:
         row that never fit its transition
     test_regression_preview_without_a_saved_show_does_not_claim_there_are_no_revisions: names the
         missing show when the head holds only proposals
+    test_rescale_merges_beside_a_facing_override_ending_at_the_rescaled_set_start: keeps an
+        override that ends exactly where the rescaled set starts
+    test_rescale_of_two_sets_conflicts_with_an_override_after_the_first: judges overrides from the
+        earliest rescaled set
+    test_shrink_conflicts_with_a_route_the_head_added: refuses a plain shrink beside a head route
+    test_rescale_conflicts_with_a_facing_override_the_head_removed: refuses a rescale beside a
+        head removal of an override it would shift
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -59,10 +66,12 @@ STEP = timedelta(minutes=1)
 SHORTER = 4.0
 
 
-def _head_edits(base: Show, op: ChangeOp, edit: Callable[[Show], Show]) -> Workspace:
+def _head_edits(
+    base: Show, op: ChangeOp | Sequence[ChangeOp], edit: Callable[[Show], Show]
+) -> Workspace:
     """Proposes `op` against `base`, then saves the designer's `edit` on top."""
     _, agent, designer = open_session(base, AT)
-    propose(agent, [op], "", "p1", AT + STEP)
+    propose(agent, list(op) if isinstance(op, Sequence) else [op], "", "p1", AT + STEP)
     designer.refresh()
     save_show(designer, edit(load_show(designer)), AT + 2 * STEP)
     return designer
@@ -266,3 +275,39 @@ def test_regression_preview_without_a_saved_show_does_not_claim_there_are_no_rev
         preview_proposal(ws, "p1")
     assert "no revisions" not in info.value.message
     assert "holds no saved show" in info.value.message
+
+
+def test_rescale_merges_beside_a_facing_override_ending_at_the_rescaled_set_start() -> None:
+    """Keeps an override ending exactly at the rescaled set's start, which the rescale leaves."""
+    rescale = CountsOp(set_id=SetId("3"), counts=2 * _three_sets().set("3").counts, rescale=True)
+    designer = _head_edits(_three_sets(), rescale, lambda head: _with_override(head, 6.0, 8.0))
+    assert not is_stale(designer, "p1")
+
+
+def test_rescale_of_two_sets_conflicts_with_an_override_after_the_first() -> None:
+    """Judges overrides from the earliest rescaled set, so one inside the first set conflicts."""
+    base = _three_sets()
+    rescale = [
+        CountsOp(set_id=SetId(set_id), counts=2 * base.set(set_id).counts, rescale=True)
+        for set_id in ("2", "3")
+    ]
+    designer = _head_edits(base, rescale, lambda head: _with_override(head, 1.0, 3.0))
+    assert is_stale(designer, "p1")
+
+
+def test_shrink_conflicts_with_a_route_the_head_added() -> None:
+    """Refuses a shrink without rescale beside a head route that no longer fits."""
+    designer = _head_edits(
+        two_set_show(),
+        CountsOp(set_id=SetId("2"), counts=SHORTER),
+        lambda head: head.replace(transitions=(_spec(head, routes={RouteId("r1"): _route(7.0)}),)),
+    )
+    _assert_refused_everywhere(designer, "route", "r1")
+
+
+def test_rescale_conflicts_with_a_facing_override_the_head_removed() -> None:
+    """Refuses a rescale when the head removed an override the rescale would have shifted."""
+    base = _with_override(_three_sets(), 9.0, 11.0)
+    rescale = CountsOp(set_id=SetId("2"), counts=2 * base.set("2").counts, rescale=True)
+    designer = _head_edits(base, rescale, lambda head: head.replace(facing_overrides=()))
+    assert is_stale(designer, "p1")
