@@ -34,7 +34,13 @@ from e8s.show.models import Show
 from e8s.show.set_keys import set_key
 from e8s.show.validate_comments import comment_issues
 from e8s.show.validate_placements import placement_issues
-from e8s.show.validate_refs import ERROR, WARNING, make_issue, reference_issues
+from e8s.show.validate_refs import (
+    ERROR,
+    WARNING,
+    make_issue,
+    path_spot_issues,
+    reference_issues,
+)
 from e8s.time.validate import validate_timeline
 
 MAX_NON_FINITE_ISSUES = 100
@@ -152,34 +158,6 @@ def _with_spec(show: Show, spec: TransitionSpec) -> Show:
     return show.replace(transitions=(*others, spec))
 
 
-def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
-    cast_ids = set(show.cast.ids())
-    issues = [
-        make_issue(
-            ERROR,
-            ErrorCode.UNKNOWN_SPOT,
-            f"{where} {e}",
-            f"{e} is not in the cast",
-            "remove the row",
-        )
-        for e in spec.rows
-        if e not in cast_ids
-    ]
-    for route in spec.routes.values():
-        unknown = [m for m in route.members if m not in cast_ids]
-        if unknown:
-            issues.append(
-                make_issue(
-                    ERROR,
-                    ErrorCode.UNKNOWN_SPOT,
-                    f"{where} route {route.id}",
-                    f"unknown members {unknown}",
-                    "rebuild the route",
-                )
-            )
-    return issues
-
-
 def _compile_issue(error: E8sError, where: str) -> ValidationIssue:
     code = ErrorCode.CONTINUITY if isinstance(error, ContinuityError) else error.code
     return make_issue(ERROR, code, where, error.message, error.hint)
@@ -209,7 +187,7 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
     True
     """
     where = format_tid(spec.id)
-    issues = _path_rows(show, spec, where)
+    issues = path_spot_issues(show, spec)
     expected = show.set(spec.id[1]).counts
     if not math.isclose(spec.counts, expected):
         issues.append(

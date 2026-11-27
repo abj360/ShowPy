@@ -11,6 +11,8 @@ Contains:
     make_issue(): builds a validation issue, with optional context
     reference_issues(): reports forms, sets, pins and facing overrides whose references do not
         resolve
+    path_spot_issues(): reports path rows and routes of one transition that name spots outside the
+        cast
 """
 
 import math
@@ -23,15 +25,15 @@ from e8s.choreo.engine import ALL
 from e8s.choreo.form_models import Form
 from e8s.choreo.match_ops import forms_of_set
 from e8s.choreo.models import Set
-from e8s.choreo.path_models import FacingOverride
+from e8s.choreo.path_models import FacingOverride, TransitionSpec
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import E8sError, SchemaError
-from e8s.core.ids import parse_tid
+from e8s.core.ids import format_tid, parse_tid
 from e8s.core.json_types import JsonValue
 from e8s.core.selection import Selection
 from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey
-from e8s.show.item_table import pin_path, set_keys_by_id
+from e8s.show.item_table import pin_path, set_keys_by_id, transition_key
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import covers_form, covers_placement
 from e8s.show.set_keys import set_key
@@ -384,3 +386,51 @@ def reference_issues(show: Show) -> list[ValidationIssue]:
         scope = _pin_scope(show)
         issues += [i for record in show.pins for i in _pin_issues(show, record, scope)]
     return issues + list(_override_issues(show))
+
+
+def path_spot_issues(show: Show, spec: TransitionSpec) -> list[ValidationIssue]:
+    """Reports path rows and routes of one transition that name spots outside the cast.
+
+    Each issue carries its row's or route's item key, whose transition folder uses set keys.
+
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> path_spot_issues(show, show.transition(("1", "2")))
+    []
+
+    Args:
+        show: The show whose cast the spots must be in.
+        spec: The transition's paths, stored or candidate.
+
+    Returns:
+        issues: One issue per unknown row, then one per route with unknown members.
+    """
+    cast_ids = set(show.cast.ids())
+    where = format_tid(spec.id)
+    folder = transition_key(set_keys_by_id(show), spec.id)
+    issues = [
+        make_issue(
+            ERROR,
+            ErrorCode.UNKNOWN_SPOT,
+            f"{where} {entity}",
+            f"{entity} is not in the cast",
+            "remove the row",
+            _item(ItemKey(kind="path_row", path=(folder, entity))),
+        )
+        for entity in spec.rows
+        if entity not in cast_ids
+    ]
+    for route in spec.routes.values():
+        unknown = [m for m in route.members if m not in cast_ids]
+        if unknown:
+            issues.append(
+                make_issue(
+                    ERROR,
+                    ErrorCode.UNKNOWN_SPOT,
+                    f"{where} route {route.id}",
+                    f"unknown members {unknown}",
+                    "rebuild the route",
+                    _item(ItemKey(kind="route", path=(folder, route.id)), spots=list(unknown)),
+                )
+            )
+    return issues
