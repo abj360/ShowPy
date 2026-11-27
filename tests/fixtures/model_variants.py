@@ -313,6 +313,8 @@ def _show() -> dict[str, tuple[Changes, ...]]:
             {
                 "shows": (Example("ShowUpgrade"),),
                 "skipped": (("notes.txt", "not a layout-1 show folder"),),
+                "assets_linked": 2,
+                "assets_copied": 1,
             },
         ),
         "ConformanceReport": ({"passed": ("a",), "failed": (("b", "no lock"),)},),

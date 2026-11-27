@@ -10,6 +10,7 @@ folders the history does not use are left out of the upgrade and reported with a
 Contains:
     STORE_FOLDERS: names the folders of a layout-1 show folder that hold its history
     SourceShow: holds what one layout-1 show folder lists
+    SourceListing: holds what a layout-1 root lists: its shows, its assets and what is left out
     list_source(): lists a layout-1 root, refusing every link and special file
     left_out(): pairs each file of a show folder its history does not use with the reason
 """
@@ -21,10 +22,18 @@ from typing import NamedTuple
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
+from e8s.show.assets import ASSET_DIR
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import is_redirect, listed_entries, lstat_mode
 from e8s.show.layout import HOUSEKEEPING_NAMES
-from e8s.show.layout1 import LINK_DIR, OBJECT_DIR, ROOT_LINK, TEMP_PREFIX, TREE_DIR
+from e8s.show.layout1 import (
+    LINK_DIR,
+    OBJECT_DIR,
+    REVISION_ID_PATTERN,
+    ROOT_LINK,
+    TEMP_PREFIX,
+    TREE_DIR,
+)
 
 STORE_FOLDERS = (LINK_DIR, OBJECT_DIR, TREE_DIR)
 HOUSEKEEPING = "entry the operating system adds to a folder"
@@ -32,6 +41,7 @@ NOT_A_SHOW = "not a layout-1 show folder: it holds no next/root link"
 NOT_IN_A_SHOW = "not part of a layout-1 show folder"
 FOLDER_IN_STORE = "folder inside a store folder, which holds only files"
 LEFT_BY_A_WRITER = "temp file a layout-1 writer left behind"
+NOT_AN_ASSET = "not an asset: its name is no SHA-256 digest"
 UNUSED_FILES = {
     LINK_DIR: "next/ link off the history chain",
     OBJECT_DIR: "blob no revision's tree names",
@@ -58,6 +68,20 @@ class SourceShow(NamedTuple):
     show_id: str
     files: Mapping[str, tuple[str, ...]]
     left_out: tuple[tuple[str, str], ...]
+
+
+class SourceListing(NamedTuple):
+    """Holds what a layout-1 root lists.
+
+    Attributes:
+        shows: Each show folder's listing, sorted by show ID.
+        assets: Names of the files under `assets/` that an asset store wrote, sorted.
+        left_out: Pairs of a root entry or asset-folder entry and why the upgrade leaves it out.
+    """
+
+    shows: list[SourceShow]
+    assets: tuple[str, ...]
+    left_out: LeftOut
 
 
 def _refuse_special(root: Path, path: Path, mode: int) -> None:
@@ -127,26 +151,39 @@ def _is_show_folder(root: Path, name: str) -> bool:
     return mode is not None and stat.S_ISDIR(mode) and lstat_mode("", links / ROOT_LINK) is not None
 
 
-def list_source(root: Path) -> tuple[list[SourceShow], LeftOut]:
+def _source_assets(root: Path, left: LeftOut) -> tuple[str, ...]:
+    """Lists the asset files under `assets/`, leaving out every file no asset store wrote."""
+    assets: list[str] = []
+    for name in _store_files(root, root / ASSET_DIR, left):
+        if REVISION_ID_PATTERN.fullmatch(name):
+            assets.append(name)
+        else:
+            reason = LEFT_BY_A_WRITER if name.startswith(TEMP_PREFIX) else NOT_AN_ASSET
+            left.append((f"{ASSET_DIR}/{name}", reason))
+    return tuple(assets)
+
+
+def list_source(root: Path) -> SourceListing:
     """Lists a layout-1 root for an upgrade, refusing every link and special file it finds.
 
     Args:
         root: Folder of the layout-1 repository; a symlinked root is followed.
 
     Returns:
-        shows: Each show folder's listing, sorted by show ID.
-        left_out: Pairs of a root entry that is no show folder and why it is left out.
+        listing: The show folders, the asset files of `assets/`, and every other entry with
+            why it is left out.
 
     >>> import tempfile
     >>> with tempfile.TemporaryDirectory() as folder:
     ...     (Path(folder) / "show_1" / "next").mkdir(parents=True)
     ...     _ = (Path(folder) / "show_1" / "next" / "root").write_text("0" * 64)
     ...     _ = (Path(folder) / "notes.txt").write_text("mine")
-    ...     shows, left = list_source(Path(folder))
-    ...     [show.show_id for show in shows], left
+    ...     listing = list_source(Path(folder))
+    ...     [show.show_id for show in listing.shows], listing.left_out
     (['show_1'], [('notes.txt', 'not a layout-1 show folder: it holds no next/root link')])
     """
     shows: list[SourceShow] = []
+    assets: tuple[str, ...] = ()
     left: LeftOut = []
     for name, mode in _listed(root, root):
         if name in HOUSEKEEPING_NAMES:
@@ -155,9 +192,11 @@ def list_source(root: Path) -> tuple[list[SourceShow], LeftOut]:
         _refuse_special(root, root / name, mode)
         if stat.S_ISDIR(mode) and _is_show_folder(root, name):
             shows.append(_source_show(root, name))
+        elif stat.S_ISDIR(mode) and name == ASSET_DIR:
+            assets = _source_assets(root, left)
         else:
             left.append((name, NOT_A_SHOW))
-    return shows, left
+    return SourceListing(shows, assets, sorted(left))
 
 
 def left_out(show: SourceShow, used: Mapping[str, set[str]]) -> tuple[tuple[str, str], ...]:

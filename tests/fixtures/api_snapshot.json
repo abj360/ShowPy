@@ -1529,6 +1529,8 @@
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "UpgradeReport": {
     "model": {
+      "assets_copied": "Count",
+      "assets_linked": "Count",
       "shows": "tuple[e8s.show.storage_models.ShowUpgrade, ...]",
       "skipped": "tuple[tuple[str, str], ...]"
     }

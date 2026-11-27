@@ -97,10 +97,14 @@ class UpgradeReport(FrozenModel):
         shows: What each show's upgrade moved, sorted by show ID.
         skipped: Pairs of an entry of the source root that holds no show and why the upgrade left
             it out.
+        assets_linked: Assets of the source's asset store hard-linked into the new root.
+        assets_copied: Assets copied, where a hard link was refused.
     """
 
     shows: tuple[ShowUpgrade, ...] = ()
     skipped: tuple[tuple[str, str], ...] = ()
+    assets_linked: Count = 0
+    assets_copied: Count = 0
 
 
 class ConformanceReport(FrozenModel):

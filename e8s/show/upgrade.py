@@ -15,6 +15,7 @@ from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.show import durable_io
+from e8s.show.assets import ASSET_DIR
 from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt, recomputes
 from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer
 from e8s.show.document_dump import dump_json
@@ -160,6 +161,18 @@ class _Target:
             finally:
                 durable_io.remove_file(temp)
 
+    def carry_assets(self, source: Path, names: tuple[str, ...]) -> int:
+        """Links or copies each asset into `assets/`, verified; returns how many were linked."""
+        folder = self.root / ASSET_DIR
+        if not names:
+            return 0
+        with mapped_io("", folder):
+            durable_io.make_folder(folder)
+        linked = sum(self.transfer("", source / name, folder / name) for name in names)
+        with mapped_io("", folder):
+            durable_io.flush_directory(folder)
+        return linked
+
     def flush_show(self, folder: Path) -> None:
         with mapped_io("", folder):
             for name in (OBJECT_DIR, RECORD_DIR, LOG_DIR):
@@ -292,9 +305,15 @@ def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
     """
     _require_layout_1(source)
     _require_free_target(source, target)
-    shows, skipped = list_source(source)
+    listing = list_source(source)
     reader = Layout1Reader(source)
     writer = _Target(target)
-    upgraded = tuple(_upgrade_show(reader, writer, show) for show in shows)
+    upgraded = tuple(_upgrade_show(reader, writer, show) for show in listing.shows)
+    linked = writer.carry_assets(source / ASSET_DIR, listing.assets)
     writer.finish()
-    return UpgradeReport(shows=upgraded, skipped=tuple(skipped))
+    return UpgradeReport(
+        shows=upgraded,
+        skipped=tuple(listing.left_out),
+        assets_linked=linked,
+        assets_copied=len(listing.assets) - linked,
+    )
