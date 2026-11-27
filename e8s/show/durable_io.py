@@ -2,20 +2,16 @@
 durable_io.py --- the file-system calls of the file backends: writes, capped reads, error mapping
 
 Every folder, file and link a layout-2 commit creates goes through the write functions, so a test
-can stop a commit after any one of them. Every read goes through the capped, no-follow readers and
-every OSError is mapped to a StorageError by `mapped_io`.
+can stop a commit after any one of them. Every read goes through the capped, no-follow readers of
+`durable_reads`, and every OSError is mapped to a StorageError by `mapped_io`.
 
 Contains:
     TEMP_PREFIX: starts the name of every temp file a commit writes
     NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
+    MOVE_FALLBACK_ERRNOS: lists the link refusals after which a move renames instead
     WINDOWS_INVALID_NAME: names the Windows error code for an unusable path component
     COMPONENT_MAX_CHARS: caps the length of one path component on NTFS
-    READ_FLAGS: opens stored files without following symlinks or blocking on FIFOs
-    SYMLINK_OPEN_ERRNOS: lists the errno values an O_NOFOLLOW open of a symlink raises
     mapped_io(): turns an OSError raised inside a block into a StorageError with a code and hint
-    lstat_mode(): returns the lstat mode of a path, or None when it is absent
-    is_redirect(): tells whether a path is a symlink or a Windows junction
-    read_capped(): reads a regular file of at most a given size, reporting problems through a hook
     NOFOLLOW_FLAG: refuses to open a symlink where the system has the flag
     DIRECTORY_FLAGS: opens a folder for a flush without following symlinks
     IS_WINDOWS: tells whether the process runs on Windows, which has no directory flush
@@ -34,6 +30,9 @@ Contains:
     write_new(): writes a new file's bytes in one call, raising when it writes fewer
     create_new(): creates a file under a new name, writes it in one call and flushes it
     remove_file(): removes a file when it exists
+    freshen(): sets a file's modification time to the file system's current time
+    move_new(): moves a file to a name no file has, never replacing one
+    is_stale_temp(): tells whether a folder entry is a temp file last modified before a cut-off
     remove_stale_temps(): removes the temp files in a folder last modified before a cut-off
 """
 
@@ -42,35 +41,26 @@ import os
 import stat
 import sys
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 
 TEMP_PREFIX = ".tmp-"
 NO_HARDLINK_ERRNOS = frozenset({errno.EPERM, errno.EXDEV, errno.ENOTSUP})
+# exFAT and some FAT drivers refuse a hard link with EINVAL. A move falls back to a rename on it,
+# which fails the same way if the name itself is bad; a commit's link probe does not, so an
+# EINVAL there still surfaces instead of switching every later commit to in-place writes.
+MOVE_FALLBACK_ERRNOS = NO_HARDLINK_ERRNOS | {errno.EINVAL}
 # Windows has no ENAMETOOLONG for a component over 255 characters: with long paths enabled it
 # raises ERROR_INVALID_NAME (errno EINVAL), which also covers bad characters, so the length
 # decides. NTFS caps one component at 255 UTF-16 units.
 WINDOWS_INVALID_NAME = 123
 COMPONENT_MAX_CHARS = 255
 
-# A file swapped in between the lstat check and the open must not be followed (symlink) or
-# block the open (FIFO), so the open itself refuses both and fstat checks the descriptor.
-# Windows has neither flag; there only the lstat check guards, and creating symlinks needs
-# privilege. O_BINARY (Windows only) keeps the C runtime from translating line endings.
-READ_FLAGS = (
-    os.O_RDONLY
-    | getattr(os, "O_NOFOLLOW", 0)
-    | getattr(os, "O_NONBLOCK", 0)
-    | getattr(os, "O_BINARY", 0)
-)
-# open(O_NOFOLLOW) on a symlink fails with ELOOP on Linux and macOS, EMLINK on FreeBSD.
-SYMLINK_OPEN_ERRNOS = frozenset({errno.ELOOP, errno.EMLINK})
 # A folder swapped for a symlink after the lstat checks must not be followed and flushed instead.
 NOFOLLOW_FLAG = getattr(os, "O_NOFOLLOW", 0)
 DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | NOFOLLOW_FLAG
@@ -82,79 +72,6 @@ IS_MACOS = sys.platform == "darwin"
 # fcntl commands of macOS (sys/fcntl.h); Python's fcntl module has only F_FULLFSYNC.
 F_FULLFSYNC = 51
 F_BARRIERFSYNC = 85
-
-
-def _open_no_follow(path: Path, fail: Callable[[Path, str], Exception]) -> int:
-    try:
-        return os.open(path, READ_FLAGS)
-    except OSError as error:
-        if error.errno in SYMLINK_OPEN_ERRNOS:
-            raise fail(path, "file is a symbolic link") from error
-        raise
-
-
-def _read_sized(
-    path: Path,
-    handle: BinaryIO,
-    kind: str,
-    cap: int,
-    fail: Callable[[Path, str], Exception],
-    *,
-    allows_growth: bool,
-) -> bytes:
-    """Reads an open file by its fstat size, which `read(n)` allocates up front."""
-    size = os.fstat(handle.fileno()).st_size
-    if size > cap:
-        raise fail(path, f"{kind} is larger than {cap} bytes")
-    data = handle.read(size + 1)
-    if len(data) > size:
-        if allows_growth:
-            return data[:size]
-        raise fail(path, f"{kind} grew while it was read")
-    return data
-
-
-def read_capped(
-    path: Path,
-    kind: str,
-    cap: int,
-    fail: Callable[[Path, str], Exception],
-    *,
-    allows_growth: bool = False,
-) -> bytes:
-    """Reads a regular file of at most `cap` bytes, checking its size before reading.
-
-    Args:
-        path: File to read; a symlink, a FIFO, a directory or a missing file is refused.
-        kind: What the file holds, named in the size messages.
-        cap: Largest size accepted, in bytes.
-        fail: Builds the exception raised for a refused file from its path and the reason.
-        allows_growth: Whether a file that grows while it is read, as one another writer is
-            still filling in place does, returns the bytes it held when the read began instead
-            of being refused.
-
-    Returns:
-        data: The file's bytes.
-
-    >>> import tempfile
-    >>> with tempfile.TemporaryDirectory() as folder:
-    ...     (Path(folder) / "a").write_bytes(b"hi")
-    ...     read_capped(Path(folder) / "a", "note", 16, lambda p, why: ValueError(why))
-    2
-    b'hi'
-    """
-    try:
-        mode = path.lstat().st_mode
-        if stat.S_ISLNK(mode):
-            raise fail(path, "file is a symbolic link")
-        if not stat.S_ISREG(mode):
-            raise fail(path, "file is missing or not a regular file")
-        with os.fdopen(_open_no_follow(path, fail), "rb") as handle:
-            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                raise fail(path, "file is missing or not a regular file")
-            return _read_sized(path, handle, kind, cap, fail, allows_growth=allows_growth)
-    except (FileNotFoundError, IsADirectoryError) as error:
-        raise fail(path, "file is missing or not a file") from error
 
 
 def _is_name_too_long(error: OSError, path: str) -> bool:
@@ -208,23 +125,6 @@ def mapped_io(show_id: str, path: Path, *, is_link: bool = False) -> Iterator[No
         yield
     except OSError as error:
         raise _storage_error(show_id, error, path, is_link=is_link) from error
-
-
-def lstat_mode(show_id: str, path: Path) -> int | None:
-    """Returns the lstat mode of `path`, or None if absent; ENAMETOOLONG is never hidden."""
-    with mapped_io(show_id, path):
-        try:
-            return os.lstat(path).st_mode
-        except FileNotFoundError:
-            return None
-
-
-def is_redirect(path: Path, mode: int) -> bool:
-    """Tells whether a path with lstat mode `mode` is a symlink or a Windows junction.
-
-    Python 3.12 stopped reporting a junction as a symlink, so a junction needs its own check.
-    """
-    return stat.S_ISLNK(mode) or os.path.isjunction(path)
 
 
 def make_folder(path: Path) -> None:
@@ -408,6 +308,88 @@ def remove_file(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
+def freshen(path: Path) -> bool:
+    """Sets a file's modification time to the file system's current time, without a link.
+
+    A commit that reuses a file another commit left freshens it, so a clean-up that keeps every
+    file younger than a cut-off keeps it until the commit's slot reaches it. The time comes from
+    the file system, never from a clock the library reads.
+
+    Args:
+        path: The file; a link there is changed itself, never its target.
+
+    Returns:
+        is_present: False when no file has the name any more.
+    """
+    try:
+        if os.utime in os.supports_follow_symlinks:
+            os.utime(path, follow_symlinks=False)
+        else:
+            os.utime(path)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def move_new(source: Path, target: Path) -> bool:
+    """Moves a file to a name no file has, keeping its inode and times.
+
+    Where the file system can hard-link, the file is linked under the new name, which never
+    replaces a file, and the old name is then removed; at every moment one name or both point
+    at it. Where the link is refused (MOVE_FALLBACK_ERRNOS), it is renamed once a lookup finds
+    the new name free. On POSIX a file a writer places under that name between the lookup and
+    the rename is replaced: where a name fixes its bytes, as it does for blobs and records, the
+    bytes under the name stay the same, but the writer's file and its times are lost, so the
+    name may then carry the moved file's older time. Windows refuses the rename onto a taken
+    name, and the file stays.
+
+    Args:
+        source: The file; one already gone is not moved.
+        target: Its new name, in the same folder or on the same file system.
+
+    Returns:
+        is_moved: False when `target` was taken or `source` was gone.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     a, b = Path(folder) / "a", Path(folder) / "b"
+    ...     _ = a.write_bytes(b"x")
+    ...     move_new(a, b), move_new(a, b), b.read_bytes()
+    (True, False, b'x')
+    """
+    try:
+        os.link(source, target)
+    except (FileExistsError, FileNotFoundError):
+        return False
+    except OSError as error:
+        if error.errno not in MOVE_FALLBACK_ERRNOS:
+            raise
+        if os.path.lexists(target):
+            return False
+        try:
+            source.rename(target)
+        except (FileExistsError, FileNotFoundError):
+            return False
+        return True
+    remove_file(source)
+    return True
+
+
+def is_stale_temp(name: str, info: os.stat_result, cutoff: datetime) -> bool:
+    """Tells whether a folder entry is a temp file whose modification time is before `cutoff`.
+
+    Args:
+        name: The entry's name; a temp file's starts with TEMP_PREFIX.
+        info: The entry's lstat result; only a regular file counts.
+        cutoff: Moment before which a temp file counts as left behind by a crashed writer.
+    """
+    return (
+        name.startswith(TEMP_PREFIX)
+        and stat.S_ISREG(info.st_mode)
+        and info.st_mtime < cutoff.timestamp()
+    )
+
+
 def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
     """Removes the temp files in `folder` whose modification time is before `cutoff`.
 
@@ -418,7 +400,6 @@ def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
         folder: Folder that holds the temp files; it must exist.
         cutoff: Moment before which a temp file counts as left behind by a crashed writer.
     """
-    cutoff_s = cutoff.timestamp()
     with os.scandir(folder) as entries:
         for entry in entries:
             if not entry.name.startswith(TEMP_PREFIX):
@@ -427,5 +408,5 @@ def remove_stale_temps(folder: Path, cutoff: datetime) -> None:
                 info = entry.stat(follow_symlinks=False)
             except FileNotFoundError:
                 continue
-            if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff_s:
+            if is_stale_temp(entry.name, info, cutoff):
                 remove_file(Path(entry.path))

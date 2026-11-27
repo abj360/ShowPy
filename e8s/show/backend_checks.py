@@ -5,6 +5,8 @@ Contains:
     CORRUPT_HINT: tells the caller how to repair a damaged show folder
     FIRST_SEQ: numbers the first slot of every show
     corrupt(): builds the StorageError for a stored file that fails a check
+    MISSING_FILE_HINT: tells the caller how to find and put back a blob or record that is missing
+    missing_file(): builds the StorageError for a blob or record a read needs that is missing
     TORN_SLOT_HINT: tells the caller how to clear a slot its writer left torn
     torn_slot(): builds the StorageError for a slot still empty or cut short after every reread
     parsed_json(): parses a stored JSON file, mapping a parse failure to CORRUPT
@@ -13,6 +15,8 @@ Contains:
     parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
     require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
     Record: holds a revision record's slot number, revision and tree
+    parsed_record(): checks a parsed revision record against its name and returns it
+    require_slot_record(): raises CORRUPT unless a slot's record holds its number and revision
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     refuse_redirect(): refuses a folder that is a symlink or a junction
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
@@ -28,7 +32,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show import durable_io
+from e8s.show import document_repository, durable_reads
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import REVISION_ID_PATTERN
@@ -38,11 +42,18 @@ from e8s.show.torn_reads import is_unfinished_line
 
 CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
 MANIFEST_KEYS = frozenset({"id", "legacy_before"})
+RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 FIRST_SEQ = 1
+MISSING_FILE_HINT = (
+    "run fsck(root); if it lists a set-aside .gc- copy of this file, "
+    "gc(root, at=datetime.now(UTC), confirm=True) puts it back, otherwise restore the show "
+    "folder from a backup"
+)
 TORN_SLOT_HINT = (
     "read again later; if the slot stays torn, its writer stopped before writing it: run "
-    "fsck(root, repair=True, confirm=True), which removes a torn last slot"
+    "fsck(root, repair=True, confirm=True, at=datetime.now(UTC)), which removes a torn last "
+    "slot once it is a day old"
 )
 
 
@@ -62,6 +73,23 @@ def corrupt(show_id: str, path: Path, reason: str) -> StorageError:
         hint=CORRUPT_HINT,
         context=context,
         code=ErrorCode.CORRUPT,
+    )
+
+
+def missing_file(show_id: str, path: Path, reason: str) -> StorageError:
+    """Builds the CORRUPT StorageError for a blob or record a read needs that is missing.
+
+    A gc that stopped part way can hold such a file aside, and one confirmed gc puts it back,
+    while restoring a backup could roll back commits that already returned.
+
+    Args:
+        show_id: Show the file belongs to.
+        path: The missing file.
+        reason: What needs it.
+    """
+    error = corrupt(show_id, path, reason)
+    return StorageError(
+        error.message, hint=MISSING_FILE_HINT, context=error.context, code=error.code
     )
 
 
@@ -168,6 +196,66 @@ class Record(NamedTuple):
     tree: dict[str, str]
 
 
+def _require_scheme_id(show_id: str, path: Path, record: Record, legacy_before: int) -> None:
+    """Requires the ID to be recomputable from the record, except before `legacy_before`."""
+    revision = record.revision
+    if record.seq < legacy_before:
+        return
+    changes = {changed: record.tree.get(changed) for changed in revision.changed}
+    if document_repository.revision_id(revision.parent, revision.at, changes) != revision.id:
+        raise corrupt(show_id, path, "record does not hash to its name")
+
+
+def parsed_record(
+    show_id: str, path: Path, stored: JsonValue, revision_id: str, legacy_before: int
+) -> Record:
+    """Checks a parsed revision record and returns it.
+
+    Args:
+        show_id: Show the record belongs to, named in errors.
+        path: The record file.
+        stored: Parsed JSON of the record.
+        revision_id: Revision the record's name gives; the record must hold it.
+        legacy_before: First slot whose revision ID must be recomputable from its record.
+
+    Returns:
+        record: The record's slot number, revision and tree, each checked.
+    """
+    if not isinstance(stored, dict) or stored.keys() != RECORD_KEYS:
+        raise corrupt(show_id, path, f"record must hold exactly {sorted(RECORD_KEYS)}")
+    seq, tree = stored["seq"], stored["tree"]
+    if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
+        raise corrupt(show_id, path, "record seq is not a positive integer")
+    revision = stored_revision(show_id, path, stored["revision"])
+    if revision.id != revision_id:
+        raise corrupt(show_id, path, "record holds another revision than its name")
+    if not isinstance(tree, dict) or not all(
+        isinstance(value, str) and REVISION_ID_PATTERN.fullmatch(value) for value in tree.values()
+    ):
+        raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
+    record = Record(seq, revision, {key: str(value) for key, value in tree.items()})
+    _require_scheme_id(show_id, path, record, legacy_before)
+    return record
+
+
+def require_slot_record(
+    show_id: str, path: Path, seq: int, revision: Revision, record: Record
+) -> None:
+    """Raises CORRUPT unless the record a slot names holds the slot's number and revision.
+
+    Args:
+        show_id: Show the slot belongs to, named in errors.
+        path: The slot file, named in errors.
+        seq: The slot's number.
+        revision: The revision the slot holds.
+        record: The record of that revision.
+    """
+    if record.seq != seq:
+        raise corrupt(show_id, path, f"record of this slot holds seq {record.seq}, not {seq}")
+    if record.revision != revision:
+        raise corrupt(show_id, path, "slot differs from the revision in its record")
+
+
 class ReadBudget:
     """Counts the bytes one log() call has read and refuses to pass its limit."""
 
@@ -212,7 +300,7 @@ def require_caller_ids(
 
 def refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:
     """Raises CORRUPT when `path`, with stat mode `mode`, is a symlink or a junction."""
-    if durable_io.is_redirect(path, mode):
+    if durable_reads.is_redirect(path, mode):
         raise corrupt(show_id, path, "folder is a symbolic link or junction")
 
 
@@ -224,6 +312,6 @@ def require_plain_folders(show_id: str, *folders: Path) -> None:
         folders: Folders a read or write passes through; a missing one is fine.
     """
     for path in folders:
-        mode = durable_io.lstat_mode(show_id, path)
+        mode = durable_reads.lstat_mode(show_id, path)
         if mode is not None:
             refuse_redirect(path, mode, show_id)

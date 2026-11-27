@@ -101,6 +101,8 @@ class ErrorCode(StrEnum):
     """A text form edit removes a spot that is not one of the form's members."""
     NOT_A_TEXT_FORM = "NOT_A_TEXT_FORM"
     """A text-only operation gets a form of another kind."""
+    NOT_CONFIRMED = "NOT_CONFIRMED"
+    """A repository repair lacks confirm=True or the caller's time `at`, or confirm lacks repair."""
     NOT_FINITE = "NOT_FINITE"
     """A similarity fit or a stored show field holds a NaN or infinite number."""
     NOT_SERIALIZABLE = "NOT_SERIALIZABLE"
