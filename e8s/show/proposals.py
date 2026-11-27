@@ -18,7 +18,13 @@ from datetime import datetime
 from typing import Final
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
+from e8s.core.errors import (
+    MAX_LISTED_ERRORS,
+    ConflictError,
+    SchemaError,
+    UnknownRefError,
+    join_listed,
+)
 from e8s.core.ids import SetId, TransitionId
 from e8s.core.strict_json import parse_strict_json
 from e8s.core.types import JsonAny
@@ -404,9 +410,14 @@ def accept(ws: Workspace, proposal_id: str, at: datetime) -> Revision:
         listed = [_describe(c) for c in result.conflicts]
         raise ConflictError(
             f"proposal {proposal.id} conflicts with changes since "
-            f"{proposal.base_revision[:SHORT_ID]}: {'; '.join(listed)}",
+            f"{proposal.base_revision[:SHORT_ID]}: {join_listed(listed)}",
             hint="propose again against the current show",
-            context={"proposal": proposal.id, "conflicts": listed, "head": head.revision},
+            context={
+                "proposal": proposal.id,
+                "conflicts": listed[:MAX_LISTED_ERRORS],
+                "conflict_count": len(listed),
+                "head": head.revision,
+            },
             code=ErrorCode.PROPOSAL_STALE,
         )
     require_unlocked(head, result.show)

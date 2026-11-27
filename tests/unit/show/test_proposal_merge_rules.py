@@ -18,6 +18,8 @@ Contains:
         revision predates, as preview and accept do
     test_regression_is_stale_of_an_accepted_proposal_is_false_from_a_stale_workspace: sees the
         accepted state stored at the head
+    test_regression_conflict_message_lists_five_and_counts_the_rest: bounds the message and the
+        context list of a proposal with many conflicts
 """
 
 from collections.abc import Callable, Mapping
@@ -164,3 +166,23 @@ def test_regression_is_stale_of_an_accepted_proposal_is_false_from_a_stale_works
     accept(agent, "p1", AT + 2 * STEP)
     save_show(agent, set_counts(load_show(agent), "2", 6.0), AT + 3 * STEP)
     assert not is_stale(designer, "p1")
+
+
+def test_regression_conflict_message_lists_five_and_counts_the_rest() -> None:
+    """Bounds the refusal text of a proposal that conflicts on many items."""
+    names = ["T1", "T2", "T3", "T4"]
+
+    def add_many(head: Show) -> Show:
+        rows = {SpotId(n): PathRow(entity=SpotId(n), start=1.0) for n in names}
+        routes = {RouteId(f"r{n}"): _route(4.0).replace(id=RouteId(f"r{n}")) for n in (1, 2)}
+        return head.replace(transitions=(_spec(head, rows=rows, routes=routes),))
+
+    rescale = CountsOp(set_id=SetId("2"), counts=2 * two_set_show().set("2").counts, rescale=True)
+    designer = _head_edits(two_set_show(), rescale, add_many)
+    with pytest.raises(ConflictError) as info:
+        accept(designer, "p1", AT + 3 * STEP)
+    assert "(+1 more)" in info.value.message
+    listed = info.value.context["conflicts"]
+    assert isinstance(listed, list)
+    assert len(listed) == 5
+    assert info.value.context["conflict_count"] == 6
