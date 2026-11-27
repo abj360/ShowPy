@@ -17,10 +17,13 @@ Contains:
         a vanished file found in place of a regular file once it is opened
     test_same_bytes_refuses_two_fifos_found_in_place_of_both_files: answers False when both
         names hold FIFOs once opened, never blocking on them
+    test_regression_same_bytes_refuses_a_folder_found_in_place_of_a_file: answers False and
+        closes every descriptor when a folder holds either name once opened
 """
 
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import IO
 
@@ -171,3 +174,32 @@ def test_same_bytes_refuses_two_fifos_found_in_place_of_both_files(
         os.mkfifo(path)
     monkeypatch.setattr(durable_reads, "lstat_info", lambda _show_id, path: looked_up[path])
     assert has_same_bytes(first, second) is False
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows refuses to open a folder as a file")
+@pytest.mark.parametrize("swapped", ["first", "second"])
+def test_regression_same_bytes_refuses_a_folder_found_in_place_of_a_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, swapped: str
+) -> None:
+    """A folder opens read-only on POSIX; it must be refused and its descriptor closed."""
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.write_bytes(b"abc")
+    second.write_bytes(b"abc")
+    looked_up = {path: os.lstat(path) for path in (first, second)}
+    folder = first if swapped == "first" else second
+    folder.unlink()
+    folder.mkdir()
+    monkeypatch.setattr(durable_reads, "lstat_info", lambda _show_id, path: looked_up[path])
+    opened: list[int] = []
+    real_open = durable_reads._open_no_follow
+
+    def recording_open(path: Path, fail: Callable[[Path, str], Exception]) -> int:
+        opened.append(real_open(path, fail))
+        return opened[-1]
+
+    monkeypatch.setattr(durable_reads, "_open_no_follow", recording_open)
+    assert has_same_bytes(first, second) is False
+    assert opened
+    for descriptor in opened:
+        with pytest.raises(OSError, match="Bad file descriptor"):
+            os.fstat(descriptor)

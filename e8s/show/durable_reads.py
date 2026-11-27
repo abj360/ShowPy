@@ -202,6 +202,22 @@ def _is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
     return first.st_ino != 0 and (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
 
 
+def _open_regular(path: Path) -> BinaryIO | None:
+    """Opens a file for reading only if its descriptor is a regular file; else closes it.
+
+    A folder, FIFO or device swapped in after the lookup is refused by the descriptor's own
+    mode, before `os.fdopen`, which raises on a folder without closing the descriptor.
+    """
+    descriptor = _open_no_follow(path, _refused)
+    is_regular = False
+    try:
+        is_regular = stat.S_ISREG(os.fstat(descriptor).st_mode)
+    finally:
+        if not is_regular:
+            os.close(descriptor)
+    return os.fdopen(descriptor, "rb") if is_regular else None
+
+
 def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
     while True:
         piece = first.read(COMPARE_PIECE_BYTES)
@@ -242,12 +258,14 @@ def has_same_bytes(first: Path, second: Path) -> bool:
     if one.st_size != other.st_size:
         return False
     try:
-        with (
-            os.fdopen(_open_no_follow(first, _refused), "rb") as left,
-            os.fdopen(_open_no_follow(second, _refused), "rb") as right,
-        ):
-            if not all(stat.S_ISREG(os.fstat(f.fileno()).st_mode) for f in (left, right)):
+        left = _open_regular(first)
+        if left is None:
+            return False
+        with left:
+            right = _open_regular(second)
+            if right is None:
                 return False
-            return _pieces_match(left, right)
+            with right:
+                return _pieces_match(left, right)
     except (_RefusedError, FileNotFoundError):
         return False
