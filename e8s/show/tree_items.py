@@ -14,6 +14,7 @@ Contains:
     changed_set_keys(): lists the listed sets whose set or role documents changed
     reads_alone(): reports whether the items two trees differ in follow from the changed documents
     tree_changes(): lists the items two trees differ in, decoding only the changed documents
+    changes_alone(): lists those items when the changed documents hold them all, else None
 """
 
 import itertools
@@ -22,6 +23,7 @@ from collections.abc import Collection, Iterator
 
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
+from e8s.core.errors import SchemaError
 from e8s.show.change_models import ChangeSet, ItemChange, ItemKey
 from e8s.show.document_parts import is_same_float
 from e8s.show.document_paths import (
@@ -204,3 +206,32 @@ def tree_changes(before: TreeParts, after: TreeParts, paths: Collection[str]) ->
         for (kind, path, role), was, now in _differences(before, after, paths)
     )
     return ChangeSet(changes=tuple(sorted(found, key=lambda change: change.key.sort_key())))
+
+
+def changes_alone(before: TreeParts, after: TreeParts, paths: Collection[str]) -> ChangeSet | None:
+    """Lists the items two trees differ in from the changed documents, or None when it cannot.
+
+    None means reads_alone() does not hold and the two shows must be compared whole. A changed
+    document that fails its checks raises the error a whole-show decode of `after` raises, so
+    its code, message, context and hint are read_show's.
+
+    Args:
+        before: The older tree.
+        after: The newer tree.
+        paths: The paths whose blobs differ between the two trees.
+
+    Returns:
+        change_set: One change per differing item, in key order, or None.
+
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.documents import encode_show
+    >>> docs = encode_show(two_set_show())
+    >>> changes_alone(TreeParts(docs), TreeParts(docs), []).changes
+    ()
+    """
+    try:
+        if not reads_alone(before, after, paths):
+            return None
+        return tree_changes(before, after, paths)
+    except SchemaError as exc:
+        raise after.refusal(exc) from exc

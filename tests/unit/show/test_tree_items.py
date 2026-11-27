@@ -14,8 +14,8 @@ Contains:
         renumbers to the whole-show comparison
     test_reads_alone_refuses_older_and_layout1_trees: sends v1 and layout-1 trees to the
         whole-show comparison
-    test_reading_a_refused_tree_alone_fails_closed: raises for every changed document a
-        whole-show decode refuses, whichever way the tree is read
+    test_reading_a_refused_tree_alone_fails_closed: raises read_show's own error, code, message,
+        context and hint, for every changed document a whole-show decode refuses
 """
 
 import json
@@ -53,7 +53,7 @@ from e8s.show.models import Show
 from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
 from e8s.show.show_io import load_show, save_show
-from e8s.show.tree_items import reads_alone, tree_changes
+from e8s.show.tree_items import changes_alone, reads_alone, tree_changes
 from e8s.show.tree_parts import TreeParts
 from e8s.time.models import TempoSection
 from tests.fixtures.layout1 import layout1_documents
@@ -285,18 +285,21 @@ def _refused_trees() -> dict[str, Callable[[dict[str, bytes]], dict[str, bytes]]
         "form of another set": lambda docs: {**docs, forms_doc("2"): dump_json([stray_form])},
         "bad sheet": lambda docs: {**docs, SHEET_DOC: b'{"unexpected": 1}'},
         "bad timeline": lambda docs: {**docs, TIMELINE_DOC: b"[]"},
+        "bad sheet name": _with_json(SHEET_DOC, lambda sheet: {**sheet, "name": 5}),
+        "bad tempos": _with_json(TIMELINE_DOC, lambda timeline: {**timeline, "tempos": "x"}),
         "unlisted role documents": lambda docs: {**docs, role_docs("9")[0]: b"{}"},
         "unknown cast document": lambda docs: {**docs, "/cast/extra.json": b"{}"},
         "bad cast": lambda docs: {**docs, CAST_DOC: b'{"groups": 5}'},
     }
 
 
+def _described(error: E8sError) -> tuple[object, ...]:
+    return type(error), error.code, error.message, error.context, error.hint
+
+
 def _read(before: dict[str, bytes], after: dict[str, bytes]) -> None:
     old, new = _parts(before, after)
-    paths = changed_paths(before, after)
-    if reads_alone(old, new, paths):
-        tree_changes(old, new, paths)
-    else:
+    if changes_alone(old, new, changed_paths(before, after)) is None:
         decode_show(after)
 
 
@@ -304,7 +307,8 @@ def _read(before: dict[str, bytes], after: dict[str, bytes]) -> None:
 def test_reading_a_refused_tree_alone_fails_closed(name: str) -> None:
     base = encode_show(two_set_show())
     broken = _refused_trees()[name](base)
-    with pytest.raises(E8sError):
+    with pytest.raises(E8sError) as whole:
         decode_show(broken)
-    with pytest.raises(E8sError):
+    with pytest.raises(E8sError) as alone:
         _read(base, broken)
+    assert _described(alone.value) == _described(whole.value)

@@ -13,7 +13,8 @@ Contains:
     test_events_since_reads_comment_only_and_reverted_revisions_like_whole_shows: gives the same
         events for comment-only revisions and a revert
     test_events_since_refuses_a_revision_whose_changed_document_is_refused: raises the error a
-        whole-show decode raises for a revision that changed a refused document
+        whole-show decode raises, code, message, context and hint, for a revision that changed a
+        refused document
 """
 
 import itertools
@@ -29,7 +30,7 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.choreo.recipe_models import LineRecipe
-from e8s.core.errors import SchemaError
+from e8s.core.errors import E8sError, SchemaError
 from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.geo.shapes import line
 from e8s.show.anchors import Anchor
@@ -38,7 +39,7 @@ from e8s.show.changes import apply_change
 from e8s.show.collab_models import Comment, CountsOp, FormOp, PathsOp, PlacementOp
 from e8s.show.document_paths import forms_doc, role_docs
 from e8s.show.document_repository import revision_id
-from e8s.show.documents import SHEET_DOC, dump_json, is_show_doc
+from e8s.show.documents import SHEET_DOC, TIMELINE_DOC, dump_json, is_show_doc
 from e8s.show.events import events_since
 from e8s.show.history import revert
 from e8s.show.history_models import Revision
@@ -308,6 +309,10 @@ def test_events_since_reads_comment_only_and_reverted_revisions_like_whole_shows
     assert all(later.parent == earlier.id for earlier, later in pairs)
 
 
+def _described(error: E8sError) -> tuple[object, ...]:
+    return error.code, error.message, error.context, error.hint
+
+
 def _commit_raw(
     repo: InMemoryRepository, ws: Workspace, docs: Mapping[str, bytes], at: datetime
 ) -> str:
@@ -337,6 +342,11 @@ def _with_x(x: object) -> Callable[[object], object]:
     return moved
 
 
+def _object(value: object) -> dict[str, object]:
+    assert isinstance(value, dict)
+    return value
+
+
 def _refused(docs: dict[str, bytes], name: str) -> None:
     if name == "bad drill row":
         _with_json(docs, role_docs("2")[0], _with_x("a"))
@@ -344,12 +354,24 @@ def _refused(docs: dict[str, bytes], name: str) -> None:
         docs[forms_doc("2")] = dump_json([FORM.replace(set=SetId("1")).to_json()])
     elif name == "bad sheet":
         docs[SHEET_DOC] = b'{"unexpected": 1}'
+    elif name == "bad sheet name":
+        _with_json(docs, SHEET_DOC, lambda sheet: {**_object(sheet), "name": 5})
+    elif name == "bad timeline":
+        _with_json(docs, TIMELINE_DOC, lambda timeline: {**_object(timeline), "tempos": "x"})
     else:
         _with_json(docs, role_docs("3")[0], _with_x(-9.0))
 
 
 @pytest.mark.parametrize(
-    "name", ["bad drill row", "form of another set", "bad sheet", "stray cast document"]
+    "name",
+    [
+        "bad drill row",
+        "form of another set",
+        "bad sheet",
+        "bad sheet name",
+        "bad timeline",
+        "stray cast document",
+    ],
 )
 def test_events_since_refuses_a_revision_whose_changed_document_is_refused(name: str) -> None:
     repo, agent, designer = open_session(_base(), AT)
@@ -365,4 +387,4 @@ def test_events_since_refuses_a_revision_whose_changed_document_is_refused(name:
         open_workspace(repo, agent.show_id).show_at(head)
     with pytest.raises(SchemaError) as alone:
         events_since(agent, base)
-    assert alone.value.message == whole.value.message
+    assert _described(alone.value) == _described(whole.value)

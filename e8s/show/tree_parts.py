@@ -11,6 +11,7 @@ Contains:
     TreeParts.set_keys(): lists the set keys show.json holds, in show order
     TreeParts.is_role_tree(): reports whether the tree is current and stores every set by role
     TreeParts.require_known_paths(): runs the checks a whole-show decode runs on the tree's paths
+    TreeParts.refusal(): returns the error a whole-show decode of the tree raises for a refusal
     TreeParts.set(): returns the set stored under a key
     TreeParts.stored_paths(): returns the paths stored for two consecutive sets, or None
     TreeParts.form_sources(): maps each form's item path to the form and its set's key
@@ -24,6 +25,7 @@ from functools import cached_property
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
+from e8s.core.errors import SchemaError
 from e8s.core.ids import TransitionId
 from e8s.sheet.models import Sheet
 from e8s.show.decode_cache import DecodeCache
@@ -45,6 +47,7 @@ from e8s.show.document_paths import (
     role_docs,
     set_doc,
 )
+from e8s.show.document_reading import read_show, reraised_for_show
 from e8s.show.document_sources import raw_source
 from e8s.show.integrity import LazyBlobs
 from e8s.show.item_table import ItemPath
@@ -112,6 +115,25 @@ class TreeParts:
         paths = list(self.tree)
         require_listed_role_folders(paths, self.set_keys())
         require_known_cast_documents(paths)
+
+    def refusal(self, exc: SchemaError) -> SchemaError:
+        """Returns the error a whole-show decode of the tree raises, for a part read that refused.
+
+        A part is checked on its own, so its error names fields within the part; the whole-show
+        decode names them within the show. The tree is decoded whole once to give that error.
+        Should the whole decode pass, `exc` is still returned, wrapped as read_show wraps it.
+
+        Args:
+            exc: The error a part read raised.
+
+        Returns:
+            error: The error read_show raises for the tree.
+        """
+        try:
+            read_show(self.tree, cache=self._reading.cache, digests=self._reading.digests)
+        except SchemaError as whole:
+            return whole
+        return reraised_for_show(exc)
 
     def set(self, key: str) -> Set:
         """Returns the set stored under `key`, decoded from set.json and its role documents."""

@@ -13,7 +13,6 @@ from collections.abc import Mapping
 
 from e8s.core.errors import (
     LockedError,
-    SchemaError,
     UnknownRefError,
 )
 from e8s.core.ids import FormId
@@ -25,7 +24,6 @@ from e8s.show.collab_models import (
     FormOp,
     Highlight,
 )
-from e8s.show.document_reading import reraised_for_show
 from e8s.show.documents import is_show_doc
 from e8s.show.event_derivation import Edit, WholeShow, pin_edits, show_edits
 from e8s.show.history_models import Revision
@@ -37,7 +35,7 @@ from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin, pin_key, unpin
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.structured import COMMENTS_DOC, decode_comments
-from e8s.show.tree_items import reads_alone, tree_changes
+from e8s.show.tree_items import changes_alone
 from e8s.show.workspace import Workspace
 
 EVENT_ID_LENGTH = 12
@@ -188,11 +186,9 @@ def _revision_edits(ws: Workspace, r: Revision, paths: list[str]) -> list[Edit]:
     if not before.has_show():
         ws.show_at(r.id)
         return []
-    try:
-        if reads_alone(before, after, paths):
-            return show_edits(tree_changes(before, after, paths).changes, before, after)
-    except SchemaError as exc:
-        raise reraised_for_show(exc) from exc
+    delta = changes_alone(before, after, paths)
+    if delta is not None:
+        return show_edits(delta.changes, before, after)
     return _whole_edits(ws, r)
 
 
