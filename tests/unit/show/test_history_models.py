@@ -64,6 +64,7 @@ def _layout1_with_naive_times(root: Path) -> FileRepository:
     for record in (root / V040_SHOW / "trees").iterdir():
         stored = record.read_bytes()
         record.write_bytes(stored.replace(STORED_AWARE_AT, STORED_NAIVE_AT))
+        assert STORED_NAIVE_AT in record.read_bytes()
     return FileRepository(root)
 
 
