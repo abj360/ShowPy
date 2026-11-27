@@ -400,7 +400,7 @@ class FileBackend:
             require_caller_ids(show_id, revision, tree, blobs)
             require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
-            self._require_legacy_bound(show_id, seq - 1)
+            self._require_legacy_bound(show_id)
             self._prepare(show_id)
             remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
             self._store_blobs(show_id, blobs)
