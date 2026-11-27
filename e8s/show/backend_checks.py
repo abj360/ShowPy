@@ -7,7 +7,7 @@ Contains:
     Record: holds a revision record's slot number, revision and tree
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     refuse_redirect(): refuses a folder that is a symlink or a junction
-    require_plain_folders(): refuses every listed folder that is a symlink or a junction
+    require_plain_folders(): refuses the first listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
 """
 
