@@ -207,11 +207,6 @@ def _shifts_overrides(value: JsonAny, start: float) -> bool:
     return isinstance(value, Sequence) and any(_ends_after(o, start) for o in value)
 
 
-def _after(rescaled: Mapping[object, ItemChange], row: ItemChange) -> JsonAny:
-    found = rescaled.get(row.key.sort_key())
-    return row.before if found is None else found.after
-
-
 def _rescale_conflicts(
     base: Show, head: Show, theirs: Show, change: Sequence[ChangeOp]
 ) -> list[MergeConflict]:
