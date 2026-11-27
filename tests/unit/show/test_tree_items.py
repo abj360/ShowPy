@@ -10,6 +10,8 @@ Contains:
         set or paths document and never validates a show
     test_tree_changes_retime_the_stored_paths_into_a_set_whose_counts_changed: reads the paths
         into a set whose new counts they take, though their document did not change
+    test_tree_changes_read_a_form_two_sets_store_as_the_later_set_does: keeps the later set's
+        form when two sets' forms documents store one form ID, as Show.forms does
     test_reads_alone_refuses_show_cast_and_set_id_changes: sends pins, new sets, cast edits and
         renumbers to the whole-show comparison
     test_reads_alone_refuses_older_and_layout1_trees: sends v1 and layout-1 trees to the
@@ -221,6 +223,21 @@ def test_tree_changes_retime_the_stored_paths_into_a_set_whose_counts_changed() 
     found = tree_changes(before, after, paths)
     assert found == changes(decode_show(old), decode_show(new))
     assert {c.key.kind for c in found.changes} == {"set", "transition"}
+
+
+def test_tree_changes_read_a_form_two_sets_store_as_the_later_set_does() -> None:
+    show = _with_form(_four_set_show(), FORM)
+    later = FORM.replace(set=SetId("3"))
+    old = {**encode_show(show), forms_doc("3"): dump_json([later.to_json()])}
+    swapped = later.replace(members=later.members[::-1])
+    new = {**old, forms_doc("3"): dump_json([swapped.to_json()])}
+    assert decode_show(old).forms[FormId("f1")] == later
+    paths = changed_paths(old, new)
+    before, after = _parts(old, new)
+    assert reads_alone(before, after, paths)
+    found = tree_changes(before, after, paths)
+    assert found == changes(decode_show(old), decode_show(new))
+    assert [c.key.kind for c in found.changes] == ["form"]
 
 
 def _renumbered(show: Show) -> Show:
