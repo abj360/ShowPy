@@ -324,8 +324,9 @@ def _collab_examples() -> list[FrozenModel]:
 
 
 def _example_preview(show: Show, op: PlacementOp) -> FrozenModel:
-    ws = open_workspace(InMemoryRepository(), show.id)
-    save_show(ws, show, AT)
+    storable = show.replace(id="show_1")
+    ws = open_workspace(InMemoryRepository(), storable.id)
+    save_show(ws, storable, AT)
     propose(ws, [op], "nudge", "p1", AT)
     return preview_proposal(ws, "p1")
 
