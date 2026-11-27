@@ -24,6 +24,8 @@ Contains:
         the file system gave the freed inode, which differs in size or change time only
     test_regression_gc_keeps_a_file_replaced_with_a_reused_inode_as_it_moves: keeps such a file
         replaced between gc's last check of its name and its move aside
+    test_regression_gc_removes_files_a_listing_reports_without_inodes: removes unreachable and
+        stale temp files where folder listings, as on Windows, report device and inode 0
     test_gc_never_follows_a_link: keeps old temp files behind a symlinked tmp folder
     test_gc_refuses_layout_1_and_a_time_without_a_zone: raises VersionError and SchemaError
 """
@@ -50,7 +52,7 @@ from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder
-from tests.fixtures.fsck_repos import with_stat, with_zero_inode
+from tests.fixtures.fsck_repos import list_like_windows, with_stat, with_zero_inode
 
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 SHOW_ID = "show_1"
@@ -421,6 +423,18 @@ def test_regression_gc_keeps_a_file_replaced_with_a_reused_inode_as_it_moves(
     assert _relative(tmp_path, stray) not in report.removed
     assert stray.read_bytes() == b"new"
     assert len(report.removed) == len(garbage) - 1
+
+
+def test_regression_gc_removes_files_a_listing_reports_without_inodes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows listings report device and inode 0, which no lookup of the file matches."""
+    _, landed = _repository(tmp_path)
+    garbage = _garbage(tmp_path, landed)
+    list_like_windows(monkeypatch)
+    report = gc(tmp_path, at=AT, confirm=True)
+    assert set(report.removed) == {_relative(tmp_path, path) for path in garbage}
+    assert not any(path.exists() for path in garbage)
 
 
 @SKIP_LINKS

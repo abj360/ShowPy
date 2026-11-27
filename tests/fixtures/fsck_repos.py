@@ -24,11 +24,17 @@ Contains:
     codes(): lists the code and path of each finding fsck reports
     with_stat(): returns an lstat result with some fields changed, as another file reports them
     with_zero_inode(): returns an lstat result whose inode is 0
+    ZeroInodeEntry: wraps a folder entry whose lstat result has device, inode and link count 0
+    list_like_windows(): makes every folder listing report device, inode and link count 0
 """
 
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from e8s.show.backend import digest
 from e8s.show.document_repository import revision_id
@@ -132,3 +138,41 @@ def with_stat(info: os.stat_result, **changes: int) -> os.stat_result:
 def with_zero_inode(info: os.stat_result) -> os.stat_result:
     """Returns an lstat result with st_ino 0, as some Windows and network file systems report."""
     return with_stat(info, st_ino=0)
+
+
+class ZeroInodeEntry:
+    """Wraps a folder entry whose lstat result has device, inode and link count 0, as on Windows.
+
+    Attributes:
+        name: The entry's name.
+        path: The entry's path, as the listing gave it.
+    """
+
+    def __init__(self, entry: os.DirEntry[str]) -> None:
+        self._entry = entry
+        self.name = entry.name
+        self.path = entry.path
+
+    def stat(self, *, follow_symlinks: bool = True) -> os.stat_result:
+        """Returns the entry's stat result with device, inode and link count set to 0."""
+        info = self._entry.stat(follow_symlinks=follow_symlinks)
+        return with_stat(info, st_dev=0, st_ino=0, st_nlink=0)
+
+
+def list_like_windows(monkeypatch: pytest.MonkeyPatch, *, by_descriptor: bool = False) -> None:
+    """Makes every folder listing report device, inode and link count 0, as Windows listings do.
+
+    Args:
+        monkeypatch: Patches os.scandir for the test.
+        by_descriptor: Whether listings may still open a folder by its descriptor.
+    """
+    real_scandir = os.scandir
+
+    @contextmanager
+    def scandir(target: int | str | Path) -> Iterator[Iterator[ZeroInodeEntry]]:
+        with real_scandir(target) as entries:
+            yield (ZeroInodeEntry(entry) for entry in entries)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    if by_descriptor:
+        monkeypatch.setattr(os, "supports_fd", os.supports_fd | {scandir})

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_durable_reads.py --- tests comparing two stored files in bounded pieces
+test_durable_reads.py --- tests comparing two stored files in bounded pieces, and folder listings
 
 Contains:
     test_same_file_under_two_names_has_the_same_bytes: answers from the inode, reading nothing
@@ -21,6 +21,8 @@ Contains:
         names hold FIFOs once opened, never blocking on them
     test_regression_same_bytes_refuses_a_folder_found_in_place_of_a_file: answers False and
         closes every descriptor when a folder holds either name once opened
+    test_regression_listing_looks_up_entries_a_listing_reports_without_inodes: gives each entry
+        its device and inode where the listing, as on Windows, reports them as 0
 """
 
 import os
@@ -32,8 +34,8 @@ from typing import IO
 import pytest
 
 from e8s.show import durable_reads
-from e8s.show.durable_reads import has_same_bytes
-from tests.fixtures.fsck_repos import with_stat, with_zero_inode
+from e8s.show.durable_reads import has_same_bytes, listed_entries
+from tests.fixtures.fsck_repos import list_like_windows, with_stat, with_zero_inode
 
 PIECE = 4
 
@@ -225,3 +227,19 @@ def test_regression_same_bytes_refuses_a_folder_found_in_place_of_a_file(
     for descriptor in opened:
         with pytest.raises(OSError, match="Bad file descriptor"):
             os.fstat(descriptor)
+
+
+@pytest.mark.parametrize("by_descriptor", [False, True], ids=["by_path", "by_descriptor"])
+def test_regression_listing_looks_up_entries_a_listing_reports_without_inodes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, by_descriptor: bool
+) -> None:
+    """Windows listings report device, inode and link count 0; lstat reports them."""
+    (tmp_path / "a").write_bytes(b"x")
+    (tmp_path / "b").mkdir()
+    expected = {name: os.lstat(tmp_path / name) for name in ("a", "b")}
+    list_like_windows(monkeypatch, by_descriptor=by_descriptor)
+    listed = dict(listed_entries(tmp_path))
+    assert listed.keys() == expected.keys()
+    for name, info in listed.items():
+        assert (info.st_dev, info.st_ino) == (expected[name].st_dev, expected[name].st_ino)
+        assert info.st_ino != 0

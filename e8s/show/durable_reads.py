@@ -137,7 +137,9 @@ def listed_entries(
 
     The folder is opened without following a symlink where the system allows it, so a folder
     swapped for a link after its caller checked it is refused rather than listed. An entry that
-    vanishes between the listing and its lstat was removed by a writer, so it is left out.
+    vanishes between the listing and its lstat was removed by a writer, so it is left out. An
+    entry the listing reports with inode 0, as every Windows listing does, is looked up again,
+    so its result names its device and inode wherever the file system has them.
 
     Args:
         folder: Existing folder.
@@ -155,22 +157,38 @@ def listed_entries(
     """
     if IS_WINDOWS or os.scandir not in os.supports_fd:
         with os.scandir(folder) as entries:
-            return _entry_stats(entries)
+            return _entry_stats(entries, None)
     descriptor = os.open(
         folder, DIRECTORY_FLAGS & ~NOFOLLOW_FLAG if follows_links else DIRECTORY_FLAGS
     )
     try:
         with os.scandir(descriptor) as entries:
-            return _entry_stats(entries)
+            return _entry_stats(entries, descriptor)
     finally:
         os.close(descriptor)
 
 
-def _entry_stats(entries: Iterator[os.DirEntry[str]]) -> list[tuple[str, os.stat_result]]:
+def _entry_lstat(entry: os.DirEntry[str], descriptor: int | None) -> os.stat_result:
+    """Returns an entry's lstat result, looked up again where the listing reports inode 0.
+
+    Windows listings report the device, inode and link count as 0, which no lookup of the file
+    matches; the lookup goes through the folder's descriptor where the listing used one.
+    """
+    info = entry.stat(follow_symlinks=False)
+    if info.st_ino != 0:
+        return info
+    if descriptor is None:
+        return os.lstat(entry.path)
+    return os.lstat(entry.name, dir_fd=descriptor)
+
+
+def _entry_stats(
+    entries: Iterator[os.DirEntry[str]], descriptor: int | None
+) -> list[tuple[str, os.stat_result]]:
     listed: list[tuple[str, os.stat_result]] = []
     for entry in entries:
         try:
-            listed.append((entry.name, entry.stat(follow_symlinks=False)))
+            listed.append((entry.name, _entry_lstat(entry, descriptor)))
         except FileNotFoundError:
             continue
     return sorted(listed, key=lambda item: item[0])
