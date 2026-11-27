@@ -143,7 +143,7 @@ def test_join_disjoint_sections_and_clashes() -> None:
     relabelled = second.replace(sets=tuple(s.replace(id=f"B{s.id}") for s in second.sets))
     joined = join_sections(first, relabelled)
     assert joined.set_ids() == ["1", "2", "B1", "B2", "B3"]
-    other_cast = relabelled.replace(cast=first.cast.replace(spots=()))
+    other_cast = relabelled._copied(update={"cast": first.cast.replace(spots=())})
     with pytest.raises(SchemaError):
         join_sections(first, other_cast)
     moved = relabelled.sets[0].with_placements({"T1": PlacementPatch(x=9.0)})

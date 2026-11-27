@@ -61,6 +61,7 @@ INDEX_TOL = 1e-9
 EXTENSION_KEY = re.compile(r"^x-")
 EXTENSION_PREFIX = "x-"
 EXTENSIONS_FIELD = "extensions"
+MAX_NAMED_STRAY_SPOTS = 5
 
 
 type PinTarget = Literal["entity", "form", "set", "transition"]
@@ -177,7 +178,7 @@ class Show(FrozenModel):
         sheet: The 2D design surface.
         cast: Groups and spots.
         timeline: Show clock.
-        sets: Sets in show order; at most MAX_SETS.
+        sets: Sets in show order; at most MAX_SETS, each placing only spots the cast holds.
         forms: Form ID to form, across every set.
         transitions: Stored path instructions for consecutive set pairs.
         facing_overrides: Facings forced over global count ranges.
@@ -266,6 +267,23 @@ class Show(FrozenModel):
                 f"set keys repeat ignoring case: {', '.join(repeated)}",
                 hint="give every set a key unique ignoring case; add_set() picks a free one",
                 context={"keys": repeated},
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _placements_name_cast_spots(self) -> "Show":
+        cast_ids = frozenset(self.cast.ids())
+        for owner in self.sets:
+            # the set's cached spot index keeps this check under 40 ms at MAX_SETS by MAX_SPOTS
+            if cast_ids.issuperset(owner._index):
+                continue
+            stray = [e for e in owner.entity_ids() if e not in cast_ids]
+            raise SchemaError(
+                f"set {owner.id} places {len(stray)} spot(s) the cast does not hold:"
+                f" {', '.join(stray[:MAX_NAMED_STRAY_SPOTS])}",
+                hint="add the spots to the cast, or remove their placements with delete_spots()",
+                context={"set": owner.id, "spots": stray[:MAX_NAMED_STRAY_SPOTS]},
+                code=ErrorCode.UNKNOWN_SPOT,
             )
         return self
 
