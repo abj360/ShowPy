@@ -9,6 +9,8 @@ Contains:
     remove_set(): deletes a set with its forms and paths, optionally keeping the total time
     replace_sets(): replaces a show's sets, syncing transitions and refusing locked edits
     set_counts(): retimes a set and the transition into it
+    late_rows(): lists the spots whose path window does not fit a transition's counts
+    late_routes(): lists the routes that end after a transition's counts
 """
 
 import re
@@ -389,16 +391,34 @@ def _scale_spec(spec: TransitionSpec, factor: float) -> TransitionSpec:
     return spec.replace(rows=rows, routes=routes)
 
 
-def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
-    late: list[str] = [
+def late_rows(spec: TransitionSpec, counts: float) -> list[SpotId]:
+    """Lists the spots whose stored path window does not fit a transition of `counts`.
+
+    >>> from e8s.examples import two_set_show
+    >>> late_rows(two_set_show().transition(("1", "2")), 8.0)
+    []
+    """
+    return [
         entity
         for entity, row in spec.rows.items()
         if row.window(counts)[1] > counts
         or row.start >= counts
         or any(w.at is not None and w.at > counts for w in row.waypoints)
     ]
-    late += [key for key, r in spec.routes.items() if (r.end or counts) > counts]
-    return late
+
+
+def late_routes(spec: TransitionSpec, counts: float) -> list[str]:
+    """Lists the routes of a transition that end after `counts`.
+
+    >>> from e8s.examples import two_set_show
+    >>> late_routes(two_set_show().transition(("1", "2")), 8.0)
+    []
+    """
+    return [key for key, r in spec.routes.items() if (r.end or counts) > counts]
+
+
+def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
+    return [*late_rows(spec, counts), *late_routes(spec, counts)]
 
 
 def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> TransitionSpec:

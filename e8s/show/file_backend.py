@@ -10,40 +10,49 @@ Contains:
 """
 
 from collections.abc import Mapping
+from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
-from e8s.core.errors import SchemaError, UnknownRefError, VersionError
+from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show import document_repository
+from e8s.show import document_repository, durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
     conflict_error,
     history_too_long_error,
     unknown_revision_error,
 )
-from e8s.show.backend_checks import ReadBudget, Record, corrupt, require_caller_ids
+from e8s.show.backend_checks import (
+    ReadBudget,
+    Record,
+    corrupt,
+    refuse_redirect,
+    require_caller_ids,
+    require_plain_folders,
+)
+from e8s.show.commit_writes import (
+    STALE_TEMP_AGE,
+    flush_directories,
+    place_file,
+    remove_lost_record,
+    store_blobs,
+    store_record,
+    write_layout_file,
+)
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
-    is_redirect,
-    link_new,
     lstat_mode,
-    make_folder,
     mapped_io,
     read_capped,
-    remove_file,
-    write_temp,
+    remove_stale_temps,
 )
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout import (
-    CURRENT_LAYOUT,
     HOUSEKEEPING_NAMES,
-    LAYOUT_FILE,
-    LAYOUT_FORMAT,
     TEMP_DIR,
-    read_layout,
 )
 from e8s.show.layout1 import (
     BLOB_MAX_BYTES,
@@ -72,13 +81,6 @@ LOG_READ_MAX_BYTES = BLOB_MAX_BYTES
 # A manifest holds one show ID; stored layout-1 IDs have no length rule, but a folder name of
 # theirs never passed 255 characters. Rounded up.
 MANIFEST_MAX_BYTES = 4096
-LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
-
-
-def _refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:
-    """Raises CORRUPT when `path`, with stat mode `mode`, is a symlink or a junction."""
-    if is_redirect(path, mode):
-        raise corrupt(show_id, path, "folder is a symbolic link or junction")
 
 
 class FileBackend:
@@ -110,6 +112,7 @@ class FileBackend:
         self._seen: dict[str, tuple[int, str]] = {}
         self._manifests: dict[str, int] = {}
         self._has_layout = False
+        self._flushed: set[str] = set()
 
     def _folder(self, show_id: str) -> Path:
         return self.root / SHOWS_DIR / show_folder(show_id)
@@ -175,17 +178,15 @@ class FileBackend:
     def _require_plain_folders(self, show_id: str) -> None:
         """Refuses a symlink or junction in place of any folder a read or write passes through."""
         folder = self._folder(show_id)
-        for path in (
+        require_plain_folders(
+            show_id,
             self.root / SHOWS_DIR,
             folder,
             folder / LOG_DIR,
             folder / RECORD_DIR,
             folder / OBJECT_DIR,
             self.root / TEMP_DIR,
-        ):
-            mode = lstat_mode(show_id, path)
-            if mode is not None:
-                _refuse_redirect(path, mode, show_id)
+        )
 
     def shows(self) -> list[str]:
         """Returns the IDs of shows with at least one slot, read from their manifests."""
@@ -194,7 +195,7 @@ class FileBackend:
             mode = lstat_mode("", folder)
             if mode is None:
                 return []
-            _refuse_redirect(folder, mode)
+            refuse_redirect(folder, mode)
             names = sorted(p.name for p in folder.iterdir() if p.name not in HOUSEKEEPING_NAMES)
             return [show for show in map(self._listed_show, names) if show is not None]
 
@@ -205,7 +206,7 @@ class FileBackend:
             raise corrupt("", folder, "entry under shows/ is not a show folder")
         mode = lstat_mode("", folder)
         if mode is not None:
-            _refuse_redirect(folder, mode)
+            refuse_redirect(folder, mode)
         if lstat_mode("", folder / MANIFEST_FILE) is None:
             return None
         show_id, _ = self._manifest("", folder)
@@ -414,9 +415,17 @@ class FileBackend:
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._prepare(show_id)
+            remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
             self._store_blobs(show_id, blobs)
             self._store_record(show_id, revision, seq, tree)
-            self._claim_slot(show_id, revision, seq)
+            folder = self._folder(show_id)
+            flush_directories(folder / OBJECT_DIR, folder / RECORD_DIR)
+            try:
+                self._claim_slot(show_id, revision, seq)
+            except ConflictError:
+                winner = self._read_slot(show_id, seq).id
+                remove_lost_record(self._record_path(show_id, revision.id), winner, revision.id)
+                raise
             self._remember(show_id, seq, revision.id)
 
     def _parent_seq(self, show_id: str, parent: str) -> int:
@@ -432,68 +441,55 @@ class FileBackend:
             raise conflict_error(show_id, parent, self.log(show_id)) from None
 
     def _prepare(self, show_id: str) -> None:
-        """Writes the layout file, the show's folders and its manifest when missing."""
+        """Writes what is missing of the layout file, folders and manifest, and flushes them.
+
+        Whichever process placed an entry, every process flushes the folders that hold them once
+        per show, so a commit never returns while an entry it relies on is still volatile.
+        """
         self._ensure_layout(show_id)
-        if show_id in self._manifests:
+        if show_id in self._flushed:
             return
         folder = self._folder(show_id)
         for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
-            make_folder(folder / name)
-        if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
-            self._manifests[show_id] = FIRST_SEQ
-        else:
-            self._check_manifest(show_id)
+            durable_io.make_folder(folder / name)
+        if show_id not in self._manifests:
+            if self._place(show_id, folder / MANIFEST_FILE, dump_json({"id": show_id})):
+                self._manifests[show_id] = FIRST_SEQ
+            else:
+                self._check_manifest(show_id)
+        durable_io.flush_directory(self.root, follows_links=True)
+        flush_directories(self.root / SHOWS_DIR, folder)
+        self._flushed.add(show_id)
 
     def _ensure_layout(self, show_id: str) -> None:
         """Links `layout.json` into place, after `tmp/` and before anything else is written."""
         if self._has_layout:
             return
-        if read_layout(self.root) != CURRENT_LAYOUT:
-            raise VersionError(
-                f"repository at {self.root} is layout 1, which this backend does not write",
-                hint="open it with FileRepository, which reads layout 1",
-                context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(self.root)},
-            )
-        make_folder(self.root / TEMP_DIR)
-        if not self._place(show_id, self.root / LAYOUT_FILE, LAYOUT_BYTES):
-            read_layout(self.root)
+        write_layout_file(self.root, show_id)
         self._has_layout = True
 
     def _place(self, show_id: str, target: Path, data: bytes) -> bool:
         """Writes `data` under `target` through a temp file; False when the name was taken."""
-        temp = write_temp(self.root / TEMP_DIR, data)
-        try:
-            with mapped_io(show_id, target, is_link=True):
-                return link_new(temp, target)
-        finally:
-            remove_file(temp)
+        return place_file(self.root / TEMP_DIR, show_id, target, data)
 
     def _store_blobs(self, show_id: str, blobs: Mapping[str, bytes]) -> None:
         """Stores each blob, keeping one already there only when it holds the same bytes."""
         objects = self._folder(show_id) / OBJECT_DIR
-        for digest, data in blobs.items():
-            target = objects / digest
-            if lstat_mode(show_id, target) is None and self._place(show_id, target, data):
-                continue
-            self._verified_blob(show_id, target)
+        verify = partial(self._verified_blob, show_id)
+        store_blobs(self.root / TEMP_DIR, show_id, objects, blobs, verify)
 
     def _store_record(
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
     ) -> None:
         """Places the revision record, or checks the one an identical commit placed first."""
-        path = self._record_path(show_id, revision.id)
         record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
-        if self._place(show_id, path, record):
-            return
-        stored = read_capped(
-            path, "revision record", TREE_MAX_BYTES, lambda p, why: corrupt(show_id, p, why)
-        )
-        if stored != record:
-            raise corrupt(show_id, path, "revision record differs from this commit")
+        store_record(self.root / TEMP_DIR, show_id, self._record_path(show_id, revision.id), record)
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
         self._require_no_gap(show_id, seq)
         slot = jcs(revision.to_json()) + b"\n"
-        if not self._place(show_id, self._slot_path(show_id, seq), slot):
+        path = self._slot_path(show_id, seq)
+        if not place_file(self.root / TEMP_DIR, show_id, path, slot):
             raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
+        flush_directories(path.parent, is_commit_point=True)
