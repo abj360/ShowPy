@@ -4,6 +4,10 @@
 test_durable_io.py --- tests the flushes a layout-2 commit makes before its slot lands
 
 Contains:
+    test_failed_macos_flush_fails_the_commit_with_io: maps a failing fcntl flush to IO and lands
+        no slot
+    test_failed_directory_flush_fails_the_commit_with_io: maps a failing directory fsync to IO and
+        lands no slot
     test_first_commit_flushes_every_directory_it_creates_before_the_slot: flushes the layout
         entry's folder, shows/ and the show folder after the first files and before the slot
     test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commit: flushes the
@@ -19,12 +23,14 @@ Contains:
     test_other_systems_flush_every_file_with_fsync: calls fsync for blobs, records and slots
 """
 
+import errno
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from e8s.core.errors import StorageError
 from e8s.show import durable_io
 from e8s.show.backend import digest
 from e8s.show.document_repository import revision_id
@@ -134,6 +140,38 @@ def test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commi
     start = calls.index(chain[0])
     assert calls[start : start + len(chain)] == chain
     assert start < calls.index((LINK_ENTRY, "log"))
+
+
+def test_failed_macos_flush_fails_the_commit_with_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing_fcntl(_descriptor: int, _command: int) -> None:
+        raise OSError(errno.ENOTSUP, "Operation not supported")
+
+    monkeypatch.setattr(durable_io, "IS_MACOS", True)
+    monkeypatch.setattr(durable_io, "fcntl_flush", failing_fcntl)
+    revision, tree, blobs = _change("", 1)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert caught.value.code == "IO"
+    assert not list((tmp_path / "shows").glob("*/log/*"))
+
+
+def test_failed_directory_flush_fails_the_commit_with_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing_fsync(_descriptor: int) -> None:
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(durable_io, "IS_MACOS", False)
+    monkeypatch.setattr(durable_io, "IS_WINDOWS", False)
+    monkeypatch.setattr(durable_io, "flush_file", lambda _descriptor: None)
+    monkeypatch.setattr(os, "fsync", failing_fsync)
+    revision, tree, blobs = _change("", 1)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert caught.value.code == "IO"
+    assert not list((tmp_path / "shows").glob("*/log/*"))
 
 
 def test_directory_flush_is_skipped_on_windows(

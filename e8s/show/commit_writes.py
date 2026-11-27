@@ -2,10 +2,10 @@
 commit_writes.py --- the writes of a layout-2 commit: files placed by exclusive link
 
 Contains:
-    flush_directories: flushes each folder so the names placed in it survive power loss
-    place_file: writes bytes to a temp file and links it under a name that never gets replaced
-    store_blobs: places each blob, keeping one already there only when it holds the same bytes
-    store_record: places a revision record, or checks the one an identical commit placed first
+    flush_directories(): flushes each folder so the names placed in it survive power loss
+    place_file(): writes bytes to a temp file and links it under a name that never gets replaced
+    store_blobs(): places each blob, keeping one already there only when it holds the same bytes
+    store_record(): places a revision record, or checks the one an identical commit placed first
 """
 
 from collections.abc import Callable, Mapping
