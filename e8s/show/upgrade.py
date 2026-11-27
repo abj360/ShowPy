@@ -39,7 +39,14 @@ from e8s.show.file_backend import (
     SLOT_DIGITS,
 )
 from e8s.show.history_models import Revision
-from e8s.show.layout import HOUSEKEEPING_NAMES, LAYOUT_FILE, LEGACY_LAYOUT, TEMP_DIR, read_layout
+from e8s.show.layout import (
+    HOUSEKEEPING_NAMES,
+    LAYOUT_FILE,
+    LEGACY_LAYOUT,
+    TEMP_DIR,
+    read_layout,
+    require_usable_path,
+)
 from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_DIR, ROOT_LINK, TREE_DIR, Layout1Reader
 from e8s.show.manifests import manifest_json
 from e8s.show.show_folders import show_folder
@@ -122,6 +129,7 @@ def _free_target(source: Path, target: Path) -> Path:
     Returns:
         folder: The resolved existing ancestor of `target` joined with the names below it.
     """
+    require_usable_path(target)
     with mapped_io("", target):
         ancestor, tail = existing_ancestor(target)
         _require_plain_tail(target, ancestor, tail)

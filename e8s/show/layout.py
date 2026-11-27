@@ -8,6 +8,7 @@ Contains:
     LAYOUT_MAX_BYTES: caps the size of the layout file read
     HOUSEKEEPING_NAMES: lists the entries operating systems add to a folder, which a root skips
     TEMP_DIR: names the folder under a layout-2 root that holds every writer's temp files
+    require_usable_path(): refuses a path holding a NUL character, which no file system takes
     read_layout(): reports the layout version of a repository root
     read_layout_file(): reads and checks the layout file itself, refusing a missing one
     holds_layout_1(): tells whether a root holds layout-1 show folders and no layout file
@@ -49,6 +50,25 @@ HOUSEKEEPING_NAMES = frozenset(
         "System Volume Information",
     }
 )
+
+
+def require_usable_path(path: Path) -> None:
+    """Refuses a path holding a NUL character, which no file system takes, with BAD_PATH.
+
+    The operating system would refuse it with a bare ValueError on the first lookup.
+
+    >>> require_usable_path(Path("repo"))
+    >>> require_usable_path(Path("re" + chr(0) + "po"))
+    Traceback (most recent call last):
+    e8s.core.errors.StorageError: BAD_PATH: path ... holds a NUL character (hint: ...)
+    """
+    if "\0" in str(path):
+        raise StorageError(
+            f"path {str(path)!r} holds a NUL character",
+            hint="remove the NUL character from the path; no file system accepts one",
+            context={"path": repr(str(path))},
+            code=ErrorCode.BAD_PATH,
+        )
 
 
 def _corrupt(root: Path, reason: str) -> StorageError:
@@ -149,7 +169,8 @@ def read_layout(root: Path) -> int:
     show creates the file; entries the operating system adds, such as `.DS_Store`, do not count,
     and neither does the `tmp` folder a first commit creates just before that file. A symlinked
     root is followed. Any other content raises StorageError CORRUPT, a newer layout
-    raises VersionError, and a file-system failure raises StorageError IO.
+    raises VersionError, a file-system failure raises StorageError IO, and a root path holding a
+    NUL character raises StorageError BAD_PATH.
 
     Args:
         root: Folder that holds the repository.
@@ -163,6 +184,7 @@ def read_layout(root: Path) -> int:
     ...     read_layout(Path(folder) / "new-repo")
     2
     """
+    require_usable_path(root)
     try:
         return _stored_layout(root)
     except OSError as error:

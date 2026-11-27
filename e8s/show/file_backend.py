@@ -57,10 +57,7 @@ from e8s.show.durable_io import mapped_io, remove_stale_temps
 from e8s.show.durable_reads import lstat_mode, read_capped
 from e8s.show.fsck_findings import SET_ASIDE_PREFIX
 from e8s.show.history_models import Revision
-from e8s.show.layout import (
-    HOUSEKEEPING_NAMES,
-    TEMP_DIR,
-)
+from e8s.show.layout import HOUSEKEEPING_NAMES, TEMP_DIR, require_usable_path
 from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
 from e8s.show.manifests import (
     Manifest,
@@ -114,6 +111,7 @@ class FileBackend:
     """
 
     def __init__(self, root: Path) -> None:
+        require_usable_path(root)
         self.root = root
         self._seen: dict[str, tuple[int, str]] = {}
         self._manifests: dict[str, Manifest] = {}

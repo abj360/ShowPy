@@ -32,6 +32,7 @@ from e8s.show.fsck_findings import (
     relative_path,
 )
 from e8s.show.fsck_scan import RepositoryScan, scan_repository
+from e8s.show.layout import require_usable_path
 from e8s.show.storage_models import GcReport
 
 TORN_LAYOUT_REASON = "layout.json is torn; run fsck(root)"
@@ -212,8 +213,8 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
 
     Raises:
         VersionError: The root holds layout 1, or a newer layout than this release reads.
-        StorageError: The root is missing (IO), holds no repository (CORRUPT), or cannot be
-            read (IO).
+        StorageError: The root is missing (IO), holds no repository (CORRUPT), cannot be read
+            (IO), or its path holds a NUL character (BAD_PATH).
 
     >>> import tempfile
     >>> from datetime import UTC, datetime
@@ -228,6 +229,7 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
     ()
     """
     require_zoned(at)
+    require_usable_path(root)
     cutoff = at - STALE_TEMP_AGE
     with mapped_io("", root):
         scan = scan_repository(root, None, at)

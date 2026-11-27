@@ -22,6 +22,7 @@ from e8s.show.durable_io import flush_directory, mapped_io, remove_file
 from e8s.show.durable_reads import is_same_file, lstat_info, read_capped
 from e8s.show.fsck_findings import FAILING_CODES, Repairable, relative_path
 from e8s.show.fsck_scan import RepositoryScan, scan_repository
+from e8s.show.layout import require_usable_path
 from e8s.show.storage_models import FsckFinding, FsckReport
 
 
@@ -158,7 +159,7 @@ def fsck(
     Raises:
         StorageError: A repair lacks `confirm=True` or `at`, or `confirm=True` comes without
             `repair=True` (NOT_CONFIRMED); the root is missing (IO), holds no repository
-            (CORRUPT), or cannot be read (IO).
+            (CORRUPT), cannot be read (IO), or its path holds a NUL character (BAD_PATH).
         VersionError: The root holds layout 1, or a newer layout than this release reads.
         UnknownRefError: `show_id` names no show in the root.
 
@@ -176,6 +177,7 @@ def fsck(
     (True, ())
     """
     require_zoned(at)
+    require_usable_path(root)
     if confirm and not repair:
         raise _confirm_alone()
     if repair and (not confirm or at is None):
