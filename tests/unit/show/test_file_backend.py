@@ -58,6 +58,8 @@ Contains:
         folder for reads and writes, leaving the target untouched
     test_regression_junction_under_the_root_is_refused: refuses a junction in place of the show
         folder (Windows only)
+    test_log_longer_than_max_revisions_is_refused: refuses a log over MAX_REVISIONS
+    test_log_reads_at_most_the_byte_budget: refuses a log whose slots and records pass the budget
     test_every_read_error_names_the_show: carries the real show ID in every read error
     test_regression_shows_errors_never_carry_an_empty_show: leaves out the show key when a folder
         is unreadable before its show is known
@@ -83,6 +85,7 @@ from e8s.core.errors import ConflictError, StorageError, UnknownRefError, Versio
 from e8s.core.util import content_hash
 from e8s.show import file_backend
 from e8s.show.backend import digest
+from e8s.show.backend_checks import ReadBudget
 from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import DocumentRepository, revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
@@ -187,9 +190,11 @@ class _SlotReadRecorder:
         self.seqs: list[int] = []
         real = FileBackend._read_slot
 
-        def recorded(backend: FileBackend, show_id: str, seq: int) -> Revision:
+        def recorded(
+            backend: FileBackend, show_id: str, seq: int, budget: ReadBudget | None = None
+        ) -> Revision:
             self.seqs.append(seq)
-            return real(backend, show_id, seq)
+            return real(backend, show_id, seq, budget)
 
         monkeypatch.setattr(FileBackend, "_read_slot", recorded)
 
@@ -735,6 +740,30 @@ def test_regression_junction_under_the_root_is_refused(tmp_path: Path) -> None:
     with pytest.raises(StorageError) as caught:
         FileBackend(root).commit(SHOW_ID, revision, tree, blobs)
     assert caught.value.code == "CORRUPT"
+
+
+def test_log_longer_than_max_revisions_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(file_backend, "MAX_REVISIONS", 3)
+    backend = FileBackend(tmp_path)
+    landed = _landed(backend, 3)
+    assert FileBackend(tmp_path).log(SHOW_ID) == landed
+    _landed(backend, 1, landed[-1].id, start=3)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "TOO_LARGE"
+    assert caught.value.context["show"] == SHOW_ID
+    assert caught.value.context["cap"] == 3
+
+
+def test_log_reads_at_most_the_byte_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _landed(FileBackend(tmp_path), 4)
+    monkeypatch.setattr(file_backend, "LOG_READ_MAX_BYTES", 600)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "TOO_LARGE"
+    assert caught.value.context["show"] == SHOW_ID
 
 
 def test_every_read_error_names_the_show(tmp_path: Path) -> None:

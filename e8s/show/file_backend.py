@@ -4,6 +4,7 @@ file_backend.py --- the layout-2 file backend: numbered slots, encoded show fold
 Contains:
     SLOT_DIGITS: sets the width of the zero-padded sequence number that names a slot
     SLOT_MAX_BYTES: caps the size of a slot read
+    LOG_READ_MAX_BYTES: caps the bytes of slots and records one log() call reads
     MANIFEST_MAX_BYTES: caps the size of a show manifest read
     FileBackend: stores each show as numbered slots, revision records and blobs under a root
 """
@@ -16,8 +17,13 @@ from e8s.core.errors import SchemaError, UnknownRefError, VersionError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository
-from e8s.show.backend import conflict_error, unknown_revision_error
-from e8s.show.backend_checks import Record, corrupt, require_caller_ids
+from e8s.show.backend import (
+    MAX_REVISIONS,
+    conflict_error,
+    history_too_long_error,
+    unknown_revision_error,
+)
+from e8s.show.backend_checks import ReadBudget, Record, corrupt, require_caller_ids
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
     is_redirect,
@@ -60,6 +66,9 @@ MANIFEST_KEYS = frozenset({"id", "legacy_before"})
 FIRST_SEQ = 1
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
+# A log read holds every slot and record it reads in memory at once; one blob may be this large,
+# so a history may be too, and a larger one is read in pieces with since.
+LOG_READ_MAX_BYTES = BLOB_MAX_BYTES
 # A manifest holds one show ID; stored layout-1 IDs have no length rule, but a folder name of
 # theirs never passed 255 characters. Rounded up.
 MANIFEST_MAX_BYTES = 4096
@@ -105,9 +114,13 @@ class FileBackend:
     def _record_path(self, show_id: str, revision_id: str) -> Path:
         return self._folder(show_id) / RECORD_DIR / f"{revision_id}.json"
 
-    def _read(self, show_id: str, path: Path, kind: str, cap: int) -> JsonValue:
+    def _read(
+        self, show_id: str, path: Path, kind: str, cap: int, budget: ReadBudget | None = None
+    ) -> JsonValue:
         """Reads and parses one stored JSON file, mapping every refusal to CORRUPT."""
         raw = read_capped(path, kind, cap, lambda source, why: corrupt(show_id, source, why))
+        if budget is not None:
+            budget.spend(len(raw))
         try:
             return parse_strict_json(raw, document=kind)
         except SchemaError as error:
@@ -190,9 +203,9 @@ class FileBackend:
     def _has_slot(self, show_id: str, seq: int) -> bool:
         return lstat_mode(show_id, self._slot_path(show_id, seq)) is not None
 
-    def _read_slot(self, show_id: str, seq: int) -> Revision:
+    def _read_slot(self, show_id: str, seq: int, budget: ReadBudget | None = None) -> Revision:
         path = self._slot_path(show_id, seq)
-        stored = self._read(show_id, path, "slot", SLOT_MAX_BYTES)
+        stored = self._read(show_id, path, "slot", SLOT_MAX_BYTES, budget)
         if not isinstance(stored, dict) or stored.keys() != SLOT_KEYS:
             raise corrupt(show_id, path, f"slot must hold exactly {sorted(SLOT_KEYS)}")
         return self._revision(show_id, path, stored)
@@ -258,11 +271,15 @@ class FileBackend:
         """Returns the revisions after `since`, oldest first, reading only the later slots.
 
         A revision no slot holds, such as the record of a commit that lost its race, raises
-        UnknownRefError. Every slot read is checked against its record.
+        UnknownRefError. Every slot read is checked against its record, so the read costs the
+        bytes of the slots and records after `since`, up to LOG_READ_MAX_BYTES, and a history of
+        more than MAX_REVISIONS revisions is refused.
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
             last, head = self._head(show_id)
+            if last > MAX_REVISIONS:
+                raise history_too_long_error(show_id, MAX_REVISIONS)
             if since == head:
                 return []
             first = 0 if since == ROOT_REVISION else self._landed_seq(show_id, since, last)
@@ -281,31 +298,34 @@ class FileBackend:
 
     def _slots_after(self, show_id: str, first: int, last: int, parent: str) -> list[Revision]:
         """Reads slots `first + 1` to `last`, checking each against its parent and its record."""
+        budget = ReadBudget(show_id, LOG_READ_MAX_BYTES)
         landed: list[Revision] = []
         for seq in range(first + 1, last + 1):
-            revision = self._read_slot(show_id, seq)
+            revision = self._read_slot(show_id, seq, budget)
             path = self._slot_path(show_id, seq)
             if revision.parent != parent:
                 raise corrupt(show_id, path, "slot's parent is not the revision of the slot before")
-            self._check_slot_record(show_id, path, seq, revision)
+            self._check_slot_record(show_id, path, seq, revision, budget)
             landed.append(revision)
             parent = revision.id
         return landed
 
-    def _check_slot_record(self, show_id: str, path: Path, seq: int, revision: Revision) -> None:
+    def _check_slot_record(
+        self, show_id: str, path: Path, seq: int, revision: Revision, budget: ReadBudget
+    ) -> None:
         """Requires the slot's revision to have a record that holds the same revision and seq."""
         if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
             raise corrupt(show_id, path, "slot names a revision that has no record")
-        stored = self._record(show_id, revision.id)
+        stored = self._record(show_id, revision.id, budget)
         if stored.seq != seq:
             raise corrupt(show_id, path, f"record of this slot holds seq {stored.seq}, not {seq}")
         if stored.revision != revision:
             raise corrupt(show_id, path, "slot differs from the revision in its record")
 
-    def _record(self, show_id: str, revision_id: str) -> Record:
+    def _record(self, show_id: str, revision_id: str, budget: ReadBudget | None = None) -> Record:
         """Reads a revision record, checking it names itself and that its ID is verified."""
         path = self._record_path(show_id, revision_id)
-        stored = self._read(show_id, path, "revision record", TREE_MAX_BYTES)
+        stored = self._read(show_id, path, "revision record", TREE_MAX_BYTES, budget)
         if not isinstance(stored, dict) or stored.keys() != RECORD_KEYS:
             raise corrupt(show_id, path, f"record must hold exactly {sorted(RECORD_KEYS)}")
         seq, tree = stored["seq"], stored["tree"]

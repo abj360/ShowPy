@@ -5,6 +5,7 @@ Contains:
     CORRUPT_HINT: tells the caller how to repair a damaged show folder
     corrupt(): builds the StorageError for a stored file that fails a check
     Record: holds a revision record's slot number, revision and tree
+    ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
 """
 
@@ -47,6 +48,26 @@ class Record(NamedTuple):
     seq: int
     revision: Revision
     tree: dict[str, str]
+
+
+class ReadBudget:
+    """Counts the bytes one log() call has read and refuses to pass its limit."""
+
+    def __init__(self, show_id: str, limit: int) -> None:
+        self._show_id = show_id
+        self._limit = limit
+        self._remaining = limit
+
+    def spend(self, size: int) -> None:
+        """Takes `size` bytes from the budget, raising TOO_LARGE when it runs out."""
+        self._remaining -= size
+        if self._remaining < 0:
+            raise StorageError(
+                f"log of {self._show_id} holds more than {self._limit} bytes",
+                hint="save the current state as a new show and continue there",
+                context={"show": self._show_id, "cap": self._limit},
+                code=ErrorCode.TOO_LARGE,
+            )
 
 
 def _caller_id(show_id: str, value: str, role: str) -> None:
