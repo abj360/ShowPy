@@ -180,7 +180,7 @@ def _revision_edits(ws: Workspace, r: Revision, paths: list[str]) -> list[Edit]:
     show.json, cast document or set ID is read part by part: each changed document is decoded
     and checked, and nothing else; pins live in show.json, so it has no pin edits.
     """
-    before, after = ws._parts_at(r.parent), ws._parts_at(r.id)
+    before, after = ws.parts_at(r.parent), ws.parts_at(r.id)
     if not after.has_show():
         return []
     if not before.has_show():
