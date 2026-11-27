@@ -94,7 +94,7 @@ def _reserved_path(path: str, root: str) -> StorageError:
 
 def _named_segments(root: str, segments: list[str]) -> list[str]:
     """Returns the segments a path names freely; a set or transition folder is its set keys'."""
-    if root in (f"/{SETS_ROOT}/", f"/{TRANSITIONS_ROOT}/"):
+    if len(segments) > 1 and root in (f"/{SETS_ROOT}/", f"/{TRANSITIONS_ROOT}/"):
         return segments[1:]
     return segments
 

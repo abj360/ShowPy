@@ -705,7 +705,17 @@ def test_commit_check_validates_the_whole_show_model(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.parametrize(
     "path",
-    ["/exports/CON.txt", "/exports/nul", "/renders/a/com1.png", "/exports/Lpt9/x.pdf", "/time/aux"],
+    [
+        "/exports/CON.txt",
+        "/exports/nul",
+        "/renders/a/com1.png",
+        "/exports/Lpt9/x.pdf",
+        "/time/aux",
+        "/sets/con",
+        "/sets/con.txt",
+        "/transitions/NUL.json",
+        "/cast/aux.json",
+    ],
 )
 def test_regression_windows_device_names_in_paths_are_refused(path: str) -> None:
     with pytest.raises(StorageError) as caught:
