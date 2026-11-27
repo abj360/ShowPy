@@ -7,6 +7,7 @@ Contains:
     gc(): removes unreachable records and blobs and stale temp files, or reports them in a dry run
 """
 
+import os
 import stat
 from datetime import datetime
 from pathlib import Path
@@ -42,13 +43,28 @@ def _has_moved(show: ShowScan) -> bool:
     return lstat_info(show.show_id, following) is not None
 
 
+def _is_listed_file(info: os.stat_result, listed: os.stat_result) -> bool:
+    """Tells whether an lstat result is the file listed, by its inode where it has one.
+
+    Python documents st_ino as unique only when non-zero; where a file system reports 0, the
+    device, size and modification time must all match instead.
+    """
+    if info.st_ino == 0 or listed.st_ino == 0:
+        return (info.st_dev, info.st_size, info.st_mtime_ns) == (
+            listed.st_dev,
+            listed.st_size,
+            listed.st_mtime_ns,
+        )
+    return (info.st_dev, info.st_ino) == (listed.st_dev, listed.st_ino)
+
+
 def _is_unchanged(path: Path, leftover: Leftover, cutoff: datetime) -> bool:
     """Tells whether `path` is still the regular file listed, and still older than the cut-off."""
     info = lstat_info("", path)
     return (
         info is not None
         and stat.S_ISREG(info.st_mode)
-        and (info.st_dev, info.st_ino) == (leftover.info.st_dev, leftover.info.st_ino)
+        and _is_listed_file(info, leftover.info)
         and info.st_mtime < cutoff.timestamp()
     )
 

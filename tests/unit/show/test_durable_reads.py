@@ -7,6 +7,8 @@ Contains:
     test_same_file_under_two_names_has_the_same_bytes: answers from the inode, reading nothing
     test_same_bytes_compares_every_piece: tells equal from unequal files of one size, the
         difference in the last piece
+    test_regression_same_bytes_never_trusts_an_inode_of_zero: compares the bytes of two files
+        whose file system reports inode 0 for both
     test_same_bytes_refuses_what_is_not_a_regular_file: answers False for a missing file, a
         folder, a symlink and files of different sizes
     test_same_bytes_refuses_a_file_swapped_after_its_lookup: answers False for a link, a FIFO or
@@ -21,6 +23,7 @@ import pytest
 
 from e8s.show import durable_reads
 from e8s.show.durable_reads import has_same_bytes
+from tests.fixtures.fsck_repos import with_zero_inode
 
 PIECE = 4
 
@@ -48,6 +51,25 @@ def test_same_bytes_compares_every_piece(tmp_path: Path, monkeypatch: pytest.Mon
     other.write_bytes(base[:-1] + b"X")
     assert has_same_bytes(first, same) is True
     assert has_same_bytes(first, other) is False
+
+
+def test_regression_same_bytes_never_trusts_an_inode_of_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Python documents st_ino as unique only when non-zero; some file systems report 0."""
+    first, same, other = tmp_path / "a", tmp_path / "b", tmp_path / "c"
+    first.write_bytes(b"good bytes")
+    same.write_bytes(b"good bytes")
+    other.write_bytes(b"other byte")
+    lookup = durable_reads.lstat_info
+
+    def zero_inode(show_id: str, path: Path) -> os.stat_result | None:
+        info = lookup(show_id, path)
+        return None if info is None else with_zero_inode(info)
+
+    monkeypatch.setattr(durable_reads, "lstat_info", zero_inode)
+    assert has_same_bytes(first, other) is False
+    assert has_same_bytes(first, same) is True
 
 
 def test_same_bytes_refuses_what_is_not_a_regular_file(tmp_path: Path) -> None:

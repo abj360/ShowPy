@@ -194,7 +194,12 @@ def _refused(_path: Path, _reason: str) -> _RefusedError:
 
 
 def _is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
-    return (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
+    """Tells whether two lstat results name one file; an inode of 0 never proves it.
+
+    Python documents st_ino as unique only when non-zero; some Windows file systems and network
+    shares report 0 for every file.
+    """
+    return first.st_ino != 0 and (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
 
 
 def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
@@ -209,9 +214,10 @@ def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
 def has_same_bytes(first: Path, second: Path) -> bool:
     """Tells whether two regular files hold the same bytes, comparing them a piece at a time.
 
-    One file under two names holds the same bytes and is not read; files of different sizes
-    differ. A link, a folder, a missing file or a file swapped for one of those after the lookup
-    never matches. At most COMPARE_PIECE_BYTES of each file are in memory at once.
+    One file under two names, known by a non-zero inode, holds the same bytes and is not read;
+    files of different sizes differ. A link, a folder, a missing file or a file swapped for one
+    of those after the lookup never matches. At most COMPARE_PIECE_BYTES of each file are in
+    memory at once.
 
     Args:
         first: One file.

@@ -18,6 +18,8 @@ Contains:
     test_gc_skips_a_show_whose_head_moved: removes nothing from a show that landed a slot while gc
         ran
     test_gc_keeps_a_file_that_changed_after_the_check: keeps a file a writer touched or replaced
+    test_regression_gc_never_trusts_an_inode_of_zero: tells a replaced or retimed file from the
+        listed one by size and time where the file system reports inode 0
     test_gc_never_follows_a_link: keeps old temp files behind a symlinked tmp folder
     test_gc_refuses_layout_1_and_a_time_without_a_zone: raises VersionError and SchemaError
 """
@@ -33,16 +35,18 @@ import pytest
 
 from e8s.core.errors import ConflictError, SchemaError, VersionError
 from e8s.examples import two_set_show
-from e8s.show import fsck_scan
+from e8s.show import durable_reads, fsck_scan
 from e8s.show import gc as gc_module
 from e8s.show.backend import digest
 from e8s.show.document_repository import DocumentRepository, revision_id
 from e8s.show.file_backend import FileBackend
 from e8s.show.fsck import fsck
+from e8s.show.fsck_findings import Leftover
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder
+from tests.fixtures.fsck_repos import with_zero_inode
 
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 SHOW_ID = "show_1"
@@ -286,6 +290,30 @@ def test_gc_keeps_a_file_that_changed_after_the_check(
     report = gc(tmp_path, at=AT, confirm=True)
     assert _relative(tmp_path, stray) not in report.removed
     assert len(report.removed) == len(garbage) - 1
+
+
+@pytest.mark.parametrize(
+    "change", [_replace, lambda path: _age(path, OLD + DAY)], ids=["replaced", "retimed"]
+)
+def test_regression_gc_never_trusts_an_inode_of_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: Callable[[Path], object]
+) -> None:
+    """Where the file system reports inode 0, size and time tell a replaced file apart."""
+    stray = tmp_path / "stray"
+    stray.write_bytes(b"{}")
+    _age(stray, OLD)
+    listed = Leftover(stray, with_zero_inode(os.lstat(stray)))
+    lookup = durable_reads.lstat_info
+
+    def zero_inode(show_id: str, path: Path) -> os.stat_result | None:
+        info = lookup(show_id, path)
+        return None if info is None else with_zero_inode(info)
+
+    monkeypatch.setattr(gc_module, "lstat_info", zero_inode)
+    cutoff = AT - DAY
+    assert gc_module._is_unchanged(stray, listed, cutoff) is True
+    change(stray)
+    assert gc_module._is_unchanged(stray, listed, cutoff) is False
 
 
 @SKIP_LINKS

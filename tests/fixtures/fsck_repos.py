@@ -18,6 +18,7 @@ Contains:
     relative(): names a path relative to the root, as findings do
     age_by(): sets a file's times to a moment before AT
     snapshot(): maps every path under a root to its bytes and modification time
+    with_zero_inode(): returns an lstat result whose inode is 0
 """
 
 import os
@@ -94,3 +95,11 @@ def snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
         )
         for path in sorted(root.rglob("*"))
     }
+
+
+def with_zero_inode(info: os.stat_result) -> os.stat_result:
+    """Returns an lstat result with st_ino 0, as some Windows and network file systems report."""
+    fields = list(info)
+    fields[1] = 0
+    times = ("st_atime", "st_mtime", "st_ctime", "st_atime_ns", "st_mtime_ns", "st_ctime_ns")
+    return os.stat_result(fields, {name: getattr(info, name) for name in times})
