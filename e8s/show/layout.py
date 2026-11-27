@@ -10,6 +10,7 @@ Contains:
     TEMP_DIR: names the folder under a layout-2 root that holds every writer's temp files
     read_layout(): reports the layout version of a repository root
     read_layout_file(): reads and checks the layout file itself, refusing a missing one
+    holds_layout_1(): tells whether a root holds layout-1 show folders and no layout file
 """
 
 import os
@@ -198,3 +199,34 @@ def _stored_layout(root: Path) -> int:
     except NotADirectoryError as error:
         raise _corrupt(root, "the root is not a folder") from error
     return _declared_layout(root, path)
+
+
+def holds_layout_1(root: Path) -> bool:
+    """Tells whether a root holds layout-1 show folders and no layout file.
+
+    Unlike read_layout(), anything else a root holds, such as an asset store's folders before
+    the first show, is no error here.
+
+    Args:
+        root: Folder that may hold a repository.
+
+    Returns:
+        is_layout_1: True for a root that release v0.4.0 or earlier wrote.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     holds_layout_1(Path(folder))
+    False
+    """
+    try:
+        if os.path.lexists(root / LAYOUT_FILE):
+            return False
+        with os.scandir(root) as entries:
+            return any(
+                entry.name not in HOUSEKEEPING_NAMES and _is_legacy_show_dir(entry)
+                for entry in entries
+            )
+    except FileNotFoundError:
+        return False
+    except OSError as error:
+        raise _io_error(root, error) from error
