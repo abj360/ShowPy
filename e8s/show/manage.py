@@ -92,32 +92,45 @@ def _carried(show: Show, previous: Set | None, entity: SpotId) -> Placement:
     return source.replace(form=None, order=None, pinned=pinned)
 
 
-def _pins_a_vanished_pair(record: Pin, vanished: set[TransitionId]) -> bool:
+def _pins_a_pair_in(record: Pin, pairs: set[TransitionId]) -> bool:
     if record.target != "transition":
         return False
     try:
-        return parse_tid(record.id) in vanished
+        return parse_tid(record.id) in pairs
     except SchemaError:
         return False
 
 
 def _sync_transitions(show: Show, before: set[TransitionId]) -> Show:
+    """Keeps the transitions between consecutive sets and drops pins on pairs the edit changed.
+
+    A pin on a pair the edit separates goes with its transition. A pin on a pair the edit makes
+    consecutive was stale, so it pinned nothing; it is dropped too, never left to pin a pair the
+    designer did not pin.
+    """
     pairs = set(show.transition_ids())
     counts = {s.id: s.counts for s in show.sets}
     kept = tuple(
         spec.replace(counts=counts[spec.id[1]]) for spec in show.transitions if spec.id in pairs
     )
-    vanished = before - pairs
-    pins = tuple(p for p in show.pins if not _pins_a_vanished_pair(p, vanished))
+    changed = before ^ pairs
+    pins = tuple(p for p in show.pins if not _pins_a_pair_in(p, changed))
     return show.replace(transitions=kept, pins=pins)
+
+
+def _without_joined_pins(show: Show, joined: set[TransitionId]) -> Show:
+    """Returns `show` without the stale pins on pairs an edit joins, which pin nothing."""
+    pins = tuple(p for p in show.pins if not _pins_a_pair_in(p, joined))
+    return show if pins == show.pins else show.replace(pins=pins)
 
 
 def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: object) -> Show:
     """Replaces a show's sets, keeping transitions in step and refusing pinned or locked edits.
 
     Transitions between sets that are no longer consecutive are dropped, with the pins on pairs
-    this edit separates, and each kept one takes the counts of the set it leads into. A pin that
-    was already stale stays for validate_show to report.
+    this edit separates, and each kept one takes the counts of the set it leads into. A stale
+    pin on a pair this edit makes consecutive is dropped without force, since it pinned nothing;
+    any other pin that was already stale stays for validate_show to report.
 
     Args:
         show: Show to edit.
@@ -135,7 +148,8 @@ def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: obje
     """
     before = set(show.transition_ids())
     edited = _sync_transitions(show.replace(sets=tuple(sets), **update), before)
-    require_unlocked(show, edited, force=force)
+    joined = set(edited.transition_ids()) - before
+    require_unlocked(_without_joined_pins(show, joined), edited, force=force)
     return edited
 
 
