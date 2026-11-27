@@ -33,7 +33,7 @@ from e8s.show.backend import (
 )
 from e8s.show.documents import dump_json
 from e8s.show.durable_io import lstat_mode, mapped_io, read_capped
-from e8s.show.history_models import Revision
+from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.storage import ROOT_REVISION
 
@@ -230,13 +230,15 @@ class _FileBackend:
     def _stored_revision(self, show_id: str, revision_id: str, source: Path) -> Revision:
         """Decodes a stored revision; v0.1 and v0.2 records lose their authorship keys.
 
+        A time stored with no timezone reads as UTC.
+
         The file is never rewritten: its ID still hashes the dropped keys, and stays as stored.
         """
         stored = self._record(show_id, revision_id, source)["revision"]
         if isinstance(stored, dict):
             stored = {k: v for k, v in stored.items() if k not in LEGACY_REVISION_KEYS}
         try:
-            return Revision._validated(stored)
+            return Revision._validated(stored, context={STORED_TIME_KEY: True})
         except SchemaError as error:
             path = self._tree_path(show_id, revision_id, source)
             raise self._corrupt(show_id, path, "stored revision is malformed") from error

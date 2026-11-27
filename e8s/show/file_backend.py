@@ -10,6 +10,7 @@ Contains:
 """
 
 from collections.abc import Mapping
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from e8s.show.backend_checks import (
     ReadBudget,
     Record,
     corrupt,
+    hashed_time,
     parsed_json,
     parsed_manifest,
     parsed_slot,
@@ -341,17 +343,27 @@ class FileBackend:
         ):
             raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
         checked = {key: str(value) for key, value in tree.items()}
-        self._require_scheme_id(show_id, path, seq, revision, checked)
+        hashed_at = hashed_time(revision, stored["revision"])
+        self._require_scheme_id(show_id, path, seq, revision, checked, hashed_at)
         return Record(seq, revision, checked)
 
     def _require_scheme_id(
-        self, show_id: str, path: Path, seq: int, revision: Revision, tree: Mapping[str, str]
+        self,
+        show_id: str,
+        path: Path,
+        seq: int,
+        revision: Revision,
+        tree: Mapping[str, str],
+        hashed_at: datetime,
     ) -> None:
-        """Requires the ID to be recomputable from the record, except before `legacy_before`."""
+        """Requires the ID to be recomputable from the record, except before `legacy_before`.
+
+        `hashed_at` is the revision's time exactly as stored, which its ID hashes.
+        """
         if seq < self._manifests.get(show_id, FIRST_SEQ):
             return
         changes = {changed: tree.get(changed) for changed in revision.changed}
-        if document_repository.revision_id(revision.parent, revision.at, changes) != revision.id:
+        if document_repository.revision_id(revision.parent, hashed_at, changes) != revision.id:
             raise corrupt(show_id, path, "record does not hash to its name")
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
