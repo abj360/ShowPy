@@ -30,6 +30,8 @@ Contains:
         route that no longer fits counts the head rescaled
     test_regression_paths_proposal_conflicts_with_its_own_row_past_the_counts: refuses a proposed
         row that never fit its transition
+    test_regression_preview_without_a_saved_show_does_not_claim_there_are_no_revisions: names the
+        missing show when the head holds only proposals
 """
 
 from collections.abc import Callable, Mapping
@@ -39,17 +41,18 @@ import pytest
 
 from e8s.choreo.path_models import FacingMode, FacingOverride, PathRow, Route, TransitionSpec
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError
+from e8s.core.errors import ConflictError, StorageError
 from e8s.core.ids import RouteId, SetId, SpotId, make_tid
 from e8s.geo.curves import Segment
 from e8s.show.collab_models import ChangeOp, CountsOp, PathsOp
 from e8s.show.manage import add_set, set_counts
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.proposals import accept, is_stale, preview_proposal, propose
 from e8s.show.show_io import load_show, save_show
-from e8s.show.workspace import Workspace
+from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.shows import two_set_show
-from tests.helpers import open_session
+from tests.helpers import SHOW_ID, open_session
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 STEP = timedelta(minutes=1)
@@ -253,3 +256,13 @@ def test_regression_paths_proposal_conflicts_with_its_own_row_past_the_counts() 
         lambda head: head,
     )
     _assert_refused_everywhere(designer, "path_row", "T1")
+
+
+def test_regression_preview_without_a_saved_show_does_not_claim_there_are_no_revisions() -> None:
+    """Names the missing show, not missing revisions, when the head holds only proposals."""
+    ws = open_workspace(InMemoryRepository(), SHOW_ID)
+    propose(ws, [CountsOp(set_id=SetId("2"), counts=SHORTER)], "", "p1", AT)
+    with pytest.raises(StorageError) as info:
+        preview_proposal(ws, "p1")
+    assert "no revisions" not in info.value.message
+    assert "holds no saved show" in info.value.message

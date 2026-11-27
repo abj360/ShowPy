@@ -10,6 +10,7 @@ Contains:
 from datetime import datetime
 
 from e8s.core.errors import StorageError
+from e8s.show.backend import SHORT_ID
 from e8s.show.document_repository import encode_cache_of
 from e8s.show.files import (
     show_changes,
@@ -56,7 +57,7 @@ def load_show_at(ws: Workspace, revision: str) -> Show:
     show = ws.show_at(revision)
     if show is None:
         raise StorageError(
-            f"show {ws.show_id} has no revisions yet",
+            f"show {ws.show_id} holds no saved show at revision {revision[:SHORT_ID] or '(root)'}",
             hint="save a show first with save_show()",
             context={"show": ws.show_id},
         )
