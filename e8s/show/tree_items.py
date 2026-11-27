@@ -54,7 +54,7 @@ from e8s.show.item_entries import (
 from e8s.show.migrate import SHOW_DOC
 from e8s.show.tree_parts import TreeParts
 
-SET_FOLDER_INDEX = 2
+_SET_FOLDER_INDEX = 2
 
 
 def changed_set_keys(parts: TreeParts, paths: Collection[str]) -> list[str]:
@@ -65,7 +65,7 @@ def changed_set_keys(parts: TreeParts, paths: Collection[str]) -> list[str]:
     >>> changed_set_keys(TreeParts(encode_show(two_set_show())), ["/sets/2/drill.json"])
     ['2']
     """
-    folders = {p.split("/")[SET_FOLDER_INDEX] for p in paths if is_set_document(p)}
+    folders = {p.split("/")[_SET_FOLDER_INDEX] for p in paths if is_set_document(p)}
     return [key for key in parts.set_keys() if key in folders]
 
 
