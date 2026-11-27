@@ -39,7 +39,8 @@ one item, with SchemaError.
 Stated limit: facing overrides carry no ID, so all of them are one item, and edits to two
 different overrides conflict. Finer keys need an override ID, which is a format change.
 
-The item table, its roles and the way paths name sets and transitions live in `item_table`.
+The item table, its roles and the way paths name sets and transitions live in `item_table`; how
+one object splits into items lives in `item_entries`.
 
 Contains:
     items(): splits a show into its items, in key order
@@ -49,52 +50,45 @@ Contains:
 import operator
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol
 
 from e8s.cast.models import Group, Spot
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import FacingOverride, TransitionSpec
 from e8s.core.errors import SchemaError
-from e8s.core.json_types import FrozenJsonValue, JsonValue
-from e8s.core.readonly import ReadOnlyMap, thaw_json
+from e8s.core.json_types import JsonValue
+from e8s.core.readonly import ReadOnlyMap
 from e8s.sheet.models import Sheet
 from e8s.show.change_models import ChangeSet, ItemChange, ItemKey, ItemKind
-from e8s.show.item_table import (
-    ENTITY_FIELD,
-    ID_FIELD,
-    KEY_FIELD,
-    LABEL_SCHEME_FIELD,
-    PLACEMENT_ROLES,
-    PLACEMENTS,
-    SET_FIELD,
-    SET_IDENTITY_FIELDS,
-    SET_ROLES,
-    SHOW_FIELDS,
-    TARGET_FIELD,
-    TRANSITION_FIELDS,
-    ItemPath,
-    pin_path,
-    set_keys_by_id,
-    transition_key,
+from e8s.show.item_entries import (
+    Difference,
+    Entry,
+    RawKey,
+    form_entries,
+    group_entries,
+    is_same_form,
+    order_entries,
+    override_entries,
+    pin_entries,
+    pin_order_entries,
+    selection_entries,
+    set_entries,
+    sheet_entries,
+    show_entries,
+    source_differences,
+    spot_entries,
+    spot_order_entries,
+    timeline_entries,
+    transition_entries,
 )
+from e8s.show.item_table import ItemPath, pin_path, set_keys_by_id, transition_key
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import set_key
 from e8s.show.storable import require_storable
 from e8s.time.models import Timeline
 
 type _Path = ItemPath
-type _RawKey = tuple[ItemKind, _Path, str | None]
-type _Entry = tuple[_RawKey, JsonValue]
-type _Diff = tuple[_RawKey, JsonValue, JsonValue]
-
-
-def _without(dumped: dict[str, JsonValue], *names: str) -> dict[str, JsonValue]:
-    return {name: value for name, value in dumped.items() if name not in names}
-
-
-def _picked(dumped: Mapping[str, JsonValue], names: Iterable[str]) -> dict[str, JsonValue]:
-    return {name: dumped[name] for name in names}
 
 
 DUPLICATE_HINTS: Mapping[ItemKind, str] = ReadOnlyMap(
@@ -122,115 +116,9 @@ def _unique[T](kind: ItemKind, pairs: Iterable[tuple[_Path, T]]) -> dict[_Path, 
     return found
 
 
-def _set_values(current: Set) -> dict[str, JsonValue]:
-    """Reads a set's own stored fields as their JSON values, leaving its placements unread."""
-    return {
-        ID_FIELD: current.id,
-        "counts": current.counts,
-        "label": current.label,
-        "cue": current.cue,
-        "source_hash": current.source_hash,
-        "state": current.state.value,
-        "forms": list(current.forms),
-    }
-
-
-def _transition_values(spec: TransitionSpec) -> dict[str, JsonValue]:
-    """Reads a path spec's own stored fields as their JSON values, leaving its rows unread."""
-    return {"counts": spec.counts, "notes": spec.notes, "source_hash": spec.source_hash}
-
-
-def _set_entries(path: _Path, current: Set) -> Iterator[_Entry]:
-    (key,) = path
-    for placement in current.placements:
-        dumped = placement.to_json()
-        for role, fields in PLACEMENT_ROLES:
-            yield ("placement", (key, placement.entity), role), _picked(dumped, fields)
-    values = _set_values(current)
-    yield ("set", path, None), _picked(values, SET_IDENTITY_FIELDS)
-    yield ("set", path, PLACEMENTS), [placement.entity for placement in current.placements]
-    for role, fields in SET_ROLES:
-        yield ("set", path, role), _picked(values, fields)
-
-
-def _transition_entries(path: _Path, spec: TransitionSpec) -> Iterator[_Entry]:
-    (key,) = path
-    yield ("transition", path, None), _picked(_transition_values(spec), TRANSITION_FIELDS)
-    for entity, row in spec.rows.items():
-        yield ("path_row", (key, entity), None), _without(row.to_json(), ENTITY_FIELD)
-    for route_id, route in spec.routes.items():
-        yield ("route", (key, route_id), None), _without(route.to_json(), ID_FIELD)
-
-
-def _form_entries(path: _Path, source: tuple[Form, str]) -> Iterator[_Entry]:
-    form, key = source
-    yield ("form", path, None), {**_without(form.to_json(), ID_FIELD), SET_FIELD: key}
-
-
 def _forms(show: Show) -> dict[_Path, tuple[Form, str]]:
     keys = set_keys_by_id(show)
     return {(i,): (form, keys.get(form.set, form.set)) for i, form in show.forms.items()}
-
-
-def _same_form(was: tuple[Form, str], now: tuple[Form, str]) -> bool:
-    return was[0] is now[0] and was[1] == now[1]
-
-
-def _spot_entries(path: _Path, spot: Spot) -> Iterator[_Entry]:
-    yield ("spot", path, None), _without(spot.to_json(), ID_FIELD)
-
-
-def _group_entries(path: _Path, group: Group) -> Iterator[_Entry]:
-    yield ("group", path, None), _without(group.to_json(), KEY_FIELD)
-
-
-def _selection_entries(path: _Path, spot_ids: tuple[str, ...]) -> Iterator[_Entry]:
-    yield ("selection", path, None), list(spot_ids)
-
-
-def _pin_entries(path: _Path, record: Pin) -> Iterator[_Entry]:
-    yield ("pin", path, None), _without(record.to_json(), TARGET_FIELD, ID_FIELD)
-
-
-def _pin_order_entries(path: _Path, pin_paths: tuple[_Path, ...]) -> Iterator[_Entry]:
-    yield ("pin_order", path, None), [list(pin_path) for pin_path in pin_paths]
-
-
-def _spot_order_entries(path: _Path, spots: tuple[Spot, ...]) -> Iterator[_Entry]:
-    yield ("spot_order", path, None), [spot.id for spot in spots]
-
-
-def _override_entries(path: _Path, overrides: tuple[FacingOverride, ...]) -> Iterator[_Entry]:
-    yield ("facing_override", path, None), [override.to_json() for override in overrides]
-
-
-def _sheet_entries(path: _Path, sheet: Sheet) -> Iterator[_Entry]:
-    yield ("sheet", path, None), sheet.to_json()
-
-
-def _timeline_entries(path: _Path, timeline: Timeline) -> Iterator[_Entry]:
-    yield ("timeline", path, None), timeline.to_json()
-
-
-def _order_entries(path: _Path, sets: tuple[Set, ...]) -> Iterator[_Entry]:
-    yield ("set_order", path, None), [set_key(current) for current in sets]
-
-
-def _show_values(show: Show) -> dict[str, JsonValue]:
-    """Reads the show's metadata fields and the cast's label scheme as their JSON values."""
-    return {
-        ID_FIELD: show.id,
-        "title": show.title,
-        "pack": show.pack,
-        "dependencies": dict(show.dependencies),
-        # Show validation freezes every extension value.
-        "extensions": thaw_json(cast("FrozenJsonValue", show.extensions)),
-        LABEL_SCHEME_FIELD: show.cast.label_scheme.to_json(),
-    }
-
-
-def _show_entries(path: _Path, show: Show) -> Iterator[_Entry]:
-    yield ("show", path, None), _picked(_show_values(show), SHOW_FIELDS)
 
 
 def _transitions(show: Show) -> dict[_Path, TransitionSpec]:
@@ -250,9 +138,9 @@ def _pin_paths(show: Show) -> dict[_Path, tuple[_Path, ...]]:
 
 
 class _Area(Protocol):
-    def entries(self, show: Show) -> Iterator[_Entry]: ...
+    def entries(self, show: Show) -> Iterator[Entry]: ...
 
-    def differences(self, before: Show, after: Show) -> Iterator[_Diff]: ...
+    def differences(self, before: Show, after: Show) -> Iterator[Difference]: ...
 
 
 @dataclass(frozen=True)
@@ -266,58 +154,50 @@ class _Sourced[T]:
     """
 
     sources: Callable[[Show], Mapping[_Path, T]]
-    expand: Callable[[_Path, T], Iterator[_Entry]]
+    expand: Callable[[_Path, T], Iterator[Entry]]
     is_same: Callable[[T, T], bool] = operator.is_
 
-    def entries(self, show: Show) -> Iterator[_Entry]:
+    def entries(self, show: Show) -> Iterator[Entry]:
         """Lists the items of this part of a show."""
         for path, source in self.sources(show).items():
             yield from self.expand(path, source)
 
-    def differences(self, before: Show, after: Show) -> Iterator[_Diff]:
+    def differences(self, before: Show, after: Show) -> Iterator[Difference]:
         """Lists the items of this part that differ, skipping source objects both shows share."""
-        old, new = self.sources(before), self.sources(after)
-        for path in old.keys() | new.keys():
-            was, now = old.get(path), new.get(path)
-            if was is not None and now is not None and self.is_same(was, now):
-                continue
-            was_items = {} if was is None else dict(self.expand(path, was))
-            now_items = {} if now is None else dict(self.expand(path, now))
-            for key in was_items.keys() | now_items.keys():
-                value_was, value_now = was_items.get(key), now_items.get(key)
-                if value_was != value_now:
-                    yield key, value_was, value_now
+        yield from source_differences(
+            self.sources(before), self.sources(after), self.expand, self.is_same
+        )
 
 
 AREAS: tuple[_Area, ...] = (
-    _Sourced[Show](lambda show: {(): show}, _show_entries),
-    _Sourced[tuple[Set, ...]](lambda show: {(): show.sets}, _order_entries),
+    _Sourced[Show](lambda show: {(): show}, show_entries),
+    _Sourced[tuple[Set, ...]](lambda show: {(): show.sets}, order_entries),
     _Sourced[Set](
-        lambda show: _unique("set", (((set_key(s),), s) for s in show.sets)), _set_entries
+        lambda show: _unique("set", (((set_key(s),), s) for s in show.sets)), set_entries
     ),
-    _Sourced[tuple[Form, str]](_forms, _form_entries, _same_form),
-    _Sourced[TransitionSpec](_transitions, _transition_entries),
+    _Sourced[tuple[Form, str]](_forms, form_entries, is_same_form),
+    _Sourced[TransitionSpec](_transitions, transition_entries),
     _Sourced[Spot](
-        lambda show: _unique("spot", (((s.id,), s) for s in show.cast.spots)), _spot_entries
+        lambda show: _unique("spot", (((s.id,), s) for s in show.cast.spots)), spot_entries
     ),
-    _Sourced[tuple[Spot, ...]](lambda show: {(): show.cast.spots}, _spot_order_entries),
+    _Sourced[tuple[Spot, ...]](lambda show: {(): show.cast.spots}, spot_order_entries),
     _Sourced[Group](
-        lambda show: {(k,): group for k, group in show.cast.groups.items()}, _group_entries
+        lambda show: {(k,): group for k, group in show.cast.groups.items()}, group_entries
     ),
     _Sourced[tuple[str, ...]](
-        lambda show: {(k,): ids for k, ids in show.cast.selections.items()}, _selection_entries
+        lambda show: {(k,): ids for k, ids in show.cast.selections.items()}, selection_entries
     ),
-    _Sourced[Pin](_pins, _pin_entries),
-    _Sourced[tuple[_Path, ...]](_pin_paths, _pin_order_entries),
+    _Sourced[Pin](_pins, pin_entries),
+    _Sourced[tuple[_Path, ...]](_pin_paths, pin_order_entries),
     _Sourced[tuple[FacingOverride, ...]](
-        lambda show: {(): show.facing_overrides}, _override_entries
+        lambda show: {(): show.facing_overrides}, override_entries
     ),
-    _Sourced[Sheet](lambda show: {(): show.sheet}, _sheet_entries),
-    _Sourced[Timeline](lambda show: {(): show.timeline}, _timeline_entries),
+    _Sourced[Sheet](lambda show: {(): show.sheet}, sheet_entries),
+    _Sourced[Timeline](lambda show: {(): show.timeline}, timeline_entries),
 )
 
 
-def _item_key(raw: _RawKey) -> ItemKey:
+def _item_key(raw: RawKey) -> ItemKey:
     kind, path, role = raw
     return ItemKey(kind=kind, path=path, role=role)
 
