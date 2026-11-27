@@ -142,17 +142,6 @@ class Layout1Reader:
             raise self._corrupt(show_id, source, f"{value!r} is not a 64-digit hex id")
         return value
 
-    def _caller_id(self, show_id: str, value: str, role: str) -> str:
-        if not REVISION_ID_PATTERN.fullmatch(value):
-            raise StorageError(
-                f"{role} {value!r} is not a 64-digit hex id",
-                hint="revision IDs and blob digests are 64 lowercase hex digits made by "
-                "DocumentRepository.transaction",
-                context={"show": show_id, role: value},
-                code=ErrorCode.BAD_ID,
-            )
-        return value
-
     def _guard_dirs(self, show_id: str) -> None:
         """Refuses symlinked store directories and reports a file standing in for one as ENOTDIR.
 
