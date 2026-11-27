@@ -36,8 +36,8 @@ Contains:
         CanvasEvent
     test_stored_record_with_an_unknown_key_is_refused: drops only the legacy keys from a stored
         record, so any other extra key still fails
-    test_regression_v020_revision_with_a_naive_time_is_corrupt: reports a stored revision whose
-        time has no timezone as a corrupt tree file, with the SchemaError as its cause
+    test_regression_v020_revision_with_a_naive_time_reads_as_utc: reads a stored revision whose
+        time has no timezone as UTC, leaving its tree file as stored
 """
 
 import hashlib
@@ -416,19 +416,17 @@ def test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revis
     assert set(head.changed) == _normalized_paths(ws.tree_at(expected["head"]))
 
 
-def test_regression_v020_revision_with_a_naive_time_is_corrupt(tmp_path: Path) -> None:
-    """Reports a stored revision with no timezone as a corrupt tree file, never a bare error."""
+def test_regression_v020_revision_with_a_naive_time_reads_as_utc(tmp_path: Path) -> None:
+    """Reads a stored v0.2.0 revision with no timezone as UTC, keeping its stored record."""
     repo, _, expected = v020_workspace(tmp_path)
     first = expected["revisions"][0]
     record_path = tmp_path / "repo" / expected["show_id"] / "trees" / f"{first}.json"
     record = json.loads(record_path.read_text())
-    record["revision"]["at"] = (
-        datetime.fromisoformat(record["revision"]["at"]).replace(tzinfo=None).isoformat()
-    )
+    aware = datetime.fromisoformat(record["revision"]["at"])
+    record["revision"]["at"] = aware.replace(tzinfo=None).isoformat()
     record_path.write_text(json.dumps(record))
-    with pytest.raises(StorageError) as caught:
-        repo.revisions(expected["show_id"])
-    assert caught.value.code == ErrorCode.CORRUPT
-    assert caught.value.context["file"] == record_path.name
-    assert isinstance(caught.value.__cause__, SchemaError)
-    assert "timezone" in caught.value.__cause__.message
+    stored = record_path.read_bytes()
+    revision = repo.revisions(expected["show_id"])[0]
+    assert revision.id == first
+    assert revision.at == aware.replace(tzinfo=UTC)
+    assert record_path.read_bytes() == stored

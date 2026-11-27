@@ -44,7 +44,7 @@ SHOW_ID = "torn"
 RENDER = "/renders/a.txt"
 REREADS = 3
 PAUSES_S = [0.001, 0.01, 0.1]
-REPAIR_CALL = "fsck(root, repair=True, confirm=True)"
+REPAIR_CALL = "fsck(root, repair=True, confirm=True, at=datetime.now(UTC))"
 # A capped read checks the descriptor's type with one fstat, then takes its size with the next.
 SIZE_FSTAT = 2
 

@@ -8,18 +8,22 @@ Contains:
         that starts on the last count, so covers no show time
     test_regression_facing_override_with_a_negative_start_is_reported: reports an override that
         starts before count 0
+    test_regression_facing_override_toward_an_unknown_spot_is_reported: reports an override that
+        faces toward a spot outside the cast, keyed by the overrides item
 """
 
-from e8s.choreo.path_models import FacingMode, FacingOverride, FixedFacing
+from e8s.choreo.path_models import EntityFacing, FacingMode, FacingOverride, FixedFacing
 from e8s.core.ids import SpotId
 from e8s.examples import two_set_show
 from e8s.show.change_models import ItemKey
 from e8s.show.models import Show
 from e8s.show.set_queries import index
+from e8s.show.validate import validate_show
 from e8s.show.validate_refs import reference_issues
 
 OVERRIDES_ITEM = ItemKey(kind="facing_override", path=())
 NEGATIVE_START = -2.0
+UNKNOWN_TARGET = "ZZ9"
 
 
 def _with_override(start: float, end: float) -> Show:
@@ -49,3 +53,23 @@ def test_regression_facing_override_with_a_negative_start_is_reported() -> None:
     assert "-2" in issue.message
     assert ItemKey.model_validate(issue.context["item"]) == OVERRIDES_ITEM
     assert issue.context["start"] == NEGATIVE_START
+
+
+def test_regression_facing_override_toward_an_unknown_spot_is_reported() -> None:
+    """Reports an override facing toward a spot outside the cast, naming it, as UNKNOWN_SPOT."""
+    override = FacingOverride(
+        entities=(SpotId("T1"),),
+        mode=FacingMode.TOWARD_ENTITY,
+        value=EntityFacing(entity=SpotId(UNKNOWN_TARGET)),
+        start=0.0,
+        end=1.0,
+    )
+    show = two_set_show().replace(facing_overrides=(override,))
+    (issue,) = [i for i in validate_show(show).issues if i.code == "UNKNOWN_SPOT"]
+    assert issue.level == "error"
+    assert UNKNOWN_TARGET in issue.message
+    assert ItemKey.model_validate(issue.context["item"]) == OVERRIDES_ITEM
+    assert issue.context["target"] == UNKNOWN_TARGET
+    toward_cast = override.replace(value=EntityFacing(entity=SpotId("T2")))
+    known = two_set_show().replace(facing_overrides=(toward_cast,))
+    assert [i for i in validate_show(known).issues if i.code == "UNKNOWN_SPOT"] == []

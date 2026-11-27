@@ -120,7 +120,8 @@ from e8s.show.change_models import ItemKey
 from e8s.show.collab_models import Comment
 from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
-from e8s.show.pinning import covers_placement, pin
+from e8s.show.pin_flags import covers_placement
+from e8s.show.pinning import pin
 from e8s.show.validate import (
     validate_dependencies,
     validate_paths,

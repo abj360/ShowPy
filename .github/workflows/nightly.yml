@@ -13,7 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every check runs even after an earlier one fails, so one failing check never hides another.
+  # The job still fails when any step fails. Without a synced environment no check runs.
   nightly:
+    name: tests, slow, fuzz and large benchmarks
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -25,15 +28,35 @@ jobs:
         with:
           version: "0.13.8"
           enable-cache: true
-      - run: uv sync --locked
+      - id: sync
+        run: uv sync --locked
       - name: tests
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s tests
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: slow
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s slow
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: fuzz
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s fuzz
-      - run: uv run nox -s bench -- --tier L
+      - name: bench
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run nox -s bench -- --tier L
+
+  # Reports the check job's result on main only. A fork's pull_request run cannot reach this
+  # job: its github.ref is never refs/heads/main, and its token is read-only.
+  report:
+    name: report the nightly result
+    needs: [nightly]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    permissions:
+      actions: read # lets the report list the jobs of this run
+      issues: write # lets the report open, comment on and close the nightly failure issue
+    uses: $/.github/workflows/report-nightly.yml
+    with:
+      workflow: ${{ github.workflow }}
+      result: ${{ needs.nightly.result }}

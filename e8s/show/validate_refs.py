@@ -15,6 +15,7 @@ Contains:
 import math
 from collections.abc import Iterator
 
+from e8s.cast.rewrite import faces_entity
 from e8s.cast.select import select
 from e8s.choreo.engine import ALL
 from e8s.choreo.form_models import Form
@@ -155,6 +156,20 @@ def _override_spot(spot: str, number: int) -> ValidationIssue:
     )
 
 
+def _override_target(show: Show, override: FacingOverride, number: int) -> ValidationIssue | None:
+    target = faces_entity(override.mode, override.value)
+    if target is None or target in show.cast.ids():
+        return None
+    return make_issue(
+        ERROR,
+        ErrorCode.UNKNOWN_SPOT,
+        f"facing override {number}",
+        f"facing override {number} faces toward {target}, which is not in the cast",
+        "face another spot, or change the override's facing mode",
+        item_context(OVERRIDES_ITEM, override=number, target=target),
+    )
+
+
 def _override_selector(number: int, error: E8sError) -> ValidationIssue:
     return make_issue(
         ERROR,
@@ -228,6 +243,9 @@ def _override_issues(show: Show) -> Iterator[ValidationIssue]:
     total = _show_total(show)
     for number, override in enumerate(show.facing_overrides):
         yield from _override_spots(show, override, number)
+        target = _override_target(show, override, number)
+        if target is not None:
+            yield target
         if override.start < 0:
             yield _before_the_show(override, number)
         elif total is not None and override.start >= total:
@@ -239,8 +257,8 @@ def reference_issues(show: Show) -> list[ValidationIssue]:
 
     Covers form members outside the cast, forms of missing sets, sets listing missing forms,
     members whose placements do not point back to their form, pins that name missing items or
-    leave their flags unset, and facing overrides naming unknown spots or starting before count
-    0 or on or after the show's last count.
+    leave their flags unset, and facing overrides naming or facing toward unknown spots or
+    starting before count 0 or on or after the show's last count.
 
     >>> from e8s.examples import two_set_show
     >>> reference_issues(two_set_show())

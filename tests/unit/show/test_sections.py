@@ -19,6 +19,8 @@ Contains:
         restores the show
     test_regression_join_keeps_one_pin_per_target: keeps the first half's pin when both halves pin
         one spot or the shared set, so the joined show can be stored
+    test_regression_join_never_brings_a_stale_transition_to_life: drops a stale spec with locked
+        rows and its pin on the pair a join makes adjacent
 """
 
 from datetime import UTC, datetime
@@ -33,7 +35,7 @@ from e8s.core.errors import SchemaError, TimelineError
 from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.core.util import approx_equal
 from e8s.show.documents import encode_show
-from e8s.show.manage import add_set
+from e8s.show.manage import add_set, remove_set
 from e8s.show.models import Pin, PinTarget, Show
 from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
@@ -376,3 +378,18 @@ def test_regression_join_after_split_restores_second_half_audio_within_tolerance
     assert restored.section is not None
     assert approx_equal(restored.section[0], track.section[0], abs_tol=TOL)
     assert approx_equal(restored.section[1], track.section[1], abs_tol=TOL)
+
+
+def test_regression_join_never_brings_a_stale_transition_to_life() -> None:
+    """Drops a stale 2→3 spec with locked rows and its pin when the join makes 2 and 3 adjacent."""
+    whole = add_set(two_set_show(), "3", 4.0)
+    first, second = split_section(whole, "3")
+    first = remove_set(first, "3")
+    locked = pin(whole, "transition", "1→2").transition(("1", "2"))
+    stale = first.replace(
+        transitions=(*first.transitions, locked.replace(id=("2", "3"))),
+        pins=(*first.pins, Pin(target="transition", id="2→3")),
+    )
+    joined = join_sections(stale, second)
+    assert joined == join_sections(first, second)
+    assert not any(row.locked for row in joined.transition(("2", "3")).rows.values())

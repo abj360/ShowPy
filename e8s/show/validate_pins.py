@@ -22,7 +22,7 @@ from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey
 from e8s.show.item_table import pin_path, set_keys_by_id
 from e8s.show.models import Pin, Show
-from e8s.show.pinning import covers_form, covers_placement
+from e8s.show.pin_flags import covers_form, covers_placement
 from e8s.show.validate_issue import ERROR, item_context, make_issue
 
 MAX_NAMED_UNFLAGGED = 5

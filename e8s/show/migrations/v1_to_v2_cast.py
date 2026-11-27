@@ -13,13 +13,19 @@ A v2 spot has no `claimable` field: publishing left the library. The step remove
 spot and lists each spot that stored a value other than the v1 default `performer` with
 `report.drop()`, so a host can keep who may claim it.
 
+A v2 show refers only to spots its cast holds. After its repairs the step removes every
+reference to a spot the cast lacks (placements, path rows and facings, route and form members,
+facing overrides and entity pins) and lists each with `report.drop()`; the stray spots module
+holds the rules.
+
 A v2 note time carries a time zone. A stored note time without one is read as UTC and the
 change is recorded with `report.repair()`, one per note; a value that is not a time is left for
 model validation to refuse.
 
 Contains:
     NOTES_DOC: names the stored notes document
-    migrate_cast(): rewrites the cast and the note times from the v1 shape to the v2 shape
+    migrate_cast(): rewrites the cast, the references to its spots and the note times from the
+        v1 shape to the v2 shape
 """
 
 import math
@@ -30,6 +36,7 @@ from typing import TYPE_CHECKING, Final
 from e8s.cast.models import HEX_COLOR_PATTERN, MAX_LABEL_PAD
 from e8s.core.errors import SchemaError
 from e8s.core.json_types import JsonValue
+from e8s.show.migrations.v1_to_v2_stray_spots import drop_stray_spots
 
 if TYPE_CHECKING:
     from e8s.show.migrate import ReportBuilder
@@ -219,15 +226,16 @@ def _migrate_notes(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[
 
 
 def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:
-    """Rewrites the cast and the note times from the v1 shape to the v2 shape.
+    """Rewrites the cast, the references to its spots and the note times from v1 to v2 shape.
 
     Args:
         docs: Stored path to parsed document, without a format header; never mutated.
         report: Collects the repairs the step makes.
 
     Returns:
-        docs: The documents with the repaired cast, without spot claimability, and with aware
-            note times; a value with no safe repair raises SchemaError.
+        docs: The documents with the repaired cast, without spot claimability, without
+            references to spots the cast lacks, and with aware note times; a value with no safe
+            repair raises SchemaError.
     """
     docs = _migrate_notes(docs, report)
     show = _object(docs.get(SHOW_DOC))
@@ -239,4 +247,5 @@ def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[st
     repaired = _drop_dangling_selection_ids(repaired, report)
     repaired = _drop_unknown_prefixes(repaired, report)
     repaired = _drop_claimable(repaired, report)
-    return {**docs, SHOW_DOC: {**show, "cast": repaired}}
+    known = frozenset(str(_object(spot).get("id")) for spot in _list(repaired.get("spots")))
+    return drop_stray_spots({**docs, SHOW_DOC: {**show, "cast": repaired}}, known, report)

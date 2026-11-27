@@ -39,10 +39,10 @@ from e8s.show.history_models import Revision
 from e8s.show.item_table import set_keys_by_id, transition_key
 from e8s.show.items import changes
 from e8s.show.locks import locked_changes, require_unlocked
-from e8s.show.manage import late_routes, late_rows
 from e8s.show.merge import merge
 from e8s.show.merge_refs import dangling_conflicts
 from e8s.show.models import Show
+from e8s.show.retiming import late_routes, late_rows
 from e8s.show.show_io import load_show, load_show_at
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.workspace import Workspace
