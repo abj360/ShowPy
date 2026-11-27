@@ -54,6 +54,7 @@ LINK_ENTRY = "link"
 DIRECTORY_ENTRY = "dir"
 BARRIER_FSYNC = 85
 COMMIT_POINT = "commit point"
+FOLLOWS_LINKS = "follows links"
 FAKE_DIRECTORY_DESCRIPTOR = -99
 
 
@@ -106,7 +107,14 @@ def _record_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
     def recording_flush_directory(
         path: Path, *, is_commit_point: bool = False, follows_links: bool = False
     ) -> None:
-        calls.append((DIRECTORY_ENTRY, path.name, COMMIT_POINT if is_commit_point else ""))
+        calls.append(
+            (
+                DIRECTORY_ENTRY,
+                path.name,
+                COMMIT_POINT if is_commit_point else "",
+                FOLLOWS_LINKS if follows_links else "",
+            )
+        )
         real_flush_directory(path, is_commit_point=is_commit_point, follows_links=follows_links)
 
     monkeypatch.setattr(durable_io, "flush_file", recording_flush_file)
@@ -129,11 +137,11 @@ def test_commit_flushes_each_file_and_directory_before_its_slot(
         (LINK_ENTRY, "objects"),
         (FILE_ENTRY,),
         (LINK_ENTRY, "records"),
-        (DIRECTORY_ENTRY, "objects", ""),
-        (DIRECTORY_ENTRY, "records", ""),
+        (DIRECTORY_ENTRY, "objects", "", ""),
+        (DIRECTORY_ENTRY, "records", "", ""),
         (FILE_ENTRY,),
         (LINK_ENTRY, "log"),
-        (DIRECTORY_ENTRY, "log", COMMIT_POINT),
+        (DIRECTORY_ENTRY, "log", COMMIT_POINT, ""),
     ]
 
 
@@ -148,15 +156,18 @@ def test_first_commit_flushes_every_directory_it_creates_before_the_slot(
         (LINK_ENTRY, tmp_path.name),
         (FILE_ENTRY,),
         (LINK_ENTRY, show_folder(SHOW_ID)),
-        (DIRECTORY_ENTRY, tmp_path.name, ""),
-        (DIRECTORY_ENTRY, "shows", ""),
-        (DIRECTORY_ENTRY, show_folder(SHOW_ID), ""),
+        (DIRECTORY_ENTRY, tmp_path.name, "", FOLLOWS_LINKS),
+        (DIRECTORY_ENTRY, "shows", "", ""),
+        (DIRECTORY_ENTRY, show_folder(SHOW_ID), "", ""),
         (FILE_ENTRY,),
     ]
     assert calls[-3:] == [
         (FILE_ENTRY,),
         (LINK_ENTRY, "log"),
-        (DIRECTORY_ENTRY, "log", COMMIT_POINT),
+        (DIRECTORY_ENTRY, "log", COMMIT_POINT, ""),
+    ]
+    assert [call for call in calls if FOLLOWS_LINKS in call] == [
+        (DIRECTORY_ENTRY, tmp_path.name, "", FOLLOWS_LINKS)
     ]
 
 
@@ -169,13 +180,14 @@ def test_a_second_backend_on_an_existing_root_flushes_the_chain_before_its_commi
     second, second_tree, second_blobs = _change(first.id, 2)
     FileBackend(tmp_path).commit(SHOW_ID, second, second_tree, second_blobs)
     chain = [
-        (DIRECTORY_ENTRY, tmp_path.name, ""),
-        (DIRECTORY_ENTRY, "shows", ""),
-        (DIRECTORY_ENTRY, show_folder(SHOW_ID), ""),
+        (DIRECTORY_ENTRY, tmp_path.name, "", FOLLOWS_LINKS),
+        (DIRECTORY_ENTRY, "shows", "", ""),
+        (DIRECTORY_ENTRY, show_folder(SHOW_ID), "", ""),
     ]
     start = calls.index(chain[0])
     assert calls[start : start + len(chain)] == chain
     assert start < calls.index((LINK_ENTRY, "log"))
+    assert [call for call in calls if FOLLOWS_LINKS in call] == [chain[0]]
 
 
 def test_failed_macos_flush_fails_the_commit_with_io(
@@ -234,7 +246,7 @@ def test_a_failed_chain_flush_is_retried_by_the_next_commit(
     monkeypatch.setattr(durable_io, "flush_directory", real_flush_directory)
     calls = _record_calls(monkeypatch)
     backend.commit(SHOW_ID, revision, tree, blobs)
-    assert (DIRECTORY_ENTRY, show_folder(SHOW_ID), "") in calls
+    assert (DIRECTORY_ENTRY, show_folder(SHOW_ID), "", "") in calls
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs privilege on Windows")
