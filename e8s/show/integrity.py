@@ -44,6 +44,7 @@ from e8s.show.documents import (
     require_storable,
 )
 from e8s.show.files import require_writable
+from e8s.show.font_paths import require_written_fonts
 from e8s.show.migrate import require_current_show_doc
 from e8s.show.models import Show
 from e8s.show.role_documents import CAST_ROOT, require_cast_beside_roles
@@ -404,6 +405,8 @@ def require_valid_digests(
     """Checks every changed path and decodes the show when any show document changed.
 
     Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
+    A written font document must be named by the SHA-256 of its bytes and load as a font;
+    deleting one is allowed.
     When any show document changes, the show.json the commit leaves must be in the current
     format version, else SchemaError code OLD_FORMAT: show.json versions the whole tree.
     Documents whose digest sits in `cache` at the same path are reused, so a commit loads and
@@ -427,8 +430,10 @@ def require_valid_digests(
         require_known_path(path, is_write=path in after)
         if path in after:
             require_writable(path)
-    require_new_set_keys(before, [p for p in changed if p in after])
+    written = [p for p in changed if p in after]
+    require_new_set_keys(before, written)
     require_distinct_folders(before, after)
+    require_written_fonts(written, after, blob, cache)
     require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
@@ -438,7 +443,7 @@ def require_valid_digests(
     require_cast_beside_roles(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
     require_storable(show)
-    _require_no_orphans(show, [p for p in changed if p in after])
+    _require_no_orphans(show, written)
     return show
 
 
