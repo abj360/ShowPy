@@ -5,18 +5,15 @@ Every issue carries the stored item it is about in `context["item"]`, so a consu
 issue to the item without parsing text. Item paths use set keys, as the item table does.
 
 Contains:
-    Level: names the two issue levels
-    ERROR: marks an issue that blocks
-    WARNING: marks an issue that only informs
-    make_issue(): builds a validation issue, with optional context
+    form_issues(): reports one form's unknown members, missing set and unpointed members
+    set_form_issues(): reports sets listing forms the show does not store
+    override_issues(): reports facing overrides naming unknown spots or outside the show
     reference_issues(): reports forms, sets, pins and facing overrides whose references do not
         resolve
 """
 
 import math
-from collections import defaultdict
-from collections.abc import Iterator, Mapping
-from typing import Literal, NamedTuple
+from collections.abc import Iterator
 
 from e8s.cast.select import select
 from e8s.choreo.engine import ALL
@@ -25,68 +22,22 @@ from e8s.choreo.match_ops import forms_of_set
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import FacingOverride
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import E8sError, SchemaError
-from e8s.core.ids import parse_tid
-from e8s.core.json_types import JsonValue
+from e8s.core.errors import E8sError
 from e8s.core.selection import Selection
 from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey
-from e8s.show.item_table import pin_path, set_keys_by_id
-from e8s.show.models import Pin, Show
-from e8s.show.pinning import covers_form, covers_placement
+from e8s.show.models import Show
 from e8s.show.set_keys import set_key
 from e8s.show.set_queries import index
-
-type Level = Literal["error", "warning"]
-ERROR: Level = "error"
-WARNING: Level = "warning"
+from e8s.show.validate_issue import ERROR, item_context, make_issue
+from e8s.show.validate_pins import pin_issues
 
 FORMS_ROLE = "forms"
 DRILL_ROLE = "drill"
-MAX_NAMED_UNFLAGGED = 5
-
-
-def make_issue(
-    level: Level,
-    code: ErrorCode,
-    where: str,
-    message: str,
-    hint: str,
-    context: dict[str, JsonValue] | None = None,
-) -> ValidationIssue:
-    """Builds a validation issue from its parts.
-
-    Args:
-        level: Whether the issue blocks or only informs.
-        code: Stable issue code.
-        where: Location of the problem.
-        message: What is wrong.
-        hint: What would make it valid.
-        context: JSON values that help debug the issue; empty when None.
-
-    Returns:
-        issue: The validation issue.
-    """
-    return ValidationIssue(
-        level=level,
-        code=code,
-        where=where,
-        message=message,
-        hint=hint,
-        context=context or {},
-    )
-
-
-def _item(key: ItemKey, **extra: JsonValue) -> dict[str, JsonValue]:
-    return {"item": key.to_json(), **extra}
 
 
 def _form_item(key: str) -> ItemKey:
     return ItemKey(kind="form", path=(key,))
-
-
-def _pin_item(path: tuple[str, ...]) -> ItemKey:
-    return ItemKey(kind="pin", path=path)
 
 
 def _unknown_set(key: str, form: Form) -> ValidationIssue:
@@ -96,7 +47,7 @@ def _unknown_set(key: str, form: Form) -> ValidationIssue:
         f"form {key}",
         f"form {key} belongs to set {form.set}, which does not exist",
         "move the form to an existing set or remove it",
-        _item(_form_item(key), set=form.set),
+        item_context(_form_item(key), set=form.set),
     )
 
 
@@ -107,7 +58,7 @@ def _unknown_member(key: str, spot: str) -> ValidationIssue:
         f"form {key}",
         f"form {key} lists {spot}, which is not in the cast",
         "remove the member or add the spot to the cast",
-        _item(_form_item(key), spot=spot),
+        item_context(_form_item(key), spot=spot),
     )
 
 
@@ -120,8 +71,31 @@ def _member_mismatch(key: str, owner: Set, spot: str) -> ValidationIssue:
         f"set {owner.id} {spot}",
         f"{spot} is a member of form {key}, but its placement in set {owner.id} {found}",
         "re-place the set's forms, or remove the member",
-        _item(ItemKey(kind="placement", path=(set_key(owner), spot), role=DRILL_ROLE), form=key),
+        item_context(
+            ItemKey(kind="placement", path=(set_key(owner), spot), role=DRILL_ROLE), form=key
+        ),
     )
+
+
+def form_issues(show: Show, key: str, form: Form) -> list[ValidationIssue]:
+    """Reports one stored form's members outside the cast, missing set and unpointed members.
+
+    >>> from e8s.choreo.forms import line_form
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> [str(i.code) for i in form_issues(show, "row", line_form("row", ["Z9"], (0, 1), (2, 1)))]
+    ['UNKNOWN_SPOT', 'UNKNOWN_SET']
+
+    Args:
+        show: The show that stores the form.
+        key: The key the form is stored under.
+        form: The form.
+
+    Returns:
+        issues: Members outside the cast, then a missing set or each member whose placement in
+            the form's set does not name the form.
+    """
+    return list(_form_issues(show, key, form))
 
 
 def _form_issues(show: Show, key: str, form: Form) -> Iterator[ValidationIssue]:
@@ -142,6 +116,16 @@ def _form_issues(show: Show, key: str, form: Form) -> Iterator[ValidationIssue]:
             yield _member_mismatch(key, owner, spot)
 
 
+def set_form_issues(show: Show) -> list[ValidationIssue]:
+    """Reports, set by set, the forms a set lists that the show does not store.
+
+    >>> from e8s.examples import two_set_show
+    >>> set_form_issues(two_set_show())
+    []
+    """
+    return [issue for owner in show.sets for issue in _set_issues(show, owner)]
+
+
 def _set_issues(show: Show, owner: Set) -> Iterator[ValidationIssue]:
     for form_id in owner.forms:
         if form_id not in show.forms:
@@ -151,149 +135,10 @@ def _set_issues(show: Show, owner: Set) -> Iterator[ValidationIssue]:
                 f"set {owner.id}",
                 f"set {owner.id} lists form {form_id}, which does not exist",
                 "remove the form from the set or restore it",
-                _item(ItemKey(kind="set", path=(set_key(owner),), role=FORMS_ROLE), form=form_id),
+                item_context(
+                    ItemKey(kind="set", path=(set_key(owner),), role=FORMS_ROLE), form=form_id
+                ),
             )
-
-
-class _PinScope(NamedTuple):
-    """Indexes what the pin check reads, built once per show so each pin costs only its own items.
-
-    Attributes:
-        keys: Set ID to storage key.
-        cast_ids: Every spot ID in the cast.
-        set_ids: Every set ID in the show.
-        placements: Each unpinned placement as (set ID, spot ID), under its set's ID and under its
-            spot's ID, in show order.
-        forms: Each unlocked form key under its own key and under its set's ID.
-    """
-
-    keys: Mapping[str, str]
-    cast_ids: frozenset[str]
-    set_ids: frozenset[str]
-    placements: Mapping[str, list[tuple[str, str]]]
-    forms: Mapping[str, list[str]]
-
-
-def _pin_scope(show: Show) -> _PinScope:
-    placements: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    for owner in show.sets:
-        for placement in owner.placements:
-            if placement.pinned:
-                continue
-            for name in dict.fromkeys((owner.id, placement.entity)):
-                placements[name].append((owner.id, placement.entity))
-    forms: dict[str, list[str]] = defaultdict(list)
-    for key, form in show.forms.items():
-        if form.locked:
-            continue
-        for name in dict.fromkeys((key, form.set)):
-            forms[name].append(key)
-    return _PinScope(
-        keys=set_keys_by_id(show),
-        cast_ids=frozenset(show.cast.ids()),
-        set_ids=frozenset(show.set_ids()),
-        placements=placements,
-        forms=forms,
-    )
-
-
-def _pin_exists(show: Show, record: Pin, scope: _PinScope) -> bool:
-    if record.target == "entity":
-        return record.id in scope.cast_ids
-    if record.target == "form":
-        return record.id in show.forms
-    if record.target == "set":
-        return record.id in scope.set_ids
-    try:
-        show.transition(parse_tid(record.id))
-    except E8sError:
-        return False
-    return True
-
-
-def _unresolved_pin(record: Pin, item: ItemKey, code: ErrorCode, hint: str) -> ValidationIssue:
-    return make_issue(
-        ERROR,
-        code,
-        f"pin {record.target} {record.id}",
-        f"the {record.target} pin on {record.id} names something the show does not hold",
-        hint,
-        _item(item, target=record.target, id=record.id),
-    )
-
-
-def _bad_transition_pin(record: Pin) -> ValidationIssue:
-    item = _pin_item((record.target, record.id))
-    return make_issue(
-        ERROR,
-        ErrorCode.BAD_TRANSITION,
-        f"pin transition {record.id}",
-        f"the transition pin {record.id!r} does not parse as a transition ID",
-        "write transitions as 12→13 or 12->13, or remove the pin",
-        _item(item, target=record.target, id=record.id),
-    )
-
-
-def _unflagged_placements(record: Pin, scope: _PinScope) -> list[str]:
-    held = (record,)
-    return [
-        f"{set_id} {entity}"
-        for set_id, entity in scope.placements.get(record.id, ())
-        if covers_placement(held, set_id, entity)
-    ]
-
-
-def _unflagged_forms(show: Show, record: Pin, scope: _PinScope) -> list[str]:
-    held = (record,)
-    return [key for key in scope.forms.get(record.id, ()) if covers_form(show, held, key)]
-
-
-def _unflagged_rows(show: Show, record: Pin) -> list[str]:
-    # a spot added after the pin has no row yet, and adding it is a legal edit
-    rows = show.transition(parse_tid(record.id)).rows
-    return [entity for entity, row in rows.items() if not row.locked]
-
-
-def _unflagged(show: Show, record: Pin, scope: _PinScope) -> list[str]:
-    if record.target == "transition":
-        return _unflagged_rows(show, record)
-    found = [] if record.target == "form" else _unflagged_placements(record, scope)
-    if record.target in ("form", "set"):
-        found += _unflagged_forms(show, record, scope)
-    return found
-
-
-def _pin_mismatch(record: Pin, item: ItemKey, unflagged: list[str]) -> ValidationIssue:
-    return make_issue(
-        ERROR,
-        ErrorCode.PIN_MISMATCH,
-        f"pin {record.target} {record.id}",
-        f"the {record.target} pin on {record.id} leaves {len(unflagged)} locked item(s) unflagged:"
-        f" {', '.join(unflagged[:MAX_NAMED_UNFLAGGED])}",
-        "re-pin it with pin(show, target, id), which sets every flag the pin covers",
-        _item(item, target=record.target, id=record.id, unflagged=len(unflagged)),
-    )
-
-
-def _parses(tid: str) -> bool:
-    try:
-        parse_tid(tid)
-    except SchemaError:
-        return False
-    return True
-
-
-def _pin_issues(show: Show, record: Pin, scope: _PinScope) -> Iterator[ValidationIssue]:
-    if record.target == "transition" and not _parses(record.id):
-        yield _bad_transition_pin(record)
-        return
-    item = _pin_item(pin_path(scope.keys, record))
-    if not _pin_exists(show, record, scope):
-        yield _unresolved_pin(record, item, ErrorCode.UNKNOWN_PIN, "unpin it or restore the item")
-        return
-    unflagged = _unflagged(show, record, scope)
-    if unflagged:
-        yield _pin_mismatch(record, item, unflagged)
 
 
 OVERRIDES_ITEM = ItemKey(kind="facing_override", path=())
@@ -306,7 +151,7 @@ def _override_spot(spot: str, number: int) -> ValidationIssue:
         f"facing override {number}",
         f"facing override {number} names {spot}, which is not in the cast",
         "remove the spot from the override or add it to the cast",
-        _item(OVERRIDES_ITEM, spot=spot, override=number),
+        item_context(OVERRIDES_ITEM, spot=spot, override=number),
     )
 
 
@@ -317,7 +162,7 @@ def _override_selector(number: int, error: E8sError) -> ValidationIssue:
         f"facing override {number}",
         f"facing override {number} selects spots that do not resolve: {error.message}",
         error.hint,
-        _item(OVERRIDES_ITEM, override=number),
+        item_context(OVERRIDES_ITEM, override=number),
     )
 
 
@@ -346,7 +191,7 @@ def _past_the_show(override: FacingOverride, number: int, total: float) -> Valid
         f"facing override {number} starts at count {override.start:g}, but the show ends at"
         f" {total:g}, so it covers no show time",
         f"start the override at a count from 0 to before {total:g}, or remove it",
-        _item(OVERRIDES_ITEM, override=number, start=override.start, total=total),
+        item_context(OVERRIDES_ITEM, override=number, start=override.start, total=total),
     )
 
 
@@ -357,7 +202,7 @@ def _before_the_show(override: FacingOverride, number: int) -> ValidationIssue:
         f"facing override {number}",
         f"facing override {number} starts at count {override.start:g}, before the show starts",
         "start the override at count 0 or later",
-        _item(OVERRIDES_ITEM, override=number, start=override.start),
+        item_context(OVERRIDES_ITEM, override=number, start=override.start),
     )
 
 
@@ -367,6 +212,16 @@ def _show_total(show: Show) -> float | None:
     except E8sError:
         return None
     return total if math.isfinite(total) else None
+
+
+def override_issues(show: Show) -> list[ValidationIssue]:
+    """Reports facing overrides naming unknown spots or starting outside the show's counts.
+
+    >>> from e8s.examples import two_set_show
+    >>> override_issues(two_set_show())
+    []
+    """
+    return list(_override_issues(show))
 
 
 def _override_issues(show: Show) -> Iterator[ValidationIssue]:
@@ -392,8 +247,7 @@ def reference_issues(show: Show) -> list[ValidationIssue]:
     []
     """
     issues = [i for key, form in show.forms.items() for i in _form_issues(show, key, form)]
-    issues += [i for owner in show.sets for i in _set_issues(show, owner)]
+    issues += set_form_issues(show)
     if show.pins:
-        scope = _pin_scope(show)
-        issues += [i for record in show.pins for i in _pin_issues(show, record, scope)]
-    return issues + list(_override_issues(show))
+        issues += pin_issues(show, show.pins)
+    return issues + override_issues(show)
