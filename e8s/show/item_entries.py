@@ -8,6 +8,8 @@ are those `items` documents.
 Contains:
     RawKey, Entry, Difference: name an item key, an item with its value and a changed item
     entry_differences(): lists the items two entry lists hold different values for
+    source_differences(): lists the items two maps of source objects differ in, skipping same ones
+    is_same_form(): reports whether two form sources give the same item unread
     placement_entries(): lists the role items of one placement of a set
     set_own_entries(): lists a set's own items, leaving its placements out
     set_entries(): lists every item of a set, its placements included
@@ -21,7 +23,8 @@ Contains:
         items
 """
 
-from collections.abc import Iterable, Iterator, Mapping
+import operator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import cast
 
 from e8s.cast.models import Group, Spot
@@ -69,6 +72,35 @@ def entry_differences(was: Iterable[Entry], now: Iterable[Entry]) -> Iterator[Di
             yield key, value_was, value_now
 
 
+def source_differences[T](
+    old: Mapping[ItemPath, T],
+    new: Mapping[ItemPath, T],
+    expand: Callable[[ItemPath, T], Iterable[Entry]],
+    is_same: Callable[[T, T], bool] = operator.is_,
+) -> Iterator[Difference]:
+    """Lists the items two maps of source objects differ in, expanding only the sources that differ.
+
+    Args:
+        old: The older sources, by item path.
+        new: The newer sources, by item path.
+        expand: Lists the items of one source.
+        is_same: Reports whether two sources give the same items unread; identity by default.
+
+    Returns:
+        differences: Each differing item with its older and newer value, None where absent.
+
+    >>> list(source_differences({("a",): 1}, {("a",): 2}, lambda p, v: [(("sheet", p, None), v)]))
+    [(('sheet', ('a',), None), 1, 2)]
+    """
+    for path in old.keys() | new.keys():
+        was, now = old.get(path), new.get(path)
+        if was is not None and now is not None and is_same(was, now):
+            continue
+        yield from entry_differences(
+            () if was is None else expand(path, was), () if now is None else expand(path, now)
+        )
+
+
 def _without(dumped: dict[str, JsonValue], *names: str) -> dict[str, JsonValue]:
     return {name: value for name, value in dumped.items() if name not in names}
 
@@ -95,11 +127,11 @@ def _transition_values(spec: TransitionSpec) -> dict[str, JsonValue]:
     return {"counts": spec.counts, "notes": spec.notes, "source_hash": spec.source_hash}
 
 
-def placement_entries(key: str, placement: Placement) -> Iterator[Entry]:
-    """Lists the role items of one placement of the set stored under `key`."""
+def placement_entries(key: str, entity: str, placement: Placement) -> Iterator[Entry]:
+    """Lists the role items of the placement the set stored under `key` holds for `entity`."""
     dumped = placement.to_json()
     for role, fields in PLACEMENT_ROLES:
-        yield ("placement", (key, placement.entity), role), _picked(dumped, fields)
+        yield ("placement", (key, entity), role), _picked(dumped, fields)
 
 
 def set_own_entries(path: ItemPath, current: Set) -> Iterator[Entry]:
@@ -115,7 +147,7 @@ def set_entries(path: ItemPath, current: Set) -> Iterator[Entry]:
     """Lists every item of a set, its placements first."""
     (key,) = path
     for placement in current.placements:
-        yield from placement_entries(key, placement)
+        yield from placement_entries(key, placement.entity, placement)
     yield from set_own_entries(path, current)
 
 
@@ -148,6 +180,11 @@ def form_entries(path: ItemPath, source: tuple[Form, str]) -> Iterator[Entry]:
     """Lists a form's item from the form and the key of the set it names."""
     form, key = source
     yield ("form", path, None), {**_without(form.to_json(), ID_FIELD), SET_FIELD: key}
+
+
+def is_same_form(was: tuple[Form, str], now: tuple[Form, str]) -> bool:
+    """Reports whether two form sources are one form object naming one set key."""
+    return was[0] is now[0] and was[1] == now[1]
 
 
 def spot_entries(path: ItemPath, spot: Spot) -> Iterator[Entry]:

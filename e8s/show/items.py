@@ -65,9 +65,9 @@ from e8s.show.item_entries import (
     Difference,
     Entry,
     RawKey,
-    entry_differences,
     form_entries,
     group_entries,
+    is_same_form,
     order_entries,
     override_entries,
     pin_entries,
@@ -76,6 +76,7 @@ from e8s.show.item_entries import (
     set_entries,
     sheet_entries,
     show_entries,
+    source_differences,
     spot_entries,
     spot_order_entries,
     timeline_entries,
@@ -118,10 +119,6 @@ def _unique[T](kind: ItemKind, pairs: Iterable[tuple[_Path, T]]) -> dict[_Path, 
 def _forms(show: Show) -> dict[_Path, tuple[Form, str]]:
     keys = set_keys_by_id(show)
     return {(i,): (form, keys.get(form.set, form.set)) for i, form in show.forms.items()}
-
-
-def _same_form(was: tuple[Form, str], now: tuple[Form, str]) -> bool:
-    return was[0] is now[0] and was[1] == now[1]
 
 
 def _transitions(show: Show) -> dict[_Path, TransitionSpec]:
@@ -167,14 +164,9 @@ class _Sourced[T]:
 
     def differences(self, before: Show, after: Show) -> Iterator[Difference]:
         """Lists the items of this part that differ, skipping source objects both shows share."""
-        old, new = self.sources(before), self.sources(after)
-        for path in old.keys() | new.keys():
-            was, now = old.get(path), new.get(path)
-            if was is not None and now is not None and self.is_same(was, now):
-                continue
-            was_items = () if was is None else self.expand(path, was)
-            now_items = () if now is None else self.expand(path, now)
-            yield from entry_differences(was_items, now_items)
+        yield from source_differences(
+            self.sources(before), self.sources(after), self.expand, self.is_same
+        )
 
 
 AREAS: tuple[_Area, ...] = (
@@ -183,7 +175,7 @@ AREAS: tuple[_Area, ...] = (
     _Sourced[Set](
         lambda show: _unique("set", (((set_key(s),), s) for s in show.sets)), set_entries
     ),
-    _Sourced[tuple[Form, str]](_forms, form_entries, _same_form),
+    _Sourced[tuple[Form, str]](_forms, form_entries, is_same_form),
     _Sourced[TransitionSpec](_transitions, transition_entries),
     _Sourced[Spot](
         lambda show: _unique("spot", (((s.id,), s) for s in show.cast.spots)), spot_entries
