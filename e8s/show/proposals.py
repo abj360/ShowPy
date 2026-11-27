@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Final
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
+from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
 from e8s.core.ids import SetId, TransitionId
 from e8s.core.strict_json import parse_strict_json
 from e8s.core.types import JsonAny
@@ -36,7 +36,7 @@ from e8s.show.locks import locked_changes, require_unlocked
 from e8s.show.manage import late_routes, late_rows
 from e8s.show.merge import merge
 from e8s.show.models import Show
-from e8s.show.show_io import load_show
+from e8s.show.show_io import load_show, load_show_at
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.workspace import Workspace
 
@@ -289,17 +289,6 @@ def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResu
     return MergeResult(conflicts=tuple(conflicts)) if conflicts else result
 
 
-def _show_at_head(ws: Workspace, head_revision: str) -> Show:
-    head = ws.show_at(head_revision)
-    if head is None:
-        raise StorageError(
-            f"show {ws.show_id} has no revisions yet",
-            hint="save a show first with save_show()",
-            context={"show": ws.show_id},
-        )
-    return head
-
-
 def _describe(conflict: MergeConflict) -> str:
     key = conflict.key
     name = " ".join(part for part in (key.kind, "/".join(key.path)) if part)
@@ -367,7 +356,7 @@ def preview_proposal(ws: Workspace, proposal_id: str) -> ProposalPreview:
     """
     head_revision = ws.repo.head(ws.show_id)
     proposal = _proposal_at(ws, proposal_id, head_revision)
-    head = _show_at_head(ws, head_revision)
+    head = load_show_at(ws, head_revision)
     result = _merge_onto_head(ws, proposal, head)
     if result.show is None:
         return ProposalPreview(proposal_id=proposal.id, conflicts=result.conflicts)

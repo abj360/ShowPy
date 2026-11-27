@@ -3,6 +3,7 @@ show_io.py --- reads and writes a whole show through a workspace
 
 Contains:
     load_show(): reads the whole show at the workspace revision
+    load_show_at(): reads the whole show at a given revision without moving the workspace
     save_show(): writes the whole show, refusing when another write landed meanwhile
 """
 
@@ -35,7 +36,24 @@ def load_show(ws: Workspace) -> Show:
     >>> load_show(ws).id
     'show-1'
     """
-    show = ws.show_at(ws.revision)
+    return load_show_at(ws, ws.revision)
+
+
+def load_show_at(ws: Workspace, revision: str) -> Show:
+    """Reads the whole show at a revision; the workspace stays where it is.
+
+    Raises StorageError when that revision holds no show yet.
+
+    >>> from datetime import UTC, datetime
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.memory_backend import InMemoryRepository
+    >>> from e8s.show.workspace import open_workspace
+    >>> ws = open_workspace(InMemoryRepository(), "show_1")
+    >>> saved = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
+    >>> load_show_at(ws, saved.id).revision == saved.id
+    True
+    """
+    show = ws.show_at(revision)
     if show is None:
         raise StorageError(
             f"show {ws.show_id} has no revisions yet",
