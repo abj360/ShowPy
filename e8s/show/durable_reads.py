@@ -227,8 +227,10 @@ def file_identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
 
     A file system may give a freed inode to the next file it creates, so the inode never proves
     alone that a name still holds the file it held. A replacement or a write changes the size or
-    a time, and the change time moves even where a writer sets the modification time back.
-    Windows reports the creation time instead, which a replacement also changes.
+    a time; on POSIX the change time moves even where a writer sets the modification time back.
+    On Windows st_ctime is the creation time, which NTFS may carry over to a file created under
+    a name just freed, so there the size and modification time carry the check, and NTFS does
+    not soon give a freed file ID to another file.
     """
     return (*moved_file_identity(info), info.st_ctime_ns)
 
