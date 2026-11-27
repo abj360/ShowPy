@@ -14,6 +14,10 @@ Contains:
         head-added override after the rescaled set
     test_rescale_merges_beside_a_facing_override_before_the_rescaled_set: keeps an override that
         ends before the rescaled set starts
+    test_regression_is_stale_reads_the_proposal_at_the_head: judges a proposal the workspace's
+        revision predates, as preview and accept do
+    test_regression_is_stale_of_an_accepted_proposal_is_false_from_a_stale_workspace: sees the
+        accepted state stored at the head
 """
 
 from collections.abc import Callable, Mapping
@@ -27,7 +31,7 @@ from e8s.core.errors import ConflictError
 from e8s.core.ids import RouteId, SetId, SpotId, make_tid
 from e8s.geo.curves import Segment
 from e8s.show.collab_models import ChangeOp, CountsOp
-from e8s.show.manage import add_set
+from e8s.show.manage import add_set, set_counts
 from e8s.show.models import Show
 from e8s.show.proposals import accept, is_stale, preview_proposal, propose
 from e8s.show.show_io import load_show, save_show
@@ -141,4 +145,22 @@ def test_rescale_merges_beside_a_facing_override_before_the_rescaled_set() -> No
     """Keeps an override that ends before the rescaled set starts, which the rescale leaves."""
     rescale = CountsOp(set_id=SetId("3"), counts=2 * _three_sets().set("3").counts, rescale=True)
     designer = _head_edits(_three_sets(), rescale, lambda head: _with_override(head, 1.0, 3.0))
+    assert not is_stale(designer, "p1")
+
+
+def test_regression_is_stale_reads_the_proposal_at_the_head() -> None:
+    """Judges a proposal made after the workspace's revision, not UnknownRefError."""
+    _, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [CountsOp(set_id=SetId("2"), counts=SHORTER)], "", "p1", AT + STEP)
+    assert not is_stale(designer, "p1")
+    assert not preview_proposal(designer, "p1").conflicts
+
+
+def test_regression_is_stale_of_an_accepted_proposal_is_false_from_a_stale_workspace() -> None:
+    """Reads the accepted state the head holds, so a closed proposal is never stale."""
+    _, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [CountsOp(set_id=SetId("2"), counts=SHORTER)], "", "p1", AT + STEP)
+    designer.refresh()
+    accept(agent, "p1", AT + 2 * STEP)
+    save_show(agent, set_counts(load_show(agent), "2", 6.0), AT + 3 * STEP)
     assert not is_stale(designer, "p1")
