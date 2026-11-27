@@ -33,12 +33,12 @@ from e8s.show.item_table import TIMING
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
 from e8s.show.validate_comments import comment_issues
+from e8s.show.validate_path_refs import path_spot_issues
 from e8s.show.validate_placements import placement_issues
 from e8s.show.validate_refs import (
     ERROR,
     WARNING,
     make_issue,
-    path_spot_issues,
     reference_issues,
 )
 from e8s.time.validate import validate_timeline
@@ -187,7 +187,7 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
     True
     """
     where = format_tid(spec.id)
-    issues = path_spot_issues(show, spec)
+    issues = path_spot_issues(show, [spec])
     expected = show.set(spec.id[1]).counts
     if not math.isclose(spec.counts, expected):
         issues.append(

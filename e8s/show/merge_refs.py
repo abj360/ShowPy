@@ -14,7 +14,8 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey, MergeConflict
 from e8s.show.models import Show
-from e8s.show.validate_refs import ERROR, path_spot_issues, reference_issues
+from e8s.show.validate_path_refs import path_spot_issues
+from e8s.show.validate_refs import ERROR, reference_issues
 
 type _IssueKey = tuple[str, str, str]
 
@@ -27,11 +28,8 @@ DANGLING_CODES = frozenset(
 
 
 def _reference_errors(show: Show) -> list[ValidationIssue]:
-    issues = reference_issues(show)
-    for tid in show.transition_ids():
-        stored = show.lookup.stored.get(tid)
-        if stored is not None:
-            issues += path_spot_issues(show, stored)
+    stored = [show.lookup.stored[t] for t in show.transition_ids() if t in show.lookup.stored]
+    issues = reference_issues(show) + path_spot_issues(show, stored)
     return [i for i in issues if i.level == ERROR and i.code in DANGLING_CODES]
 
 
