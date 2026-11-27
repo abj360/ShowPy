@@ -29,6 +29,7 @@ Contains:
     write_new(): writes a new file's bytes in one call, raising when it writes fewer
     create_new(): creates a file under a new name, writes it in one call and flushes it
     remove_file(): removes a file when it exists
+    freshen(): sets a file's modification time to the file system's current time
     is_stale_temp(): tells whether a folder entry is a temp file last modified before a cut-off
     remove_stale_temps(): removes the temp files in a folder last modified before a cut-off
 """
@@ -299,6 +300,29 @@ def create_new(target: Path, data: bytes) -> bool:
 def remove_file(path: Path) -> None:
     """Removes a file; a missing one is no error."""
     path.unlink(missing_ok=True)
+
+
+def freshen(path: Path) -> bool:
+    """Sets a file's modification time to the file system's current time, without a link.
+
+    A commit that reuses a file another commit left freshens it, so a clean-up that keeps every
+    file younger than a cut-off keeps it until the commit's slot reaches it. The time comes from
+    the file system, never from a clock the library reads.
+
+    Args:
+        path: The file; a link there is changed itself, never its target.
+
+    Returns:
+        is_present: False when no file has the name any more.
+    """
+    try:
+        if os.utime in os.supports_follow_symlinks:
+            os.utime(path, follow_symlinks=False)
+        else:
+            os.utime(path)
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def is_stale_temp(name: str, info: os.stat_result, cutoff: datetime) -> bool:

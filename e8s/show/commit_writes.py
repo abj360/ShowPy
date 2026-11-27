@@ -203,9 +203,16 @@ def _read_stored(show_id: str, target: Path, kind: str, cap: int, data: bytes) -
     return read_settled(read, is_short_of(data))
 
 
+def _keep_fresh(show_id: str, target: Path) -> None:
+    """Freshens a file this commit reuses; one removed since its check is placed again."""
+    if not durable_io.freshen(target):
+        raise corrupt(show_id, target, "file this commit reuses was removed")
+
+
 def _check_blob(show_id: str, target: Path, data: bytes) -> None:
     stored = _read_stored(show_id, target, "blob", BLOB_MAX_BYTES, data)
     require_blob_digest(show_id, target, stored)
+    _keep_fresh(show_id, target)
 
 
 def store_blobs(
@@ -213,7 +220,9 @@ def store_blobs(
 ) -> None:
     """Places each blob, keeping one already there only when its bytes hash to its name.
 
-    A blob another writer is still creating in place is reread until it holds these bytes.
+    A blob another writer is still creating in place is reread until it holds these bytes. A
+    blob already there is freshened, so a clean-up keeps it until this commit's slot lands; one
+    removed meanwhile is placed again.
 
     Args:
         placer: Places new files.
@@ -231,7 +240,8 @@ def store_blobs(
 def store_record(placer: FilePlacer, show_id: str, path: Path, record: bytes) -> None:
     """Places a revision record, or checks the one an identical commit placed first.
 
-    A record another writer is still creating in place is reread until it holds these bytes.
+    A record another writer is still creating in place is reread until it holds these bytes. A
+    record already there is freshened, as a reused blob is.
 
     Args:
         placer: Places new files.
@@ -243,6 +253,7 @@ def store_record(placer: FilePlacer, show_id: str, path: Path, record: bytes) ->
     def check() -> None:
         if _read_stored(show_id, path, "revision record", TREE_MAX_BYTES, record) != record:
             raise corrupt(show_id, path, "revision record differs from this commit")
+        _keep_fresh(show_id, path)
 
     place_or_check(placer, show_id, path, record, check)
 
