@@ -311,8 +311,9 @@ def is_stale(ws: Workspace, proposal_id: str) -> bool:
     """Tells whether an open proposal no longer merges with the head show.
 
     Derived from the same merge accept runs, each time, and never stored. The proposal is read at
-    the head, as accept and preview read it, whatever revision the workspace is at. A closed proposal, one
-    made before any show was saved and a repository with no saved show are never stale.
+    the head, as accept and preview read it, whatever revision the workspace is at. A closed
+    proposal, one made before any show was saved and a repository with no saved show are never
+    stale.
 
     >>> from e8s.show.memory_backend import InMemoryRepository
     >>> from e8s.show.workspace import open_workspace
