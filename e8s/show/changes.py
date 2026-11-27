@@ -17,6 +17,7 @@ from e8s.show.collab_models import ChangeOp, FormOp, PathsOp, PlacementOp
 from e8s.show.locks import require_unlocked
 from e8s.show.manage import set_counts
 from e8s.show.models import Show
+from e8s.show.pin_flags import flag_written
 
 
 def _replace_set(show: Show, op: PlacementOp) -> Show:
@@ -88,7 +89,8 @@ def apply_change(show: Show, change: Sequence[ChangeOp], *, force: bool = False)
         force: Allows touching pinned or locked items, for the designer.
 
     Returns:
-        show: Edited show; paths always take the destination set's counts.
+        show: Edited show; paths always take the destination set's counts, and each item the
+            change wrote carries the flag a held pin implies, even after a forced op.
 
     >>> from e8s.choreo.models import Placement
     >>> from e8s.examples import two_set_show
@@ -98,4 +100,4 @@ def apply_change(show: Show, change: Sequence[ChangeOp], *, force: bool = False)
     """
     edited = functools.reduce(_apply_op, change, show)
     require_unlocked(show, edited, force=force)
-    return edited
+    return flag_written(edited, change)

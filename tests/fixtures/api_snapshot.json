@@ -338,11 +338,13 @@
       "CUE_DUPLICATE": "'CUE_DUPLICATE'",
       "CUE_NEGATIVE": "'CUE_NEGATIVE'",
       "DEGENERATE": "'DEGENERATE'",
+      "FAR_OFF_SHEET": "'FAR_OFF_SHEET'",
       "FONT_HASH_MISMATCH": "'FONT_HASH_MISMATCH'",
       "FONT_NAME_TAKEN": "'FONT_NAME_TAKEN'",
       "GEOMETRY": "'GEOMETRY'",
       "HOLD_NEGATIVE": "'HOLD_NEGATIVE'",
       "HOLD_OVERLAP": "'HOLD_OVERLAP'",
+      "INACTIVE_ON_FIELD": "'INACTIVE_ON_FIELD'",
       "IO": "'IO'",
       "KEY_MISMATCH": "'KEY_MISMATCH'",
       "LOCKED": "'LOCKED'",
@@ -417,6 +419,9 @@
       "ZERO_COUNTS": "'ZERO_COUNTS'",
       "ZERO_LENGTH": "'ZERO_LENGTH'"
     }
+  },
+  "FAR_OFF_SHEET_M": {
+    "constant": "1000.0"
   },
   "FORMAT": {
     "constant": "'e8.show'"
@@ -1919,7 +1924,7 @@
   "validate_dependencies": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.core.validation.ValidationReport",
   "validate_paths": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec) -> e8s.core.validation.ValidationReport",
   "validate_set": "(show: e8s.show.models.Show, candidate: e8s.choreo.models.Set) -> e8s.core.validation.ValidationReport",
-  "validate_show": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.core.validation.ValidationReport",
+  "validate_show": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None, *, comments: collections.abc.Sequence[e8s.show.collab_models.Comment] = ()) -> e8s.core.validation.ValidationReport",
   "validate_timeline": "(tl: e8s.time.models.Timeline) -> e8s.core.validation.ValidationReport",
   "vector_facing": "(v: Point) -> Degrees",
   "walkable": "(sheet: e8s.sheet.models.Sheet, p: Point) -> bool",

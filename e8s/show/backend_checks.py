@@ -10,7 +10,8 @@ Contains:
     TORN_SLOT_HINT: tells the caller how to clear a slot its writer left torn
     torn_slot(): builds the StorageError for a slot still empty or cut short after every reread
     parsed_json(): parses a stored JSON file, mapping a parse failure to CORRUPT
-    stored_revision(): checks a stored revision and returns it
+    stored_revision(): checks a stored revision and returns it, reading a naive time as UTC
+    hashed_time(): returns the time a stored revision's ID was hashed from, naive if stored so
     parsed_slot(): checks the bytes of a slot and returns its revision, or raises TORN_SLOT
     parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
     require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
@@ -24,8 +25,11 @@ Contains:
 """
 
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TypedDict
+
+from pydantic import TypeAdapter
 
 from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
@@ -33,7 +37,7 @@ from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_reads
-from e8s.show.history_models import Revision
+from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import REVISION_ID_PATTERN
 from e8s.show.show_folders import show_folder
@@ -125,16 +129,38 @@ def stored_revision(show_id: str, path: Path, stored: JsonValue) -> Revision:
         stored: Parsed JSON of the revision.
 
     Returns:
-        revision: The revision, whose ID and parent are 64-digit hex IDs.
+        revision: The revision, whose ID and parent are 64-digit hex IDs and whose time, when
+            stored with no timezone, reads as UTC.
     """
     try:
-        revision = Revision._validated(stored)
+        revision = Revision._validated(stored, context={STORED_TIME_KEY: True})
     except SchemaError as error:
         raise corrupt(show_id, path, "stored revision is malformed") from error
     ids = [revision.id] if revision.parent == ROOT_REVISION else [revision.id, revision.parent]
     if not all(REVISION_ID_PATTERN.fullmatch(value) for value in ids):
         raise corrupt(show_id, path, "stored revision ID is not a 64-digit hex id")
     return revision
+
+
+class _StoredTime(TypedDict):
+    at: datetime
+
+
+_STORED_TIME = TypeAdapter(_StoredTime)
+
+
+def hashed_time(revision: Revision, stored: JsonValue) -> datetime:
+    """Returns the time a stored revision's ID was hashed from: its time exactly as stored.
+
+    A time stored with no timezone reads as UTC, but its ID hashes the naive time.
+
+    Args:
+        revision: The revision `stored_revision` returned for `stored`.
+        stored: Parsed JSON of the revision.
+    """
+    if _STORED_TIME.validate_python(stored)["at"].utcoffset() is None:
+        return revision.at.replace(tzinfo=None)
+    return revision.at
 
 
 def parsed_slot(show_id: str, path: Path, raw: bytes) -> Revision:
@@ -196,13 +222,18 @@ class Record(NamedTuple):
     tree: dict[str, str]
 
 
-def _require_scheme_id(show_id: str, path: Path, record: Record, legacy_before: int) -> None:
-    """Requires the ID to be recomputable from the record, except before `legacy_before`."""
+def _require_scheme_id(
+    show_id: str, path: Path, record: Record, legacy_before: int, hashed_at: datetime
+) -> None:
+    """Requires the ID to be recomputable from the record, except before `legacy_before`.
+
+    `hashed_at` is the revision's time exactly as stored, which its ID hashes.
+    """
     revision = record.revision
     if record.seq < legacy_before:
         return
     changes = {changed: record.tree.get(changed) for changed in revision.changed}
-    if document_repository.revision_id(revision.parent, revision.at, changes) != revision.id:
+    if document_repository.revision_id(revision.parent, hashed_at, changes) != revision.id:
         raise corrupt(show_id, path, "record does not hash to its name")
 
 
@@ -234,7 +265,8 @@ def parsed_record(
     ):
         raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
     record = Record(seq, revision, {key: str(value) for key, value in tree.items()})
-    _require_scheme_id(show_id, path, record, legacy_before)
+    hashed_at = hashed_time(revision, stored["revision"])
+    _require_scheme_id(show_id, path, record, legacy_before, hashed_at)
     return record
 
 

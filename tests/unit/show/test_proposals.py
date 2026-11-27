@@ -39,6 +39,15 @@ Contains:
         value the head wrote against the base's counts
     test_regression_accept_by_merge_respects_a_pin_added_after_the_base: refuses a merge that
         changes an item pinned on the head
+    test_regression_accept_refuses_an_op_naming_a_spot_the_head_deleted: refuses, as a stale
+        proposal, a placement, form, paths or row-facing op naming a spot the head deleted since
+        the base
+    test_regression_accept_refuses_a_proposal_naming_a_spot_never_in_the_cast: refuses a form op
+        whose member was never in the cast, with is_stale and preview agreeing
+    test_regression_new_form_under_a_pinned_set_is_locked: refuses, unless forced, a form op that
+        adds a form to a pinned set, in apply_change and accept
+    test_regression_forced_change_keeps_the_flags_its_pins_imply: sets the flag of a form,
+        placement or path row a forced op leaves unflagged under a pin, so no PIN_MISMATCH
 """
 
 from datetime import UTC, datetime, timedelta
@@ -46,20 +55,31 @@ from pathlib import Path
 
 import pytest
 
+from e8s.cast.spots import delete_spots
+from e8s.choreo.forms import line_form
 from e8s.choreo.models import Placement
-from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.choreo.path_models import EntityFacing, FacingMode, PathRow, TransitionSpec
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, E8sError, LockedError, SchemaError, UnknownRefError
 from e8s.core.ids import SetId, SpotId, make_tid
 from e8s.show.backend import digest
 from e8s.show.changes import apply_change
-from e8s.show.collab_models import CountsOp, PlacementOp, Proposal, ProposalState
+from e8s.show.collab_models import (
+    ChangeOp,
+    CountsOp,
+    FormOp,
+    PathsOp,
+    PlacementOp,
+    Proposal,
+    ProposalState,
+)
 from e8s.show.events import events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import diff_show
 from e8s.show.history_models import Revision
 from e8s.show.manage import add_set
 from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.models import Show
 from e8s.show.pinning import pin
 from e8s.show.proposals import (
     accept,
@@ -72,6 +92,7 @@ from e8s.show.proposals import (
     withdraw,
 )
 from e8s.show.show_io import load_show, save_show
+from e8s.show.validate import validate_show
 from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import SHOW_ID, open_session
@@ -396,3 +417,102 @@ def test_regression_stored_proposal_is_parsed_as_strict_json(raw: bytes) -> None
         with pytest.raises(SchemaError) as info:
             read()
         assert info.value.code == ErrorCode.STRICT_JSON
+
+
+DELETED_SPOT = "T4"
+GHOST_SPOT = "ZZ"
+DELETED_SPOT_OPS: dict[str, ChangeOp] = {
+    "placement": _move(DELETED_SPOT, -1.0),
+    "form": FormOp(form=line_form("f1", ["T3", DELETED_SPOT], (0.0, 0.0), (4.0, 0.0), set_id="2")),
+    "paths": PathsOp(
+        spec=TransitionSpec(
+            id=make_tid("1", "2"),
+            counts=8.0,
+            rows={SpotId(DELETED_SPOT): PathRow(entity=SpotId(DELETED_SPOT), start=2)},
+        )
+    ),
+    "paths-facing": PathsOp(
+        spec=TransitionSpec(
+            id=make_tid("1", "2"),
+            counts=8.0,
+            rows={
+                SpotId("T1"): PathRow(
+                    entity=SpotId("T1"),
+                    facing_mode=FacingMode.TOWARD_ENTITY,
+                    facing_value=EntityFacing(entity=SpotId(DELETED_SPOT)),
+                )
+            },
+        )
+    ),
+}
+
+
+@pytest.mark.parametrize("op", DELETED_SPOT_OPS.values(), ids=DELETED_SPOT_OPS.keys())
+def test_regression_accept_refuses_an_op_naming_a_spot_the_head_deleted(op: ChangeOp) -> None:
+    """Refuses, as a stale proposal, an op naming a spot the head deleted since the base."""
+    repo, agent, designer = open_session(two_set_show(), AT)
+    propose(agent, [op], "", "p1", AT + STEP)
+    designer.refresh()
+    save_show(designer, delete_spots(load_show(designer), DELETED_SPOT), AT + 2 * STEP)
+    head = repo.head(SHOW_ID)
+    assert is_stale(designer, "p1")
+    with pytest.raises(ConflictError) as caught:
+        accept(designer, "p1", AT + 3 * STEP)
+    assert caught.value.code == ErrorCode.PROPOSAL_STALE
+    assert DELETED_SPOT in caught.value.message
+    assert repo.head(SHOW_ID) == head
+
+
+def test_regression_accept_refuses_a_proposal_naming_a_spot_never_in_the_cast() -> None:
+    """Refuses a form op whose member was never in the cast; is_stale and preview agree."""
+    repo, agent, designer = open_session(two_set_show(), AT)
+    form = line_form("f1", ["T3", GHOST_SPOT], (0.0, 0.0), (4.0, 0.0), set_id="2")
+    propose(agent, [FormOp(form=form)], "", "p1", AT + STEP)
+    designer.refresh()
+    head = repo.head(SHOW_ID)
+    assert is_stale(designer, "p1")
+    assert [c.key.kind for c in preview_proposal(designer, "p1").conflicts] == ["form"]
+    with pytest.raises(ConflictError) as caught:
+        accept(designer, "p1", AT + 2 * STEP)
+    assert GHOST_SPOT in caught.value.message
+    assert repo.head(SHOW_ID) == head
+
+
+def test_regression_new_form_under_a_pinned_set_is_locked() -> None:
+    """Refuses a form op adding a form to a pinned set unless forced, in apply_change and accept."""
+    pinned = pin(two_set_show(), "set", "2")
+    add_form = FormOp(form=line_form("f9", ["T1", "T2"], (0.0, 0.0), (4.0, 0.0), set_id="2"))
+    with pytest.raises(LockedError) as caught:
+        apply_change(pinned, [add_form])
+    assert "forms of set 2" in caught.value.message
+    assert "f9" in apply_change(pinned, [add_form], force=True).set("2").forms
+    repo, agent, designer = open_session(pinned, AT)
+    propose(agent, [add_form], "", "p1", AT + STEP)
+    designer.refresh()
+    head = repo.head(SHOW_ID)
+    with pytest.raises(LockedError):
+        accept(designer, "p1", AT + 2 * STEP)
+    assert repo.head(SHOW_ID) == head
+
+
+def _forced_ops(show: Show) -> dict[str, tuple[Show, ChangeOp]]:
+    form = line_form("f9", ["T1", "T2"], (0.0, 0.0), (4.0, 0.0), set_id="2")
+    row = PathRow(entity=SpotId("T1"), start=1.0)
+    spec = show.transition(("1", "2")).replace(rows={SpotId("T1"): row})
+    return {
+        "form": (pin(show, "set", "2"), FormOp(form=form)),
+        "placement": (
+            pin(show, "entity", "T1"),
+            PlacementOp(set_id=SetId("2"), placement=Placement(entity=SpotId("T1"), x=-2.0, y=9.0)),
+        ),
+        "path row": (pin(show, "transition", "1→2"), PathsOp(spec=spec)),
+    }
+
+
+@pytest.mark.parametrize("kind", ["form", "placement", "path row"])
+def test_regression_forced_change_keeps_the_flags_its_pins_imply(kind: str) -> None:
+    """Sets the flag a pin implies on what a forced op adds or replaces; no PIN_MISMATCH."""
+    pinned, op = _forced_ops(two_set_show())[kind]
+    edited = apply_change(pinned, [op], force=True)
+    assert "PIN_MISMATCH" not in {i.code for i in validate_show(edited).issues}
+    assert edited.pins == pinned.pins

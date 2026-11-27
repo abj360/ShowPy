@@ -12,7 +12,7 @@ Contains:
 """
 
 import math
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from itertools import islice
 
 from e8s.choreo.engine import PathEngine
@@ -26,9 +26,21 @@ from e8s.core.ids import check_id, check_sheet_id, format_tid, parse_ref
 from e8s.core.types import FrozenModel
 from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import SheetStore, get_sheet
+from e8s.show.change_models import ItemKey
+from e8s.show.collab_models import Comment
 from e8s.show.document_paths import is_storable_folder
+from e8s.show.item_table import TIMING
 from e8s.show.models import Show
-from e8s.show.validate_refs import ERROR, WARNING, make_issue, reference_issues
+from e8s.show.set_keys import set_key
+from e8s.show.validate_comments import comment_issues
+from e8s.show.validate_path_refs import path_spot_issues
+from e8s.show.validate_placements import placement_issues
+from e8s.show.validate_refs import (
+    ERROR,
+    WARNING,
+    make_issue,
+    reference_issues,
+)
 from e8s.time.validate import validate_timeline
 
 MAX_NON_FINITE_ISSUES = 100
@@ -146,34 +158,6 @@ def _with_spec(show: Show, spec: TransitionSpec) -> Show:
     return show.replace(transitions=(*others, spec))
 
 
-def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
-    cast_ids = set(show.cast.ids())
-    issues = [
-        make_issue(
-            ERROR,
-            ErrorCode.UNKNOWN_SPOT,
-            f"{where} {e}",
-            f"{e} is not in the cast",
-            "remove the row",
-        )
-        for e in spec.rows
-        if e not in cast_ids
-    ]
-    for route in spec.routes.values():
-        unknown = [m for m in route.members if m not in cast_ids]
-        if unknown:
-            issues.append(
-                make_issue(
-                    ERROR,
-                    ErrorCode.UNKNOWN_SPOT,
-                    f"{where} route {route.id}",
-                    f"unknown members {unknown}",
-                    "rebuild the route",
-                )
-            )
-    return issues
-
-
 def _compile_issue(error: E8sError, where: str) -> ValidationIssue:
     code = ErrorCode.CONTINUITY if isinstance(error, ContinuityError) else error.code
     return make_issue(ERROR, code, where, error.message, error.hint)
@@ -203,7 +187,7 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
     True
     """
     where = format_tid(spec.id)
-    issues = _path_rows(show, spec, where)
+    issues = path_spot_issues(show, [spec])
     expected = show.set(spec.id[1]).counts
     if not math.isclose(spec.counts, expected):
         issues.append(
@@ -272,6 +256,41 @@ def _sequence(show: Show) -> list[ValidationIssue]:
         if spec.id not in valid
     ]
     return zero_counts + stale
+
+
+def _first_set_counts(show: Show) -> list[ValidationIssue]:
+    first = show.sets[0] if show.sets else None
+    if first is None or first.counts == 0 or not math.isfinite(first.counts):
+        return []
+    item = ItemKey(kind="set", path=(set_key(first),), role=TIMING)
+    return [
+        make_issue(
+            ERROR,
+            ErrorCode.TIME_RANGE,
+            f"set {first.id}",
+            f"the first set has counts {first.counts:g}, but no move leads into it",
+            "the first set starts the show; give it 0 counts",
+            {"item": item.to_json(), "counts": first.counts},
+        )
+    ]
+
+
+def _negative_counts(show: Show) -> list[ValidationIssue]:
+    return [
+        make_issue(
+            ERROR,
+            ErrorCode.TIME_RANGE,
+            f"set {later.id}",
+            f"set {later.id} arrives in {later.counts:g} counts",
+            "give every set after the first counts > 0",
+            {
+                "item": ItemKey(kind="set", path=(set_key(later),), role=TIMING).to_json(),
+                "counts": later.counts,
+            },
+        )
+        for later in show.sets[1:]
+        if math.isfinite(later.counts) and later.counts < 0
+    ]
 
 
 def _form_keys(show: Show) -> list[ValidationIssue]:
@@ -379,7 +398,10 @@ def _non_finite(show: Show) -> list[ValidationIssue]:
 
 
 def _too_long(show: Show) -> list[ValidationIssue]:
-    total = math.fsum(s.counts for s in show.sets if math.isfinite(s.counts))
+    try:
+        total = math.fsum(s.counts for s in show.sets if math.isfinite(s.counts))
+    except OverflowError:
+        total = math.inf
     if total <= MAX_COUNTS:
         return []
     return [
@@ -389,7 +411,7 @@ def _too_long(show: Show) -> list[ValidationIssue]:
             where="sets",
             message=f"set counts add up to {total:g}, past MAX_COUNTS",
             hint=f"keep the whole show within MAX_COUNTS ({MAX_COUNTS:,} counts)",
-            context={"total": total, "max": MAX_COUNTS},
+            context={"total": total if math.isfinite(total) else str(total), "max": MAX_COUNTS},
         )
     ]
 
@@ -401,6 +423,8 @@ def _path_reports(show: Show) -> list[ValidationReport]:
         parts = (show.set(tid.from_set), show.set(tid.to_set), stored)
         if any(part is not None and _has_non_finite(part) for part in parts):
             continue
+        if show.set(tid.to_set).counts < 0:
+            continue
         reports.append(validate_paths(show, show.transition(tid)))
     return reports
 
@@ -409,19 +433,34 @@ def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
     return ValidationReport.merge(*reports)
 
 
-def validate_show(show: Show, store: SheetStore | None = None) -> ValidationReport:
+def validate_show(
+    show: Show, store: SheetStore | None = None, *, comments: Sequence[Comment] = ()
+) -> ValidationReport:
     """Checks sets, paths, dependencies (when a store is given), sequence and timeline.
+
+    Comments live outside the show, so their anchors are checked only for the comments given.
 
     >>> from e8s.examples import two_set_show
     >>> validate_show(two_set_show()).ok
     True
+
+    Args:
+        show: The show to check.
+        store: Sheet store that resolves the sheet reference; None skips that check.
+        comments: Review comments whose anchors must resolve in the show.
+
+    Returns:
+        report: Every issue found; validation never raises on bad data.
     """
     reports = [validate_set(show, s) for s in show.sets]
     too_long = _too_long(show)
     if not too_long:
         reports += _path_reports(show)
-    extra = too_long + _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
-    extra += _non_finite(show) + reference_issues(show)
+    extra = too_long + _sequence(show) + _first_set_counts(show) + _negative_counts(show)
+    extra += _form_keys(show)
+    extra += _selections(show) + _ids(show)
+    extra += _non_finite(show) + reference_issues(show) + placement_issues(show)
+    extra += comment_issues(show, comments)
     reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
     if store is not None:
