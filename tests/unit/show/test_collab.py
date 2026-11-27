@@ -286,7 +286,8 @@ def test_propose_preview_and_reject() -> None:
         AT + STEP,
     )
     assert (proposal.state, proposal.base_revision) == ("open", base_revision)
-    preview = preview_proposal(show, proposal)
+    designer.refresh()
+    preview = preview_proposal(designer, "p1")
     assert [p.entity for p in preview.placements[SetId("2")]] == ["T1", "T2"]
     assert preview.counts == {"2": 6.0}
     assert preview.paths[0].counts == 6.0
@@ -323,7 +324,9 @@ def test_accept_conflicts_when_same_items_moved() -> None:
     save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), AT + STEP)
     with pytest.raises(ConflictError) as info:
         accept(designer, "p1", AT + 2 * STEP)
-    assert info.value.context["overlap"] == ["placement T1 in set 2"]
+    assert info.value.context["conflicts"] == [
+        "placement 2/T1 (drill): both sides changed this item differently"
+    ]
 
 
 def test_accept_respects_pins() -> None:
@@ -418,8 +421,6 @@ def test_regression_proposal_against_unsaved_show_can_be_accepted() -> None:
     assert revision.id == designer.revision
 
 
-@pytest.mark.defect("UP-9.7-46")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-46")
 def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_transition() -> None:
     """Refuses a rescale proposal after the designer edited that transition's rows (audit 9.7)."""
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
