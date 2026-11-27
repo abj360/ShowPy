@@ -5,6 +5,7 @@ test_history.py --- tests set, path and show diffs, revert, renames and the chan
 
 Contains:
     test_revert_restores_an_earlier_show: reverts to the first of two edits as a new revision
+    test_revert_reads_no_render_blobs: reads no blob of a file both revisions store unchanged
     test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: refuses or repairs a host
         undo (a revert to the parent) that would orphan the agent's path row
     test_regression_undoing_the_first_save_keeps_a_loadable_show: refuses to revert to before the
@@ -47,6 +48,7 @@ from e8s.show.history import (
     diff_show,
     revert,
 )
+from e8s.show.integrity import blob_digest
 from e8s.show.items import changes
 from e8s.show.manage import add_set
 from e8s.show.memory_backend import InMemoryRepository
@@ -169,6 +171,25 @@ def test_revert_restores_every_file() -> None:
     revert(agent, first, AT + 3 * STEP)
     assert agent.read("/config/limits.yaml") == original
     assert "set.py" not in agent.ls("/sets/1")
+
+
+def test_revert_reads_no_render_blobs() -> None:
+    repo, _, ws = open_session(two_set_show(), AT)
+    ws.write("/renders/set-1.png", b"png-bytes", at=AT + STEP)
+    first = ws.revision
+    save_show(ws, _moved(load_show(ws), "T1", 7.0), AT + 2 * STEP)
+    render_digest = blob_digest(b"png-bytes")
+    reads: list[str] = []
+    real_blob = repo.backend.blob
+
+    def counting_blob(show_id: str, digest: str) -> bytes:
+        reads.append(digest)
+        return real_blob(show_id, digest)
+
+    repo.backend.blob = counting_blob  # type: ignore[method-assign]
+    revert(ws, first, AT + 3 * STEP)
+    assert reads
+    assert render_digest not in reads
 
 
 def test_changelog_lines_since_revision() -> None:

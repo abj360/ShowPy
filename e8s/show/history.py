@@ -9,6 +9,7 @@ Contains:
     changelog(): lists revisions since a revision as terse lines
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 
 from e8s.choreo.models import Set
@@ -19,6 +20,7 @@ from e8s.core.units import angle_diff
 from e8s.core.util import approx_equal, natural_sort
 from e8s.show.diff_render import render_changes
 from e8s.show.history_models import PathDiff, Revision, SetDiff
+from e8s.show.integrity import LazyBlobs, blob_digest
 from e8s.show.items import changes
 from e8s.show.models import Show
 from e8s.show.storage import ROOT_REVISION
@@ -145,8 +147,18 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     target = ws.repo.get_revision(ws.show_id, revision_id)
     ws.refresh()
     old, head = ws.tree_at(target.id), ws.tree_at(ws.revision)
-    paths = {p for p in set(old) | set(head) if old.get(p) != head.get(p)}
+    old_digests, head_digests = _digests(old), _digests(head)
+    paths = {
+        p for p in set(old_digests) | set(head_digests) if old_digests.get(p) != head_digests.get(p)
+    }
     return ws._commit_stored({p: old.get(p) for p in sorted(paths)}, at=at)
+
+
+def _digests(tree: Mapping[str, bytes]) -> Mapping[str, str]:
+    """Returns each path's blob digest, so comparing trees reads no blob."""
+    if isinstance(tree, LazyBlobs):
+        return tree.digests
+    return {path: blob_digest(raw) for path, raw in tree.items()}
 
 
 def _line(revision: Revision) -> str:
