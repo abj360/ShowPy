@@ -58,6 +58,8 @@ Contains:
         issue the timing item of the first set and skips non-finite counts
     test_regression_validate_show_reports_negative_set_counts_without_raising: reports a later
         set with negative counts as TIME_RANGE instead of raising while checking its paths
+    test_regression_negative_infinite_counts_are_reported_once: leaves negative infinite counts to
+        NOT_FINITE alone
     test_regression_validate_show_reports_nan_counts_on_the_first_set: reports NaN counts on the
         first set by name
     test_regression_validate_show_reports_nan_waypoints: reports a path waypoint with a NaN
@@ -512,6 +514,13 @@ def test_regression_validate_show_reports_negative_set_counts_without_raising() 
     assert ItemKey.model_validate(issue.context["item"]) == ItemKey(
         kind="set", path=("2",), role="timing"
     )
+
+
+def test_regression_negative_infinite_counts_are_reported_once() -> None:
+    """Leaves negative infinite counts to NOT_FINITE alone, never TIME_RANGE as well."""
+    codes = [i.code for i in validate_show(_edited(sets=_set_two_with(counts=-math.inf))).issues]
+    assert "NOT_FINITE" in codes
+    assert "TIME_RANGE" not in codes
 
 
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:

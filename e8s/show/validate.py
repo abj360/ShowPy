@@ -289,7 +289,7 @@ def _negative_counts(show: Show) -> list[ValidationIssue]:
             },
         )
         for later in show.sets[1:]
-        if later.counts < 0
+        if math.isfinite(later.counts) and later.counts < 0
     ]
 
 
