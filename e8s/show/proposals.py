@@ -227,9 +227,7 @@ def _rescale_conflicts(
     def is_retimed(row: ItemChange) -> bool:
         if row.key.kind in ("path_row", "route"):
             return row.key.path[0] in folders
-        return row.key.kind == "facing_override" and (
-            _shifts_overrides(row.before, first_start) or _shifts_overrides(row.after, first_start)
-        )
+        return row.key.kind == "facing_override" and _shifts_overrides(row.after, first_start)
 
     return [
         MergeConflict(
