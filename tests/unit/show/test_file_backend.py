@@ -55,8 +55,8 @@ Contains:
     test_regression_cold_commit_on_a_legacy_head_lands: commits on a legacy head from a cold backend
     test_manifest_legacy_before_must_be_a_positive_integer: refuses a manifest whose legacy_before
         is not a positive integer
-    test_regression_symlinked_show_folder_is_refused: refuses a symlinked shows, show, log or tmp
-        folder for reads and writes, leaving the target untouched
+    test_regression_symlinked_show_folder_is_refused: refuses a symlinked shows, show, log, records,
+        objects or tmp folder for reads and writes, leaving the target untouched
     test_regression_junction_under_the_root_is_refused: refuses a junction in place of the show
         folder (Windows only)
     test_log_longer_than_max_revisions_is_refused: refuses a log over MAX_REVISIONS
@@ -695,9 +695,12 @@ def _symlink_show_folder(root: Path, outside: Path) -> None:
     _folder(root).symlink_to(outside / _folder(root).name, target_is_directory=True)
 
 
-def _symlink_log_folder(root: Path, outside: Path) -> None:
-    (_folder(root) / "log").rename(outside / "log")
-    (_folder(root) / "log").symlink_to(outside / "log", target_is_directory=True)
+def _symlink_inner_folder(name: str) -> Callable[[Path, Path], None]:
+    def swap(root: Path, outside: Path) -> None:
+        (_folder(root) / name).rename(outside / name)
+        (_folder(root) / name).symlink_to(outside / name, target_is_directory=True)
+
+    return swap
 
 
 def _symlink_tmp_folder(root: Path, outside: Path) -> None:
@@ -708,9 +711,19 @@ def _symlink_tmp_folder(root: Path, outside: Path) -> None:
 SYMLINKS: dict[str, Callable[[Path, Path], None]] = {
     "shows": _symlink_shows,
     "show folder": _symlink_show_folder,
-    "log folder": _symlink_log_folder,
+    "log folder": _symlink_inner_folder("log"),
+    "records folder": _symlink_inner_folder("records"),
+    "objects folder": _symlink_inner_folder("objects"),
     "tmp folder": _symlink_tmp_folder,
 }
+
+
+def _snapshot(folder: Path) -> dict[str, bytes | None]:
+    """Maps every path under `folder` to its bytes, or None for a folder."""
+    return {
+        str(path): path.read_bytes() if path.is_file() else None
+        for path in sorted(folder.rglob("*"))
+    }
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs privilege on Windows")
@@ -718,16 +731,17 @@ SYMLINKS: dict[str, Callable[[Path, Path], None]] = {
 def test_regression_symlinked_show_folder_is_refused(tmp_path: Path, kind: str) -> None:
     """Refuses to read or write through a symlinked folder, so no write leaves the root."""
     root = tmp_path / "root"
-    landed = _landed(FileBackend(root), 1)
+    warm = FileBackend(root)
+    landed = _landed(warm, 1)
     outside = _outside_folder(tmp_path)
     SYMLINKS[kind](root, outside)
-    before = sorted(str(p) for p in outside.rglob("*"))
+    before = _snapshot(outside)
     revision, tree, blobs = _change(landed[0].id, 5)
     with pytest.raises(StorageError) as written:
-        FileBackend(root).commit(SHOW_ID, revision, tree, blobs)
+        warm.commit(SHOW_ID, revision, tree, blobs)
     assert written.value.code == "CORRUPT"
     assert "symbolic link" in written.value.message
-    assert sorted(str(p) for p in outside.rglob("*")) == before
+    assert _snapshot(outside) == before
     if kind != "tmp folder":
         with pytest.raises(StorageError) as read:
             FileBackend(root).log(SHOW_ID)
