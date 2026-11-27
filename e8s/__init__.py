@@ -597,6 +597,7 @@ if TYPE_CHECKING:
         Anchor,
     )
     from e8s.show.assets import (
+        FileAssetStore,
         InMemoryAssetStore,
     )
     from e8s.show.backend import (
@@ -621,12 +622,8 @@ if TYPE_CHECKING:
         store_paths,
     )
     from e8s.show.collab import (
-        accept,
         highlight,
         pins,
-        preview_proposal,
-        propose,
-        reject,
         selection,
     )
     from e8s.show.collab_models import (
@@ -659,6 +656,9 @@ if TYPE_CHECKING:
     )
     from e8s.show.file_repository import (
         FileRepository,
+    )
+    from e8s.show.font_documents import (
+        load_fonts,
     )
     from e8s.show.history import (
         changelog,
@@ -729,6 +729,16 @@ if TYPE_CHECKING:
     from e8s.show.pinning import (
         pin,
         unpin,
+    )
+    from e8s.show.proposals import (
+        accept,
+        get_proposal,
+        is_stale,
+        preview_proposal,
+        proposals,
+        propose,
+        reject,
+        withdraw,
     )
     from e8s.show.renumber import (
         renumber,
@@ -871,6 +881,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FacingSpec": ("e8s.choreo.form_models", "FacingSpec"),
     "FacingValue": ("e8s.choreo.path_models", "FacingValue"),
     "FigureEightParams": ("e8s.choreo.path_models", "FigureEightParams"),
+    "FileAssetStore": ("e8s.show.assets", "FileAssetStore"),
     "FileRepository": ("e8s.show.file_repository", "FileRepository"),
     "FillRecipe": ("e8s.choreo.recipe_models", "FillRecipe"),
     "Fix": ("e8s.choreo.engine_models", "Fix"),
@@ -1048,7 +1059,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Workspace": ("e8s.show.workspace", "Workspace"),
     "ZeroLengthError": ("e8s.core.errors", "ZeroLengthError"),
     "ZigzagParams": ("e8s.choreo.path_models", "ZigzagParams"),
-    "accept": ("e8s.show.collab", "accept"),
+    "accept": ("e8s.show.proposals", "accept"),
     "add_cue": ("e8s.time.timeline", "add_cue"),
     "add_facing_override": ("e8s.choreo.facing", "add_facing_override"),
     "add_group": ("e8s.cast.spots", "add_group"),
@@ -1186,6 +1197,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "from_json": ("e8s.time.timeline", "from_json"),
     "gate": ("e8s.choreo.form_ops", "gate"),
     "generated_form": ("e8s.choreo.forms", "generated_form"),
+    "get_proposal": ("e8s.show.proposals", "get_proposal"),
     "get_sheet": ("e8s.sheet.templates", "get_sheet"),
     "glyph_strokes": ("e8s.geo.text", "glyph_strokes"),
     "gym_floor": ("e8s.sheet.surfaces", "gym_floor"),
@@ -1204,6 +1216,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "is_device_name": ("e8s.core.ids", "is_device_name"),
     "is_label_dependent": ("e8s.cast.select", "is_label_dependent"),
     "is_similarity": ("e8s.geo.affine", "is_similarity"),
+    "is_stale": ("e8s.show.proposals", "is_stale"),
     "items": ("e8s.show.items", "items"),
     "jcs": ("e8s.core.canonical", "jcs"),
     "join": ("e8s.geo.shapes", "join"),
@@ -1214,6 +1227,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line": ("e8s.geo.shapes", "line"),
     "line_form": ("e8s.choreo.forms", "line_form"),
     "load_font": ("e8s.geo.fonts", "load_font"),
+    "load_fonts": ("e8s.show.font_documents", "load_fonts"),
     "load_paths": ("e8s.show.paths_store", "load_paths"),
     "load_show": ("e8s.show.show_io", "load_show"),
     "lock": ("e8s.choreo.paths", "lock"),
@@ -1265,8 +1279,9 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "polyline": ("e8s.geo.shapes", "polyline"),
     "polyline_form": ("e8s.choreo.forms", "polyline_form"),
     "position_at": ("e8s.choreo.motion_stats", "position_at"),
-    "preview_proposal": ("e8s.show.collab", "preview_proposal"),
-    "propose": ("e8s.show.collab", "propose"),
+    "preview_proposal": ("e8s.show.proposals", "preview_proposal"),
+    "proposals": ("e8s.show.proposals", "proposals"),
+    "propose": ("e8s.show.proposals", "propose"),
     "ranks_and_files": ("e8s.geo.spacing", "ranks_and_files"),
     "reachable_region": ("e8s.geo.measure", "reachable_region"),
     "read_layout": ("e8s.show.layout", "read_layout"),
@@ -1281,7 +1296,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "register_unit": ("e8s.core.units", "register_unit"),
     "regroup": ("e8s.cast.spots", "regroup"),
     "regular_polygon": ("e8s.geo.shapes", "regular_polygon"),
-    "reject": ("e8s.show.collab", "reject"),
+    "reject": ("e8s.show.proposals", "reject"),
     "relabel": ("e8s.cast.spots", "relabel"),
     "remove_audio": ("e8s.time.timeline", "remove_audio"),
     "remove_cue": ("e8s.time.timeline", "remove_cue"),
@@ -1400,6 +1415,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "where": ("e8s.cast.select", "where"),
     "window": ("e8s.choreo.paths", "window"),
     "with_set": ("e8s.choreo.match_ops", "with_set"),
+    "withdraw": ("e8s.show.proposals", "withdraw"),
     "zigzag": ("e8s.choreo.motion", "zigzag"),
 }
 
@@ -1483,6 +1499,7 @@ __all__ = [
     "FacingSpec",
     "FacingValue",
     "FigureEightParams",
+    "FileAssetStore",
     "FileRepository",
     "FillRecipe",
     "Fix",
@@ -1773,6 +1790,7 @@ __all__ = [
     "from_json",
     "gate",
     "generated_form",
+    "get_proposal",
     "get_sheet",
     "glyph_strokes",
     "gym_floor",
@@ -1791,6 +1809,7 @@ __all__ = [
     "is_device_name",
     "is_label_dependent",
     "is_similarity",
+    "is_stale",
     "items",
     "jcs",
     "join",
@@ -1801,6 +1820,7 @@ __all__ = [
     "line",
     "line_form",
     "load_font",
+    "load_fonts",
     "load_paths",
     "load_show",
     "lock",
@@ -1853,6 +1873,7 @@ __all__ = [
     "polyline_form",
     "position_at",
     "preview_proposal",
+    "proposals",
     "propose",
     "ranks_and_files",
     "reachable_region",
@@ -1987,6 +2008,7 @@ __all__ = [
     "where",
     "window",
     "with_set",
+    "withdraw",
     "zigzag",
 ]
 

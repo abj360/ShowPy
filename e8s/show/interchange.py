@@ -103,14 +103,14 @@ def export_json(
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
     ['id', 'title']
     """
-    dumped = show.to_json()
+    dumped = _sorted_by_id(show.to_json())
     # Show.extensions is a JSON object, so its JSON dump is a dict.
     extensions = cast("dict[str, JsonValue]", dumped.pop(EXTENSIONS_FIELD, {}))
     if include is not None:
         names = [include] if isinstance(include, str) else include
         keep = {ALWAYS_EXPORTED, *names}
         for name in sorted(keep - set(dumped) - {EXTENSIONS_FIELD}):
-            close = close_matches(name, dumped)
+            close = close_matches(name, [*dumped, EXTENSIONS_FIELD])
             raise UnknownRefError(
                 f"show has no field {name!r}",
                 hint=f"did you mean {', '.join(close)}?" if close else f"use {sorted(dumped)}",
@@ -125,6 +125,44 @@ def export_json(
         document[FONTS_KEY] = fonts
     document.update(extensions)
     return document
+
+
+def _by_key(mapping: Mapping[str, Any]) -> dict[str, Any]:
+    return dict(sorted(mapping.items()))
+
+
+def _sorted_by_id(dumped: dict[str, Any]) -> dict[str, Any]:
+    """Returns a show dump with every ID-keyed mapping in plain string order of its keys.
+
+    Field order, list order and values stay as dumped, so equal shows dump equal bytes.
+    """
+    result = {**dumped}
+    if FORMS_FIELD in result:
+        result[FORMS_FIELD] = _by_key(result[FORMS_FIELD])
+    if "dependencies" in result:
+        result["dependencies"] = _by_key(result["dependencies"])
+    if "cast" in result:
+        result["cast"] = _sorted_cast(result["cast"])
+    if "transitions" in result:
+        result["transitions"] = [
+            {**spec, "rows": _by_key(spec["rows"]), "routes": _by_key(spec["routes"])}
+            for spec in result["transitions"]
+        ]
+    return result
+
+
+def _sorted_cast(cast: dict[str, Any]) -> dict[str, Any]:
+    groups = {
+        key: {**group, "limits": _by_key(group["limits"])}
+        for key, group in _by_key(cast["groups"]).items()
+    }
+    scheme = {**cast["label_scheme"], "prefixes": _by_key(cast["label_scheme"]["prefixes"])}
+    return {
+        **cast,
+        "groups": groups,
+        "selections": _by_key(cast["selections"]),
+        "label_scheme": scheme,
+    }
 
 
 def _embedded_fonts(

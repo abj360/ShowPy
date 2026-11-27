@@ -62,7 +62,7 @@ OPAQUE_DEFAULT = "..."
 STABLE_DEFAULT_TYPES = (type(None), bool, int, float, str, bytes, tuple, frozenset, enum.Enum)
 PRETTIER_PRINT_WIDTH = 100
 CORE_MODULE_PREFIX = "e8s._core."
-CORE_STUB_ROOT = ROOT / "e8s" / "_core"
+CORE_STUB_ROOT = Path(e8s.__file__).resolve().parent / "_core"
 STUB_SUFFIX = ".pyi"
 
 

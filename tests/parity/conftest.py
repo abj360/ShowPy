@@ -18,8 +18,8 @@ import pytest
 
 from scripts.build_oracle import build_oracle
 from tests.parity.cases import load_all_cases
-from tests.parity.compare import load_flipped
-from tests.parity.run import FLIPPED_FILE, REPO_ROOT, AreaRun, run_area
+from tests.parity.compare import load_flipped, load_intended
+from tests.parity.run import FLIPPED_FILE, INTENDED_FILE, REPO_ROOT, AreaRun, run_area
 
 PARITY_FOLDER = Path(__file__).resolve().parent
 
@@ -46,11 +46,12 @@ def parity_area(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Callable[[
         patch.chdir(REPO_ROOT)
         oracle_python = build_oracle()
         flips = load_flipped(FLIPPED_FILE, load_all_cases())
+        intended = load_intended(INTENDED_FILE, load_all_cases(), flips)
 
         def run_for(area: str) -> AreaRun:
             if area not in runs:
                 work = tmp_path_factory.mktemp(area)
-                runs[area] = run_area(area, oracle_python, work, flips)
+                runs[area] = run_area(area, oracle_python, work, flips, intended=intended)
             return runs[area]
 
         yield run_for

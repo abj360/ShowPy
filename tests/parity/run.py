@@ -9,6 +9,7 @@ writes the digest, runs the area's tests/parity/test_parity_<area>.py and fails 
 
 Contains:
     FLIPPED_FILE: the flipped cases, compared against their ledger expectation
+    INTENDED_FILE: the intended cases, compared against their stated expectation
     REPO_ROOT: the repository root the case modules import from
     AreaRun: one area's reports, speed report and core outputs
     runner_command(): builds the oracle_runner.py command, isolated and writing no bytecode
@@ -37,6 +38,7 @@ from scripts.build_oracle import build_oracle
 from tests.parity.cases import Case, Output, load_all_cases, load_cases, read_outputs
 from tests.parity.compare import (
     Flip,
+    Intended,
     ParityReport,
     SpeedReport,
     compare_case,
@@ -45,6 +47,7 @@ from tests.parity.compare import (
     format_speed,
     format_table,
     load_flipped,
+    load_intended,
 )
 from tests.parity.oracle_runner import RUNS
 
@@ -53,6 +56,7 @@ PARITY_FOLDER = Path(__file__).resolve().parent
 REPO_ROOT = PARITY_FOLDER.parents[1]
 RUNNER = PARITY_FOLDER / "oracle_runner.py"
 FLIPPED_FILE = PARITY_FOLDER / "flipped.toml"
+INTENDED_FILE = PARITY_FOLDER / "intended.toml"
 RUNS_FOLDER = Path(".parity") / "runs"
 TIMINGS_FILE = "timings.json"
 # Each side's timing is its fastest launch out of this many, launched oracle, core, oracle, ...
@@ -225,7 +229,13 @@ def alternate_timings(
 
 
 def run_area(
-    area: str, oracle_python: Path, work: Path, flips: Mapping[str, Flip], *, launches: int = 1
+    area: str,
+    oracle_python: Path,
+    work: Path,
+    flips: Mapping[str, Flip],
+    *,
+    launches: int = 1,
+    intended: Mapping[str, Intended] | None = None,
 ) -> AreaRun:
     """Runs one area's cases under the oracle and the working tree, then compares them.
 
@@ -235,6 +245,7 @@ def run_area(
         work: The folder both sides write under.
         flips: The flipped cases by qualified name.
         launches: Alternating launches per side; the outputs come from the last one.
+        intended: The intended cases by qualified name.
 
     Returns:
         run: Each case's report, the speed report and the core outputs.
@@ -254,7 +265,7 @@ def run_area(
     core = _side_outputs(work / CORE_SIDE, cases)
     reports = {
         case.qualified_name: compare_case(
-            case.qualified_name, oracle[case.name], core[case.name], flips
+            case.qualified_name, oracle[case.name], core[case.name], flips, intended
         )
         for case in cases
     }
@@ -308,13 +319,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     """Builds the oracle, runs each area on both sides, prints the tables, fails on a gate."""
     arguments = _arguments(argv)
     flips = load_flipped(FLIPPED_FILE, load_all_cases())
+    intended = load_intended(INTENDED_FILE, load_all_cases(), flips)
     oracle_python = build_oracle()
     areas = _areas(arguments.area)
     launches = SPEED_LAUNCHES if arguments.speed else 1
     passed, digests = True, dict[str, list[str]]()
     for area in areas:
-        run = run_area(area, oracle_python, RUNS_FOLDER / area, flips, launches=launches)
-        print(format_table(run.reports), flush=True)
+        run = run_area(
+            area, oracle_python, RUNS_FOLDER / area, flips, launches=launches, intended=intended
+        )
+        print(format_table(run.reports, intended), flush=True)
         passed &= all(report.passed for report in run.reports.values())
         if arguments.speed:
             print(f"speed: fastest of {RUNS} runs per launch over {launches} alternating launches")

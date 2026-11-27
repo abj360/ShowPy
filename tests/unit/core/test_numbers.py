@@ -7,6 +7,7 @@ Contains:
     test_format_number_*(): one formatting rule each
     test_format_number_never_writes_an_exponent: writes no exponent and stays within 1e-6 of input
     test_normalize_angle_*(): one wrapping rule each
+    test_regression_format_number_rejects_an_overflowing_int_with_schema_error: raises SchemaError
 """
 
 import math
@@ -15,6 +16,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError
 from e8s.core.numbers import format_number, normalize_angle
 
@@ -79,3 +81,9 @@ def test_normalize_angle_wraps_into_a_turn() -> None:
 def test_normalize_angle_rejects_non_finite(bad: float) -> None:
     with pytest.raises(SchemaError):
         normalize_angle(bad)
+
+
+def test_regression_format_number_rejects_an_overflowing_int_with_schema_error() -> None:
+    with pytest.raises(SchemaError) as caught:
+        format_number(10**400)
+    assert caught.value.code is ErrorCode.SCHEMA

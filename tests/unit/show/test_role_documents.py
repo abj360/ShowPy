@@ -112,8 +112,8 @@ def _export_bytes(show: Show) -> bytes:
 def _seeded_input() -> Show:
     """Loads the seeded show frozen as JSON; E8S_REBUILD_GOLDEN_INPUT=1 refreezes it first.
 
-    The input keeps insertion order, not sorted keys: export_json writes mappings such as the
-    cast's groups and the forms in insertion order, so sorted keys would change the golden bytes.
+    The frozen input keeps its original key order; export_json writes every ID-keyed mapping
+    sorted by ID, so the golden bytes do not depend on that order.
     """
     if os.environ.get(REBUILD_INPUT_FLAG) == "1":
         text = json.dumps(seeded_show(SEED, SPOTS, SETS).to_json(), indent=JSON_INDENT)
