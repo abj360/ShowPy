@@ -7,6 +7,8 @@ and every read is capped at a size before it allocates.
 Contains:
     READ_FLAGS: opens stored files without following symlinks or blocking on FIFOs
     SYMLINK_OPEN_ERRNOS: lists the errno values an O_NOFOLLOW open of a symlink raises
+    opened_capped(): opens a regular file of at most a given size for reading, never following a
+        symlink
     read_capped(): reads a regular file of at most a given size, reporting problems through a hook
     lstat_info(): returns the lstat result of a path, or None when it is absent
     lstat_mode(): returns the lstat mode of a path, or None when it is absent
@@ -14,6 +16,7 @@ Contains:
     is_redirect(): tells whether a path is a symlink or a Windows junction
     COMPARE_PIECE_BYTES: sets how many bytes of each file one step of a comparison reads
     has_same_bytes(): tells whether two regular files hold the same bytes, reading in pieces
+    file_pieces(): yields the bytes of an open file a piece at a time, up to a size
 """
 
 import errno
@@ -69,6 +72,47 @@ def _read_sized(
     return data
 
 
+def opened_capped(
+    path: Path, kind: str, cap: int, fail: Callable[[Path, str], Exception]
+) -> BinaryIO:
+    """Opens a regular file of at most `cap` bytes for reading, checking it before and after open.
+
+    Args:
+        path: File to open; a symlink, a FIFO, a directory or a missing file is refused.
+        kind: What the file holds, named in the size message.
+        cap: Largest size accepted, in bytes.
+        fail: Builds the exception raised for a refused file from its path and the reason.
+
+    Returns:
+        handle: The open file; the caller closes it.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     (Path(folder) / "a").write_bytes(b"hi")
+    ...     refuse = lambda path, why: ValueError(why)
+    ...     with opened_capped(Path(folder) / "a", "note", 16, refuse) as handle:
+    ...         handle.read()
+    2
+    b'hi'
+    """
+    mode = path.lstat().st_mode
+    if stat.S_ISLNK(mode):
+        raise fail(path, "file is a symbolic link")
+    if not stat.S_ISREG(mode):
+        raise fail(path, "file is missing or not a regular file")
+    descriptor = _open_no_follow(path, fail)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise fail(path, "file is missing or not a regular file")
+        if info.st_size > cap:
+            raise fail(path, f"{kind} is larger than {cap} bytes")
+        return os.fdopen(descriptor, "rb")
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 def read_capped(
     path: Path,
     kind: str,
@@ -99,14 +143,7 @@ def read_capped(
     b'hi'
     """
     try:
-        mode = path.lstat().st_mode
-        if stat.S_ISLNK(mode):
-            raise fail(path, "file is a symbolic link")
-        if not stat.S_ISREG(mode):
-            raise fail(path, "file is missing or not a regular file")
-        with os.fdopen(_open_no_follow(path, fail), "rb") as handle:
-            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                raise fail(path, "file is missing or not a regular file")
+        with opened_capped(path, kind, cap, fail) as handle:
             return _read_sized(path, handle, kind, cap, fail, allows_growth=allows_growth)
     except (FileNotFoundError, IsADirectoryError) as error:
         raise fail(path, "file is missing or not a file") from error
@@ -269,3 +306,29 @@ def has_same_bytes(first: Path, second: Path) -> bool:
                 return _pieces_match(left, right)
     except (_RefusedError, FileNotFoundError):
         return False
+
+
+def file_pieces(handle: BinaryIO, size: int) -> Iterator[bytes]:
+    """Yields the first `size` bytes of an open file, COMPARE_PIECE_BYTES at a time.
+
+    A file that is shorter yields what it holds; bytes past `size` are never read, so memory and
+    time stay bounded however the file changes while it is read.
+
+    Args:
+        handle: File open for reading.
+        size: Most bytes to read.
+
+    Returns:
+        pieces: The bytes in order, each piece at most COMPARE_PIECE_BYTES long.
+
+    >>> import io
+    >>> list(file_pieces(io.BytesIO(b"abc"), 2))
+    [b'ab']
+    """
+    left = size
+    while left > 0:
+        piece = handle.read(min(COMPARE_PIECE_BYTES, left))
+        if not piece:
+            return
+        left -= len(piece)
+        yield piece

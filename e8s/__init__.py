@@ -779,7 +779,11 @@ if TYPE_CHECKING:
         FsckFinding,
         FsckReport,
         GcReport,
+        ShowUpgrade,
         UpgradeReport,
+    )
+    from e8s.show.upgrade import (
+        upgrade_repository,
     )
     from e8s.show.validate import (
         validate_dependencies,
@@ -1028,6 +1032,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "ShowIndex": ("e8s.show.models", "ShowIndex"),
     "ShowIndexEntry": ("e8s.show.models", "ShowIndexEntry"),
     "ShowLookup": ("e8s.show.models", "ShowLookup"),
+    "ShowUpgrade": ("e8s.show.storage_models", "ShowUpgrade"),
     "ShowValidationError": ("e8s.core.errors", "ShowValidationError"),
     "SineWaveFormParams": ("e8s.choreo.form_models", "SineWaveFormParams"),
     "SnapReport": ("e8s.geo.models", "SnapReport"),
@@ -1420,6 +1425,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "unlock": ("e8s.choreo.paths", "unlock"),
     "unpin": ("e8s.show.pinning", "unpin"),
     "upgrade_dependency": ("e8s.show.dependencies", "upgrade_dependency"),
+    "upgrade_repository": ("e8s.show.upgrade", "upgrade_repository"),
     "validate_dependencies": ("e8s.show.validate", "validate_dependencies"),
     "validate_paths": ("e8s.show.validate", "validate_paths"),
     "validate_set": ("e8s.show.validate", "validate_set"),
@@ -1626,6 +1632,7 @@ __all__ = [
     "ShowIndex",
     "ShowIndexEntry",
     "ShowLookup",
+    "ShowUpgrade",
     "ShowValidationError",
     "SineWaveFormParams",
     "SnapReport",
@@ -2018,6 +2025,7 @@ __all__ = [
     "unlock",
     "unpin",
     "upgrade_dependency",
+    "upgrade_repository",
     "validate_dependencies",
     "validate_paths",
     "validate_set",

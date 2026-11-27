@@ -1286,6 +1286,15 @@
       "stored": "collections.abc.Mapping[e8s.core.ids.TransitionId, e8s.choreo.path_models.TransitionSpec]"
     }
   },
+  "ShowUpgrade": {
+    "model": {
+      "blobs_copied": "Count",
+      "blobs_linked": "Count",
+      "revisions": "Count",
+      "show": "str",
+      "skipped": "tuple[tuple[str, str], ...]"
+    }
+  },
   "ShowValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "SineWaveFormParams": {
     "model": {
@@ -1514,10 +1523,8 @@
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "UpgradeReport": {
     "model": {
-      "blobs_copied": "Count",
-      "blobs_linked": "Count",
-      "revisions": "Count",
-      "shows": "tuple[str, ...]"
+      "shows": "tuple[e8s.show.storage_models.ShowUpgrade, ...]",
+      "skipped": "tuple[tuple[str, str], ...]"
     }
   },
   "ValidationIssue": {
@@ -1912,6 +1919,7 @@
   "unlock": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel) -> e8s.choreo.path_models.TransitionSpec",
   "unpin": "(show: e8s.show.models.Show, target: PinTarget, pin_id: str) -> e8s.show.models.Show",
   "upgrade_dependency": "(show: e8s.show.models.Show, ref: str, version: str, sheet: e8s.sheet.models.Sheet | None = None) -> e8s.show.models.Show",
+  "upgrade_repository": "(source: pathlib.Path, target: pathlib.Path) -> e8s.show.storage_models.UpgradeReport",
   "validate_dependencies": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.core.validation.ValidationReport",
   "validate_paths": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec) -> e8s.core.validation.ValidationReport",
   "validate_set": "(show: e8s.show.models.Show, candidate: e8s.choreo.models.Set) -> e8s.core.validation.ValidationReport",

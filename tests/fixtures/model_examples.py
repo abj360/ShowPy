@@ -119,6 +119,7 @@ from e8s.show.storage_models import (
     FsckFinding,
     FsckReport,
     GcReport,
+    ShowUpgrade,
     UpgradeReport,
 )
 from e8s.show.workspace import open_workspace
@@ -343,6 +344,7 @@ def _storage_examples() -> list[FrozenModel]:
         FsckFinding(code="MISSING_BLOB", path="blobs/ab", message="blob is gone"),
         FsckReport(ok=True),
         GcReport(),
+        ShowUpgrade(show="show_1"),
         UpgradeReport(),
         ConformanceReport(),
     ]

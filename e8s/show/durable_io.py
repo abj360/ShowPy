@@ -23,7 +23,9 @@ Contains:
     flush_directory(): flushes a folder so its new names survive, fully for the commit point
     make_folder(): creates a folder and its missing parents
     write_temp(): writes bytes to a new temp file in a folder and returns its path
+    write_temp_pieces(): writes bytes given piece by piece to a new temp file and returns its path
     link_new(): links a file under a new name, reporting whether the name was free
+    link_file(): links a file under a new name without following a symlink, reporting a refusal
     CREATE_FLAGS: creates a file only where no file or link has its name
     CREATED_FILE_MODE: gives a file created in place the mode of a linked temp file
     open_new(): creates an empty file only where no file or link has its name
@@ -41,7 +43,7 @@ import os
 import stat
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -197,12 +199,32 @@ def write_temp(folder: Path, data: bytes) -> Path:
     ...     write_temp(Path(folder), b"hi").read_bytes()
     b'hi'
     """
+    return write_temp_pieces(folder, (data,))
+
+
+def write_temp_pieces(folder: Path, pieces: Iterable[bytes]) -> Path:
+    """Writes bytes given piece by piece to a new temp file in a folder and flushes them.
+
+    Args:
+        folder: Folder that holds the temp file; it must exist.
+        pieces: Bytes to write, in order; only one piece is held at a time.
+
+    Returns:
+        temp: Path of the written file; the caller links, moves or removes it. A failure while
+            the pieces are made or written removes it.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     write_temp_pieces(Path(folder), (b"h", b"i")).read_bytes()
+    b'hi'
+    """
     with tempfile.NamedTemporaryFile(dir=folder, delete=False, prefix=TEMP_PREFIX) as handle:
         try:
-            handle.write(data)
+            for piece in pieces:
+                handle.write(piece)
             handle.flush()
             flush_file(handle.fileno())
-        except OSError:
+        except BaseException:
             handle.close()
             Path(handle.name).unlink(missing_ok=True)
             raise
@@ -230,6 +252,39 @@ def link_new(source: Path, target: Path) -> bool:
         os.link(source, target)
     except FileExistsError:
         return False
+    return True
+
+
+def link_file(source: Path, target: Path) -> bool | None:
+    """Links an existing file under a new name, never following a symlink at `source`.
+
+    Args:
+        source: Existing file to link; where the system allows it, a symlink there is linked
+            itself, so a caller that checks the new name sees a link and refuses it.
+        target: New name for it, which a link never replaces.
+
+    Returns:
+        is_linked: True when the name now names the file, False when it was taken, None when
+            the file system refused the link (MOVE_FALLBACK_ERRNOS), as across two mounts.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     source, target = Path(folder) / "a", Path(folder) / "b"
+    ...     _ = source.write_bytes(b"x")
+    ...     link_file(source, target), link_file(source, target)
+    (True, False)
+    """
+    try:
+        if os.link in os.supports_follow_symlinks:
+            os.link(source, target, follow_symlinks=False)
+        else:
+            os.link(source, target)
+    except FileExistsError:
+        return False
+    except OSError as error:
+        if error.errno in MOVE_FALLBACK_ERRNOS:
+            return None
+        raise
     return True
 
 

@@ -1,0 +1,280 @@
+"""
+upgrade.py --- copies a layout-1 repository into a new layout-2 root, never touching the source
+
+Contains:
+    upgrade_repository(): copies every show of a layout-1 root, with its whole history, into a
+        new layout-2 root
+"""
+
+import hashlib
+from collections.abc import Callable, Iterator
+from pathlib import Path
+
+from e8s.core.canonical import jcs
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import StorageError
+from e8s.show import durable_io
+from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt
+from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer
+from e8s.show.document_dump import dump_json
+from e8s.show.durable_io import mapped_io
+from e8s.show.durable_reads import file_pieces, listed_entries, lstat_info, opened_capped
+from e8s.show.file_backend import (
+    LOG_DIR,
+    LOG_READ_MAX_BYTES,
+    MANIFEST_FILE,
+    OBJECT_DIR,
+    RECORD_DIR,
+    SHOWS_DIR,
+    SLOT_DIGITS,
+)
+from e8s.show.history_models import Revision
+from e8s.show.layout import HOUSEKEEPING_NAMES, LAYOUT_FILE, LEGACY_LAYOUT, TEMP_DIR, read_layout
+from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_DIR, ROOT_LINK, TREE_DIR, _FileBackend
+from e8s.show.show_folders import show_folder
+from e8s.show.storage_models import ShowUpgrade, UpgradeReport
+from e8s.show.upgrade_source import SourceShow, left_out, list_source
+
+SOURCE_HINT = (
+    "pass the root folder of a repository written before v0.5.0; a root that holds "
+    f"{LAYOUT_FILE} needs no upgrade"
+)
+TARGET_HINT = (
+    "pass a folder that does not exist yet, or an empty one, outside the source; a folder an "
+    f"interrupted upgrade left has no {LAYOUT_FILE}: delete it and run upgrade_repository again"
+)
+
+
+def _bad_folder(message: str, hint: str, folder: Path) -> StorageError:
+    return StorageError(message, hint=hint, context={"path": str(folder)}, code=ErrorCode.BAD_PATH)
+
+
+def _require_layout_1(source: Path) -> None:
+    """Refuses a source that holds no layout-1 repository."""
+    if read_layout(source) != LEGACY_LAYOUT:
+        raise _bad_folder(f"no layout-1 repository at {source} to upgrade", SOURCE_HINT, source)
+
+
+def _require_free_target(source: Path, target: Path) -> None:
+    """Refuses a target inside the source, one that is no folder, and one that holds anything."""
+    resolved = target.resolve()
+    if resolved == source.resolve() or source.resolve() in resolved.parents:
+        raise _bad_folder(f"upgrade target {target} is inside the source", TARGET_HINT, target)
+    info = lstat_info("", target)
+    if info is None:
+        return
+    with mapped_io("", target):
+        if not target.is_dir():
+            raise _bad_folder(f"upgrade target {target} is not a folder", TARGET_HINT, target)
+        names = [name for name, _ in listed_entries(target, follows_links=True)]
+    stored = [name for name in names if name not in HOUSEKEEPING_NAMES]
+    if LAYOUT_FILE in stored:
+        message = f"upgrade target {target} already holds a repository"
+        raise _bad_folder(message, TARGET_HINT, target)
+    if stored:
+        message = f"upgrade target {target} is not empty: it holds {', '.join(stored[:3])}"
+        raise _bad_folder(message, TARGET_HINT, target)
+
+
+class _Target:
+    """Writes the new layout-2 root: every file placed under a name nothing else holds.
+
+    `shows/` is created first, so a target an upgrade leaves unfinished holds a folder and no
+    layout file, which every reader refuses; `layout.json` is placed last.
+
+    Attributes:
+        root: The new root.
+        links_blobs: Whether blobs are still hard-linked; a refused link switches to copies.
+    """
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.links_blobs = True
+        with mapped_io("", root):
+            durable_io.make_folder(root / SHOWS_DIR)
+            durable_io.make_folder(root / TEMP_DIR)
+        self._placer = FilePlacer(root / TEMP_DIR)
+
+    def show_folder(self, show_id: str) -> Path:
+        folder = self.root / SHOWS_DIR / show_folder(show_id)
+        with mapped_io(show_id, folder):
+            for name in (LOG_DIR, RECORD_DIR, OBJECT_DIR):
+                durable_io.make_folder(folder / name)
+        return folder
+
+    def place(self, show_id: str, path: Path, data: bytes) -> None:
+        """Places a new file; a name another writer took during the upgrade fails it."""
+        if not self._placer.place(show_id, path, data):
+            raise _taken(show_id, path)
+
+    def transfer(self, show_id: str, source: Path, target: Path) -> bool:
+        """Links a blob into place, or copies it where links are refused; True when linked.
+
+        Both ways the bytes under the new name are hashed before the upgrade goes on, so a blob
+        whose bytes do not match its name stops the upgrade before the layout file exists.
+        """
+        if self.links_blobs:
+            with mapped_io(show_id, target, is_link=True):
+                is_linked = durable_io.link_file(source, target)
+            if is_linked:
+                _require_digest(show_id, source, _digest_of(show_id, target, source))
+                return True
+            if is_linked is False:
+                raise _taken(show_id, target)
+            self.links_blobs = False
+        self._copy(show_id, source, target)
+        return False
+
+    def _copy(self, show_id: str, source: Path, target: Path) -> None:
+        """Copies a blob a piece at a time through a temp file, checking its digest first."""
+        hasher = hashlib.sha256()
+
+        def hashed(pieces: Iterator[bytes]) -> Iterator[bytes]:
+            for piece in pieces:
+                hasher.update(piece)
+                yield piece
+
+        fail = _naming(show_id, source)
+        with (
+            mapped_io(show_id, source),
+            opened_capped(source, "blob", BLOB_MAX_BYTES, fail) as handle,
+        ):
+            pieces = hashed(file_pieces(handle, BLOB_MAX_BYTES))
+            temp = durable_io.write_temp_pieces(self.root / TEMP_DIR, pieces)
+        with mapped_io(show_id, target):
+            try:
+                _require_digest(show_id, source, hasher.hexdigest())
+                if not durable_io.move_new(temp, target):
+                    raise _taken(show_id, target)
+            finally:
+                durable_io.remove_file(temp)
+
+    def flush_show(self, folder: Path) -> None:
+        with mapped_io("", folder):
+            for name in (OBJECT_DIR, RECORD_DIR, LOG_DIR):
+                durable_io.flush_directory(folder / name)
+            durable_io.flush_directory(folder)
+
+    def finish(self) -> None:
+        """Flushes the folders, then places `layout.json` and flushes the root fully."""
+        with mapped_io("", self.root):
+            durable_io.flush_directory(self.root / SHOWS_DIR)
+            durable_io.flush_directory(self.root / TEMP_DIR)
+            durable_io.flush_directory(self.root, follows_links=True)
+            self.place("", self.root / LAYOUT_FILE, LAYOUT_BYTES)
+            durable_io.flush_directory(self.root, is_commit_point=True, follows_links=True)
+
+
+def _taken(show_id: str, path: Path) -> StorageError:
+    return corrupt(show_id, path, "another writer placed this file during the upgrade")
+
+
+def _naming(show_id: str, named: Path) -> Callable[[Path, str], StorageError]:
+    """Builds the failure hook that reports a refused blob under the source path it came from."""
+
+    def fail(_path: Path, reason: str) -> StorageError:
+        return corrupt(show_id, named, reason)
+
+    return fail
+
+
+def _digest_of(show_id: str, path: Path, named: Path) -> str:
+    """Hashes a stored blob a piece at a time; a refused file is reported under `named`."""
+    hasher = hashlib.sha256()
+    fail = _naming(show_id, named)
+    with mapped_io(show_id, path), opened_capped(path, "blob", BLOB_MAX_BYTES, fail) as handle:
+        for piece in file_pieces(handle, BLOB_MAX_BYTES):
+            hasher.update(piece)
+    return hasher.hexdigest()
+
+
+def _require_digest(show_id: str, source: Path, found: str) -> None:
+    if found != source.name:
+        raise corrupt(show_id, source, "blob bytes do not match their digest")
+
+
+def _upgrade_show(reader: _FileBackend, target: _Target, listed: SourceShow) -> ShowUpgrade:
+    """Copies one show's history slot by slot, its blobs first, and reports what it moved."""
+    show_id = listed.show_id
+    revisions = reader.log(show_id)
+    folder = target.show_folder(show_id)
+    manifest = {"id": show_id, "legacy_before": len(revisions) + FIRST_SEQ}
+    target.place(show_id, folder / MANIFEST_FILE, dump_json(manifest))
+    budget = ReadBudget(show_id, LOG_READ_MAX_BYTES)
+    blobs: set[str] = set()
+    linked = 0
+    for seq, revision in enumerate(revisions, start=FIRST_SEQ):
+        tree = reader.tree(show_id, revision.id)
+        for digest in sorted(set(tree.values()) - blobs):
+            source = reader.root / show_id / OBJECT_DIR / digest
+            linked += target.transfer(show_id, source, folder / OBJECT_DIR / digest)
+            blobs.add(digest)
+        record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": tree})
+        slot = jcs(revision.to_json()) + b"\n"
+        budget.spend(len(record) + len(slot))
+        target.place(show_id, folder / RECORD_DIR / f"{revision.id}.json", record)
+        target.place(show_id, folder / LOG_DIR / f"{seq:0{SLOT_DIGITS}d}", slot)
+    target.flush_show(folder)
+    return ShowUpgrade(
+        show=show_id,
+        revisions=len(revisions),
+        blobs_linked=linked,
+        blobs_copied=len(blobs) - linked,
+        skipped=left_out(listed, _used_files(revisions, blobs)),
+    )
+
+
+def _used_files(revisions: list[Revision], blobs: set[str]) -> dict[str, set[str]]:
+    """Names the files of each store folder a show's history uses."""
+    return {
+        LINK_DIR: {ROOT_LINK, *(revision.id for revision in revisions[:-1])},
+        TREE_DIR: {f"{revision.id}.json" for revision in revisions},
+        OBJECT_DIR: blobs,
+    }
+
+
+def upgrade_repository(source: Path, target: Path) -> UpgradeReport:
+    """Copies every show of a layout-1 root, with its whole history, into a new layout-2 root.
+
+    Every revision keeps its ID, parent, time and tree. Blobs are hard-linked where the two
+    roots share a file system and copied a piece at a time otherwise; each is hashed on the way.
+    The source is only read: nothing is written, renamed or removed under it, and a symlink or
+    special file in it refuses the upgrade before anything is written. The caps every read keeps
+    apply. `layout.json` is written last, after everything else is flushed, so an interrupted
+    upgrade leaves a target that readers refuse; delete it and run the upgrade again. The host
+    swaps the folders afterwards, so rolling back is keeping the source.
+
+    Args:
+        source: Root of a repository written before v0.5.0.
+        target: New folder for the layout-2 root; it must not exist yet, or be empty, and must
+            not be inside the source.
+
+    Returns:
+        report: For each show, the revisions copied, the blobs linked and copied and the files
+            left out; and the root entries left out, each with a reason.
+
+    >>> import json, tempfile
+    >>> from datetime import UTC, datetime
+    >>> from e8s.show.document_repository import revision_id
+    >>> from e8s.show.file_repository import FileRepository
+    >>> at = datetime(2026, 11, 27, tzinfo=UTC)
+    >>> rev = revision_id("", at, {})
+    >>> record = {"revision": {"id": rev, "parent": "", "at": at.isoformat()}, "tree": {}}
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     old, new = Path(folder) / "old", Path(folder) / "new"
+    ...     for name in ("next", "trees"):
+    ...         (old / "show_1" / name).mkdir(parents=True)
+    ...     _ = (old / "show_1" / "next" / "root").write_text(rev)
+    ...     _ = (old / "show_1" / "trees" / f"{rev}.json").write_text(json.dumps(record))
+    ...     report = upgrade_repository(old, new)
+    ...     report.shows[0].revisions, FileRepository(new).head("show_1") == rev
+    (1, True)
+    """
+    _require_layout_1(source)
+    _require_free_target(source, target)
+    shows, skipped = list_source(source)
+    reader = _FileBackend(source)
+    writer = _Target(target)
+    upgraded = tuple(_upgrade_show(reader, writer, show) for show in shows)
+    writer.finish()
+    return UpgradeReport(shows=upgraded, skipped=tuple(skipped))

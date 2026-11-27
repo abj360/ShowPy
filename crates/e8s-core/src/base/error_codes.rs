@@ -22,7 +22,7 @@ pub enum ErrorCode {
     BadFont,
     /// A repository id is not 64-digit hex, or a show, set, note or form ID cannot be stored.
     BadId,
-    /// A show id or workspace path cannot be stored, or names a directory where a file belongs.
+    /// A show id, workspace path or upgrade folder cannot be used, or names a folder for a file.
     BadPath,
     /// A similarity fit gets point arrays that are not matched (N, 2) arrays of numbers.
     BadShape,

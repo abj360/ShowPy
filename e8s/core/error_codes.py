@@ -32,7 +32,7 @@ class ErrorCode(StrEnum):
     BAD_ID = "BAD_ID"
     """A repository id is not 64-digit hex, or a show, set, note or form ID cannot be stored."""
     BAD_PATH = "BAD_PATH"
-    """A show id or workspace path cannot be stored, or names a directory where a file belongs."""
+    """A show id, workspace path or upgrade folder cannot be used, or names a folder for a file."""
     BAD_SHAPE = "BAD_SHAPE"
     """A similarity fit gets point arrays that are not matched (N, 2) arrays of numbers."""
     COINCIDENT_SLOTS = "COINCIDENT_SLOTS"

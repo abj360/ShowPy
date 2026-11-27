@@ -5,7 +5,8 @@ Contains:
     FsckFinding: holds one problem a repository check found
     FsckReport: holds every finding of a repository check and whether it passed
     GcReport: holds what a clean-up removed or would remove
-    UpgradeReport: holds what an upgrade of a repository moved
+    ShowUpgrade: holds what an upgrade moved of one show and what it left out
+    UpgradeReport: holds what an upgrade of a repository moved, show by show
     ConformanceReport: holds which backend conformance checks passed and which failed
 """
 
@@ -66,20 +67,36 @@ class GcReport(FrozenModel):
     skipped: tuple[tuple[str, str], ...] = ()
 
 
-class UpgradeReport(FrozenModel):
-    """Holds what an upgrade of a repository to the current layout moved.
+class ShowUpgrade(FrozenModel):
+    """Holds what an upgrade moved of one show and what it left out.
 
     Attributes:
-        shows: IDs of the shows upgraded.
-        revisions: Revisions rewritten.
-        blobs_linked: Blobs linked into the new layout.
-        blobs_copied: Blobs copied into the new layout.
+        show: ID of the show.
+        revisions: Revisions copied, each with its ID, parent, time and tree kept.
+        blobs_linked: Blobs hard-linked from the source, which shares a file system.
+        blobs_copied: Blobs copied, where a hard link was refused.
+        skipped: Pairs of a path in the show folder, relative to the source root, and why the
+            upgrade left it out: a temp file, or a file or folder no revision uses.
     """
 
-    shows: tuple[str, ...] = ()
+    show: str
     revisions: Count = 0
     blobs_linked: Count = 0
     blobs_copied: Count = 0
+    skipped: tuple[tuple[str, str], ...] = ()
+
+
+class UpgradeReport(FrozenModel):
+    """Holds what an upgrade of a repository to the current layout moved, show by show.
+
+    Attributes:
+        shows: What each show's upgrade moved, sorted by show ID.
+        skipped: Pairs of an entry of the source root that holds no show and why the upgrade left
+            it out.
+    """
+
+    shows: tuple[ShowUpgrade, ...] = ()
+    skipped: tuple[tuple[str, str], ...] = ()
 
 
 class ConformanceReport(FrozenModel):
