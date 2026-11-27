@@ -10,6 +10,8 @@ Contains:
         record after the last old-scheme one, so a swapped record there reads as CORRUPT
     test_a_history_with_no_old_scheme_id_gets_no_legacy_before: writes a manifest holding only
         the show ID, after which fsck is clean and a commit lands
+    test_upgrade_lists_the_revision_fields_it_drops: names the authorship fields v0.1 stored in
+        each revision, and nothing for v0.4.0, whose revisions hold none
 """
 
 import json
@@ -34,6 +36,8 @@ AFTER = "/renders/after.txt"
 STALE_PARENTS = (4, 0)
 # The v0.4.0 fixture's second revision has an old-scheme ID; every later one recomputes.
 LEGACY_BEFORE = 3
+CURRENT_FIELDS = frozenset({"id", "parent", "at", "changed"})
+RECORD_KEYS = frozenset({"revision", "tree"})
 
 
 def _upgraded(tmp_path: Path) -> Path:
@@ -89,3 +93,28 @@ def test_a_history_with_no_old_scheme_id_gets_no_legacy_before(tmp_path: Path) -
     head = repo.head(SHOW_ID)
     landed = repo.transaction(SHOW_ID, {AFTER: b"after"}, expected_revision=head, at=AT)
     assert FileRepository(tmp_path / "new").head(SHOW_ID) == landed.id
+
+
+def _stored_fields(source: Path, revision_id: str) -> tuple[str, ...]:
+    """Names the keys of a layout-1 record that a current revision does not hold."""
+    record = json.loads((source / LEGACY_SHOW / "trees" / f"{revision_id}.json").read_bytes())
+    extra = [f"revision.{key}" for key in record["revision"] if key not in CURRENT_FIELDS]
+    return tuple(sorted(extra + [f"record.{key}" for key in record if key not in RECORD_KEYS]))
+
+
+@pytest.mark.parametrize(("release", "drops"), [("v0.1.1", True), ("v0.4.0", False)])
+def test_upgrade_lists_the_revision_fields_it_drops(
+    tmp_path: Path, release: str, *, drops: bool
+) -> None:
+    source = copied(tmp_path, release)
+    report = upgrade_repository(source, tmp_path / "new")
+    history = FileBackend(tmp_path / "new").log(LEGACY_SHOW)
+    expected = tuple(
+        (revision.id, fields)
+        for revision in history
+        if (fields := _stored_fields(source, revision.id))
+    )
+    assert report.shows[0].dropped == expected
+    assert bool(expected) is drops
+    if drops:
+        assert all("revision.actor" in fields for _, fields in expected)

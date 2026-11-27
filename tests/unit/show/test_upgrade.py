@@ -174,7 +174,8 @@ def test_regression_every_released_fixture_upgrades_with_ids_kept(
         ).hexdigest(),
     }
     shown = report.shows[0]
-    assert shown == ShowUpgrade(show=show_id, revisions=len(history), blobs_linked=len(blobs))
+    expected_show = ShowUpgrade(show=show_id, revisions=len(history), blobs_linked=len(blobs))
+    assert shown.replace(dropped=()) == expected_show
     assert report.skipped == ()
     assert fsck(target).findings == ()
     landed = new.transaction(show_id, {AFTER: b"after"}, expected_revision=history[-1].id, at=AT)

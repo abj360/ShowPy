@@ -306,6 +306,7 @@ def _show() -> dict[str, tuple[Changes, ...]]:
                 "blobs_linked": 2,
                 "blobs_copied": 1,
                 "skipped": (("s/next/.tmp-1", "temp file a layout-1 writer left behind"),),
+                "dropped": (("a" * 64, ("revision.actor", "revision.message")),),
             },
         ),
         "UpgradeReport": (

@@ -211,12 +211,15 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
     folder = target.show_folder(show_id)
     budget = ReadBudget(show_id, LOG_READ_MAX_BYTES)
     blobs: set[str] = set()
+    dropped: list[tuple[str, tuple[str, ...]]] = []
     linked = 0
     legacy = 0
     ids: list[str] = []
     for seq, revision in enumerate(revisions, start=FIRST_SEQ):
         tree = reader.tree(show_id, revision.id)
         ids.append(revision.id)
+        if fields := reader.dropped_fields(show_id, revision.id):
+            dropped.append((revision.id, fields))
         if not recomputes(revision, tree):
             legacy = seq
         for digest in sorted(set(tree.values()) - blobs):
@@ -237,6 +240,7 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
         blobs_linked=linked,
         blobs_copied=len(blobs) - linked,
         skipped=left_out(listed, _used_files(revisions, blobs)),
+        dropped=tuple(dropped),
     )
 
 

@@ -44,6 +44,7 @@ OBJECT_DIR = "objects"
 TEMP_PREFIX = ".tmp-"
 REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
+RECORD_PARTS = frozenset({"revision", "tree"})
 # A link holds one 64-digit hex ID; v0.1 and v0.2 may have added a newline. Rounded up.
 LINK_MAX_BYTES = 128
 # A 600-spot x 120-set show's tree record is 47 KB for 362 documents (130 bytes each, measured
@@ -237,6 +238,26 @@ class Layout1Reader:
         if isinstance(stored, dict):
             stored = {k: v for k, v in stored.items() if k not in LEGACY_REVISION_KEYS}
         return Revision._validated(stored)
+
+    @_guarded
+    def dropped_fields(self, show_id: str, revision_id: str) -> tuple[str, ...]:
+        """Names the stored fields of a revision's record that reading it leaves out.
+
+        Args:
+            show_id: The show.
+            revision_id: A revision the chain holds.
+
+        Returns:
+            dropped: `revision.<key>` for each authorship key v0.1 and v0.2 stored and
+                `record.<key>` for each key beside the revision and tree, sorted.
+        """
+        folder = self._dir(show_id) / TREE_DIR
+        record = self._record(show_id, revision_id, folder)
+        stored = record["revision"]
+        names = [f"record.{key}" for key in record if key not in RECORD_PARTS]
+        if isinstance(stored, dict):
+            names += [f"revision.{key}" for key in stored if key in LEGACY_REVISION_KEYS]
+        return tuple(sorted(names))
 
     def _check_revision(
         self, show_id: str, revision: Revision, expected_id: str, parent: str, source: Path

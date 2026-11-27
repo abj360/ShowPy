@@ -77,6 +77,9 @@ class ShowUpgrade(FrozenModel):
         blobs_copied: Blobs copied, where a hard link was refused.
         skipped: Pairs of a path in the show folder, relative to the source root, and why the
             upgrade left it out: a temp file, or a file or folder no revision uses.
+        dropped: Pairs of a revision ID and the stored fields its copy no longer holds, such as
+            `revision.actor` and `revision.message`, which v0.1 and v0.2 stored and the revision
+            ID still hashes; `record.<key>` names an extra key beside the revision and tree.
     """
 
     show: str
@@ -84,6 +87,7 @@ class ShowUpgrade(FrozenModel):
     blobs_linked: Count = 0
     blobs_copied: Count = 0
     skipped: tuple[tuple[str, str], ...] = ()
+    dropped: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 class UpgradeReport(FrozenModel):

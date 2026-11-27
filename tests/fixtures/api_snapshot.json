@@ -1295,6 +1295,7 @@
     "model": {
       "blobs_copied": "Count",
       "blobs_linked": "Count",
+      "dropped": "tuple[tuple[str, tuple[str, ...]], ...]",
       "revisions": "Count",
       "show": "str",
       "skipped": "tuple[tuple[str, str], ...]"
