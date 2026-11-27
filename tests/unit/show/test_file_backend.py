@@ -771,15 +771,23 @@ def test_regression_junction_under_the_root_is_refused(tmp_path: Path) -> None:
     import _winapi
 
     root = tmp_path / "root"
-    landed = _landed(FileBackend(root), 1)
+    warm = FileBackend(root)
+    landed = _landed(warm, 1)
     outside = _outside_folder(tmp_path)
     moved = outside / _folder(root).name
     _folder(root).rename(moved)
     _winapi.CreateJunction(str(moved), str(_folder(root)))
+    before = _snapshot(outside)
     revision, tree, blobs = _change(landed[0].id, 5)
-    with pytest.raises(StorageError) as caught:
-        FileBackend(root).commit(SHOW_ID, revision, tree, blobs)
-    assert caught.value.code == "CORRUPT"
+    with pytest.raises(StorageError) as written:
+        warm.commit(SHOW_ID, revision, tree, blobs)
+    assert written.value.code == "CORRUPT"
+    assert "symbolic link or junction" in written.value.message
+    assert _snapshot(outside) == before
+    with pytest.raises(StorageError) as read:
+        FileBackend(root).log(SHOW_ID)
+    assert read.value.code == "CORRUPT"
+    assert read.value.context["show"] == SHOW_ID
 
 
 def test_log_longer_than_max_revisions_is_refused(
