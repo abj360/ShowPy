@@ -3,7 +3,8 @@ events.py --- canvas events: derives them from revisions and replays them on a s
 
 Contains:
     EVENT_ID_LENGTH: sets how many characters of a revision ID start a derived event ID
-    edit_ops(): lists the placement, form, path and count edits between two shows
+    edit_ops(): lists the placement, form, path and count edits between two shows, form
+        deletions included
     apply_event(): replays one canvas event as a model operation
     delete_form(): removes a form from its owning set and from the show
     decode_event(): decodes stored event JSON, dropping a v0.2 actor field
@@ -138,7 +139,11 @@ def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, EventPayload
 
 
 def edit_ops(before: Show, after: Show) -> list[ChangeOp]:
-    """Lists the path, count, placement and form edits that turn one show into another."""
+    """Lists the path, count, placement and form edits between two shows, for overlap checks.
+
+    A form the later show deleted is listed as a FormOp of the form as it was, so a check of
+    what changed sees the deletion; replaying that op would add the form back.
+    """
     ops: list[ChangeOp] = []
     shared = [t for t in after.transition_ids() if t in before.transition_ids()]
     ops += [
@@ -157,6 +162,7 @@ def edit_ops(before: Show, after: Show) -> list[ChangeOp]:
             if p.entity in previous and previous[p.entity] != p
         ]
     ops += [FormOp(form=f) for k, f in sorted(after.forms.items()) if before.forms.get(k) != f]
+    ops += [FormOp(form=f) for k, f in sorted(before.forms.items()) if k not in after.forms]
     return ops
 
 

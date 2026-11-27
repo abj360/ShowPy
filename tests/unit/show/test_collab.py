@@ -433,8 +433,6 @@ def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_tran
         accept(designer, "p1", AT + 2 * STEP)
 
 
-@pytest.mark.defect("UP-9.7-91")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-91")
 def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() -> None:
     """Refuses, or keeps the form deleted, when accepting an edit of a deleted form (audit 9.7)."""
     with_form = two_set_show().replace(forms={"f1": FORM})

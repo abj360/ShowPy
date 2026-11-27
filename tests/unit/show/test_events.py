@@ -20,6 +20,8 @@ Contains:
         path row as edit_paths
     test_regression_events_since_ignores_a_revision_record_that_hides_a_change: finds the
         documents a revision changed from its tree, not from its record's changed list
+    test_regression_a_proposal_on_a_form_deleted_at_head_is_stale: refuses accepting an edit of
+        a form the head deleted
 """
 
 import json
@@ -34,7 +36,7 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import Placement
 from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.choreo.recipe_models import LineRecipe
-from e8s.core.errors import LockedError, SchemaError
+from e8s.core.errors import ConflictError, LockedError, SchemaError
 from e8s.core.ids import ID_MAX_LENGTH, FormId, SetId, SpotId, make_tid
 from e8s.core.json_types import JsonValue
 from e8s.geo.shapes import line
@@ -55,6 +57,7 @@ from e8s.show.events import apply_event, decode_event, events_since
 from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin
+from e8s.show.proposals import accept, is_stale, propose
 from e8s.show.show_io import load_show, save_show
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.structured import COMMENTS_DOC
@@ -244,6 +247,20 @@ def test_regression_events_since_ignores_a_revision_record_that_hides_a_change(
         replayed = apply_event(replayed, event, force=True)
     head = load_show(designer)
     assert replayed.replace(revision=head.revision) == head
+
+
+def test_regression_a_proposal_on_a_form_deleted_at_head_is_stale() -> None:
+    _, agent, designer = open_session(two_set_show().replace(forms={"f1": FORM}), AT)
+    swapped = FORM.replace(members=FORM.members[::-1])
+    propose(agent, [FormOp(form=swapped)], "swap the ends", "p1", AT + STEP)
+    designer.refresh()
+    show = load_show(designer)
+    without_form = show.replace(forms={}, sets=(show.sets[0], show.sets[1].replace(forms=())))
+    save_show(designer, without_form, AT + 2 * STEP)
+    assert is_stale(designer, "p1")
+    with pytest.raises(ConflictError, match="form f1"):
+        accept(designer, "p1", AT + 3 * STEP)
+    assert "f1" not in load_show(designer).forms
 
 
 def _edit(show: Show, kind: str, number: int) -> Show:
