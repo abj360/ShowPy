@@ -20,6 +20,10 @@ Contains:
         between its link and its unlink left beside the same file
     test_gc_leaves_both_files_when_a_name_fills_with_other_bytes_while_aside: keeps both and
         reports them as needing an operator
+    test_gc_removes_a_file_whose_move_set_its_change_time: removes an unreached blob although
+        the link, unlink or rename that set it aside changed its change time
+    test_gc_puts_back_a_file_that_changes_once_set_aside: keeps a blob whose set-aside copy
+        changes between gc's lookup after the move and its removal
     test_move_new_renames_where_links_fail: moves by rename without replacing, where the file
         system refuses hard links (EINVAL included), and raises other link failures
     test_move_new_reports_a_name_taken_during_its_rename: answers False when the rename finds the
@@ -37,13 +41,16 @@ import pytest
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
-from e8s.show import durable_io
+from e8s.show import durable_io, durable_reads
+from e8s.show import gc as gc_module
 from e8s.show.backend import digest
 from e8s.show.file_backend import FileBackend
 from e8s.show.fsck import fsck
+from e8s.show.fsck_findings import SET_ASIDE_PREFIX
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.storage_models import GcReport
+from tests.fixtures.fsck_repos import with_stat
 from tests.fixtures.gc_races import (
     OLD,
     REDO,
@@ -261,6 +268,55 @@ def test_gc_leaves_both_files_when_a_name_fills_with_other_bytes_while_aside(
     assert blob.read_bytes() == b"other bytes"
     codes = {(f.code, f.path) for f in fsck(tmp_path).findings}
     assert ("UNKNOWN_FILE", aside.relative_to(tmp_path).as_posix()) in codes
+
+
+def _set_aside_lookups(
+    monkeypatch: pytest.MonkeyPatch, change: Callable[[os.stat_result, int], os.stat_result]
+) -> None:
+    """Passes each lookup of a set-aside name through `change`, with its count so far."""
+    lookup = durable_reads.lstat_info
+    count: list[int] = []
+
+    def changed(show_id: str, path: Path) -> os.stat_result | None:
+        info = lookup(show_id, path)
+        if info is None or not path.name.startswith(SET_ASIDE_PREFIX):
+            return info
+        count.append(1)
+        return change(info, len(count))
+
+    monkeypatch.setattr(gc_module, "lstat_info", changed)
+
+
+def test_gc_removes_a_file_whose_move_set_its_change_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POSIX sets the change time on a link, unlink or rename; Windows keeps its creation time."""
+    now = datetime.now(UTC)
+    _, blob = unreachable_blob(tmp_path, now)
+    later = blob.lstat().st_ctime_ns + 10**9
+    _set_aside_lookups(monkeypatch, lambda info, _: with_stat(info, st_ctime_ns=later))
+    report = gc(tmp_path, at=now, confirm=True)
+    assert report.removed == (blob.relative_to(tmp_path).as_posix(),)
+    assert sorted(p.name for p in blob.parent.iterdir()) == sorted(
+        [digest(b"render 0"), digest(b"static")]
+    )
+
+
+def test_gc_puts_back_a_file_that_changes_once_set_aside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another gc linking the copy back changes it after this gc's lookup that follows the move."""
+    now = datetime.now(UTC)
+    _, blob = unreachable_blob(tmp_path, now)
+
+    def changed_on_second_lookup(info: os.stat_result, count: int) -> os.stat_result:
+        return info if count == 1 else with_stat(info, st_ctime_ns=info.st_ctime_ns + 1)
+
+    _set_aside_lookups(monkeypatch, changed_on_second_lookup)
+    report = gc(tmp_path, at=now, confirm=True)
+    assert report.removed == ()
+    assert blob.read_bytes() == REDO
+    assert not any(p.name.startswith(SET_ASIDE_PREFIX) for p in blob.parent.iterdir())
 
 
 @pytest.mark.parametrize("refusal", [errno.EXDEV, errno.EPERM, errno.ENOTSUP, errno.EINVAL])

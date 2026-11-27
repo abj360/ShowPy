@@ -15,7 +15,12 @@ from pathlib import Path
 from e8s.show import durable_io
 from e8s.show.commit_writes import STALE_TEMP_AGE
 from e8s.show.durable_io import mapped_io
-from e8s.show.durable_reads import has_same_bytes, lstat_info
+from e8s.show.durable_reads import (
+    has_same_bytes,
+    is_same_file,
+    lstat_info,
+    moved_file_identity,
+)
 from e8s.show.file_backend import LOG_DIR, SLOT_DIGITS
 from e8s.show.fsck import require_zoned
 from e8s.show.fsck_findings import (
@@ -43,30 +48,36 @@ def _has_moved(show: ShowScan) -> bool:
     return lstat_info(show.show_id, following) is not None
 
 
-def _is_listed_file(info: os.stat_result, listed: os.stat_result) -> bool:
-    """Tells whether an lstat result is the file listed, by its inode where it has one.
-
-    Python documents st_ino as unique only when non-zero; where a file system reports 0, the
-    device, size and modification time must all match instead.
-    """
-    if info.st_ino == 0 or listed.st_ino == 0:
-        return (info.st_dev, info.st_size, info.st_mtime_ns) == (
-            listed.st_dev,
-            listed.st_size,
-            listed.st_mtime_ns,
-        )
-    return (info.st_dev, info.st_ino) == (listed.st_dev, listed.st_ino)
+def _is_old_file(info: os.stat_result, cutoff: datetime) -> bool:
+    return stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff.timestamp()
 
 
 def _is_unchanged(path: Path, leftover: Leftover, cutoff: datetime) -> bool:
-    """Tells whether `path` is still the regular file listed, and still older than the cut-off."""
+    """Tells whether `path` is still the regular file listed, in the same state, and still old.
+
+    The inode alone never proves it: a file system may give a freed inode to the file that
+    replaces it, so the device, inode, size and both times must all match the listing.
+    """
     info = lstat_info("", path)
-    return (
-        info is not None
-        and stat.S_ISREG(info.st_mode)
-        and _is_listed_file(info, leftover.info)
-        and info.st_mtime < cutoff.timestamp()
-    )
+    return info is not None and _is_old_file(info, cutoff) and is_same_file(info, leftover.info)
+
+
+def _moved_info(aside: Path, leftover: Leftover, cutoff: datetime) -> os.stat_result | None:
+    """Returns the lstat result of a file just set aside if it is still the file listed.
+
+    The move sets the file's change time on POSIX, so the result is compared with the listing in
+    all but that time, and it becomes the state every later check of the copy must match.
+    """
+    info = lstat_info("", aside)
+    if info is None or not _is_old_file(info, cutoff):
+        return None
+    return info if moved_file_identity(info) == moved_file_identity(leftover.info) else None
+
+
+def _is_still(path: Path, info: os.stat_result) -> bool:
+    """Tells whether `path` still shows the file and state of an earlier lstat result."""
+    now = lstat_info("", path)
+    return now is not None and is_same_file(now, info)
 
 
 def _removed_temps(temps: list[Leftover], cutoff: datetime) -> list[Leftover]:
@@ -97,14 +108,21 @@ def _set_aside_and_remove(show: ShowScan, leftover: Leftover, cutoff: datetime) 
 
     A writer that reuses the file freshens it first, and one that finds it gone places it
     again, so a file that is fresh, replaced or placed again once aside goes back, and so does
-    every file of a show that landed a slot meanwhile.
+    every file of a show that landed a slot meanwhile. The copy is removed only while it still
+    shows the state it had just after the move.
     """
     origin = leftover.path
     aside = origin.with_name(SET_ASIDE_PREFIX + origin.name)
     if not _is_unchanged(origin, leftover, cutoff) or not durable_io.move_new(origin, aside):
         return False
-    is_untouched = _is_unchanged(aside, leftover, cutoff) and lstat_info("", origin) is None
-    if is_untouched and not _has_moved(show):
+    moved = _moved_info(aside, leftover, cutoff)
+    is_untouched = (
+        moved is not None
+        and lstat_info("", origin) is None
+        and not _has_moved(show)
+        and _is_still(aside, moved)
+    )
+    if is_untouched:
         durable_io.remove_file(aside)
         return True
     _put_back(aside, origin)
