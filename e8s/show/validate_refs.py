@@ -19,6 +19,7 @@ from collections.abc import Iterator, Mapping
 from typing import Literal, NamedTuple
 
 from e8s.cast.select import select
+from e8s.choreo.engine import ALL
 from e8s.choreo.form_models import Form
 from e8s.choreo.match_ops import forms_of_set
 from e8s.choreo.models import Set
@@ -44,7 +45,6 @@ FORMS_ROLE = "forms"
 DRILL_ROLE = "drill"
 MAX_NAMED_UNFLAGGED = 5
 PIN_KIND = "pin"
-ALL_SPOTS = "all"
 
 
 def make_issue(
@@ -320,7 +320,7 @@ def _override_selector(number: int, error: E8sError) -> ValidationIssue:
 
 def _override_spots(show: Show, override: FacingOverride, number: int) -> Iterator[ValidationIssue]:
     entities = override.entities
-    if entities == ALL_SPOTS:
+    if entities == ALL:
         return
     if isinstance(entities, str):
         try:
