@@ -35,6 +35,7 @@ from e8s.show.collab_models import (
 )
 from e8s.show.documents import is_show_doc
 from e8s.show.history_models import Revision
+from e8s.show.integrity import changed_paths
 from e8s.show.item_table import TIMING, set_keys_by_id, transition_key
 from e8s.show.items import changes
 from e8s.show.locks import require_unlocked
@@ -303,8 +304,8 @@ def _comments(ws: Workspace, revision: str) -> dict[str, Comment]:
     return {} if raw is None else {c.id: c for c in decode_comments(raw)}
 
 
-def _comment_events(ws: Workspace, r: Revision) -> list[_Edit]:
-    if COMMENTS_DOC not in r.changed:
+def _comment_events(ws: Workspace, r: Revision, paths: list[str]) -> list[_Edit]:
+    if COMMENTS_DOC not in paths:
         return []
     old, new = _comments(ws, r.parent), _comments(ws, r.id)
     changed = [c for k, c in new.items() if old.get(k) != c]
@@ -328,10 +329,12 @@ def events_since(ws: Workspace, revision: str) -> list[CanvasEvent]:
     """Derives the canvas events of every revision after `revision`, oldest first.
 
     Events are derived from the items that changed between stored states, so a revision that
-    changed no show document decodes no show, and replaying the events with apply_event() on the
-    show at `revision` reproduces each later placement, form, path and count edit. Structural
-    edits (sets added or removed, cast or sheet changes) show up in changelog() only. Replaying a
-    log that holds unpin events or pin replacements needs `force=True` in apply_event().
+    changed no show document decodes no show. What a revision changed is read from the blob
+    digests of its tree and its parent's, never from its stored record. Replaying the events
+    with apply_event() on the show at `revision` reproduces each later placement, form, path and
+    count edit. Structural edits (sets added or removed, cast or sheet changes) show up in
+    changelog() only. Replaying a log that holds unpin events or pin replacements needs
+    `force=True` in apply_event().
 
     Args:
         ws: Workspace on the show.
@@ -347,11 +350,12 @@ def events_since(ws: Workspace, revision: str) -> list[CanvasEvent]:
     current = None if revision == ROOT_REVISION else ws.show_at(revision)
     events: list[CanvasEvent] = []
     for r in log:
+        changed = changed_paths(ws.tree_at(r.parent), ws.tree_at(r.id))
         found: list[_Edit] = []
-        if any(is_show_doc(path) for path in r.changed):
+        if any(is_show_doc(path) for path in changed):
             after = ws.show_at(r.id)
             if current is not None and after is not None:
                 found = _show_events(current, after)
             current = after
-        events += _stamped(r, [*found, *_comment_events(ws, r)])
+        events += _stamped(r, [*found, *_comment_events(ws, r, changed)])
     return events

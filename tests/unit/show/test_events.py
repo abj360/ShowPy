@@ -18,6 +18,8 @@ Contains:
     test_regression_locked_form_deletion_needs_force: refuses replaying a locked form's deletion
     test_regression_transition_paths_edit_without_counts_change_is_reported: reports a changed
         path row as edit_paths
+    test_regression_events_since_ignores_a_revision_record_that_hides_a_change: finds the
+        documents a revision changed from its tree, not from its record's changed list
 """
 
 import json
@@ -221,6 +223,27 @@ def test_regression_transition_paths_edit_without_counts_change_is_reported() ->
     _save_edit(designer, PathsOp(spec=spec))
     (event,) = events_since(agent, base)
     assert (event.kind, event.payload) == ("edit_paths", PathsOp(spec=spec))
+
+
+def test_regression_events_since_ignores_a_revision_record_that_hides_a_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, agent, designer = open_session(_wide_show(), AT)
+    base_revision = designer.revision
+    base = load_show(designer)
+    hidden = _save_edit(designer, _move("T1", -1.0))
+    later = _save_edit(designer, _move("T2", -2.0, "3"))
+    log = agent.repo.revisions(agent.show_id)
+    forged = [r.replace(changed=()) if r.id == hidden else r for r in log]
+    assert "/sets/2/drill.json" in next(r.changed for r in log if r.id == hidden)
+    monkeypatch.setattr(agent.repo, "revisions", {agent.show_id: forged}.__getitem__)
+    events = events_since(agent, base_revision)
+    assert [(e.kind, e.revision) for e in events] == [("move", hidden), ("move", later)]
+    replayed = base
+    for event in events:
+        replayed = apply_event(replayed, event, force=True)
+    head = load_show(designer)
+    assert replayed.replace(revision=head.revision) == head
 
 
 def _edit(show: Show, kind: str, number: int) -> Show:
