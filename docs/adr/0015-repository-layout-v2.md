@@ -622,3 +622,8 @@ of truth, and this addendum records where it departs from the text above.
   v0.1 and v0.2 authorship keys) in `ShowUpgrade.dropped`. On a layout-1 root, `FileRepository`
   writes, `FileAssetStore.put`, `fsck` and `gc` all raise `VersionError` (code `OLD_LAYOUT`)
   whose hint is the runnable upgrade call.
+- **Correction 2026-11-27, decision 15.** Comparing files covers only the folders of the target
+  that exist. A target that spells `..` or `.` below a folder that does not exist yet, or runs
+  through a symlink to nothing, is refused by its spelling (`StorageError`, code `BAD_PATH`)
+  before anything is written, even where it would land outside the source: creating the missing
+  folders would let the file system follow `..` into the source.
