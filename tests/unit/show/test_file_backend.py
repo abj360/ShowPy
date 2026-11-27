@@ -60,6 +60,7 @@ Contains:
         folder (Windows only)
     test_log_longer_than_max_revisions_is_refused: refuses a log over MAX_REVISIONS
     test_log_reads_at_most_the_byte_budget: refuses a log whose slots and records pass the budget
+    test_warm_head_does_not_look_for_a_gap: returns the remembered head without a second look
     test_every_read_error_names_the_show: carries the real show ID in every read error
     test_regression_shows_errors_never_carry_an_empty_show: leaves out the show key when a folder
         is unreadable before its show is known
@@ -764,6 +765,14 @@ def test_log_reads_at_most_the_byte_budget(tmp_path: Path, monkeypatch: pytest.M
         FileBackend(tmp_path).log(SHOW_ID)
     assert caught.value.code == "TOO_LARGE"
     assert caught.value.context["show"] == SHOW_ID
+
+
+def test_warm_head_does_not_look_for_a_gap(tmp_path: Path) -> None:
+    landed = _landed(FileBackend(tmp_path), 3)
+    backend = FileBackend(tmp_path)
+    backend.head(SHOW_ID)
+    _slot(tmp_path, 2).unlink()
+    assert backend.head(SHOW_ID) == landed[-1].id
 
 
 def test_every_read_error_names_the_show(tmp_path: Path) -> None:

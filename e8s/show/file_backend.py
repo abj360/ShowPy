@@ -218,7 +218,8 @@ class FileBackend:
         """Returns the revision in the last slot, or the root revision before the first.
 
         The manifest is checked once per backend, as for every other read, so a warm head still
-        looks up one slot.
+        looks up one slot. A warm head does not look for a gap after the slot it remembers; the
+        next commit does, and so does log().
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
