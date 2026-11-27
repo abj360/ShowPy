@@ -21,7 +21,7 @@ Contains:
     test_regression_gc_never_trusts_an_inode_of_zero: tells a replaced or retimed file from the
         listed one by size and time where the file system reports inode 0
     test_regression_gc_keeps_a_file_replaced_with_a_reused_inode: keeps a file replaced by one
-        the file system gave the freed inode, which differs in size or change time only
+        the file system gave the freed inode, which differs in size, mtime or ctime only
     test_regression_gc_keeps_a_file_replaced_with_a_reused_inode_as_it_moves: keeps such a file
         replaced between gc's last check of its name and its move aside
     test_regression_gc_removes_files_a_listing_reports_without_inodes: removes unreachable and
@@ -342,6 +342,14 @@ def _only_size_differs(listed: os.stat_result) -> dict[str, int]:
     }
 
 
+def _only_mtime_differs(listed: os.stat_result) -> dict[str, int]:
+    return {
+        "st_size": listed.st_size,
+        "st_mtime_ns": listed.st_mtime_ns + 1,
+        "st_ctime_ns": listed.st_ctime_ns,
+    }
+
+
 def _replace_reusing_inode(
     monkeypatch: pytest.MonkeyPatch,
     stray: Path,
@@ -369,8 +377,8 @@ def _replace_reusing_inode(
 
 @pytest.mark.parametrize(
     "fields",
-    [_as_written, _only_ctime_differs, _only_size_differs],
-    ids=["replaced", "only_ctime", "only_size"],
+    [_as_written, _only_ctime_differs, _only_size_differs, _only_mtime_differs],
+    ids=["replaced", "only_ctime", "only_size", "only_mtime"],
 )
 def test_regression_gc_keeps_a_file_replaced_with_a_reused_inode(
     tmp_path: Path,
@@ -380,7 +388,7 @@ def test_regression_gc_keeps_a_file_replaced_with_a_reused_inode(
     """Linux and Windows file systems may give a replaced file's freed inode to its replacement.
 
     The replacement reports the listed file's device and inode, under its name and once set
-    aside, so only its size or its change time tells it apart.
+    aside, so only its size, modification time or change time tells it apart.
     """
     _, landed = _repository(tmp_path)
     garbage = _garbage(tmp_path, landed)
@@ -400,7 +408,11 @@ def test_regression_gc_keeps_a_file_replaced_with_a_reused_inode(
     assert len(report.removed) == len(garbage) - 1
 
 
-@pytest.mark.parametrize("fields", [_as_written, _only_size_differs], ids=["replaced", "only_size"])
+@pytest.mark.parametrize(
+    "fields",
+    [_as_written, _only_size_differs, _only_mtime_differs],
+    ids=["replaced", "only_size", "only_mtime"],
+)
 def test_regression_gc_keeps_a_file_replaced_with_a_reused_inode_as_it_moves(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
