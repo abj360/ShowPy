@@ -336,7 +336,9 @@ def create_new(target: Path, data: bytes) -> bool:
 
     A file system without hard links places files this way. Until the write returns, a reader
     can find the file empty, so readers of such files reread them. A write that fails, or writes
-    less than `data`, removes the file it created and raises.
+    less than `data`, removes the file it created and raises: only a shorter start was ever in
+    place, which no reader accepts. Once every byte is written a reader may already rely on the
+    file, so a failing flush keeps it and raises.
 
     Args:
         target: New name for the file; a file or link already there is never replaced.
@@ -359,12 +361,14 @@ def create_new(target: Path, data: bytes) -> bool:
         written = os.write(descriptor, data)
         if written != len(data):
             raise OSError(errno.EIO, f"wrote {written} of {len(data)} bytes", str(target))
-        flush_file(descriptor)
-    except BaseException:
+    except OSError:
         os.close(descriptor)
         remove_file(target)
         raise
-    os.close(descriptor)
+    try:
+        flush_file(descriptor)
+    finally:
+        os.close(descriptor)
     return True
 
 

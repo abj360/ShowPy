@@ -20,12 +20,15 @@ Contains:
         the record and blob folders before the slot, then the slot's folder fully, in both paths
     test_first_commit_flushes_its_folders_before_the_slot_without_hard_links: flushes the root,
         shows/ and the show folder before the first slot in both paths
+    test_regression_failed_flush_keeps_a_visible_file: keeps a blob another commit landed on and a
+        slot a reader saw when their flush fails, so nothing goes missing and no gap opens
 """
 
 import errno
 import os
 import sys
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -332,3 +335,80 @@ def test_first_commit_flushes_its_folders_before_the_slot_without_hard_links(
     assert _folders_before_the_slot(linked) == _chain("linked")
     assert _folders_before_the_slot(unlinked) == _chain("unlinked")
     assert unlinked[-3:] == [(PLACE, "log"), (FLUSH,), (FOLDER, "log", COMMIT_POINT)]
+
+
+def _fail_flush_while_visible(
+    monkeypatch: pytest.MonkeyPatch, path: Path, while_visible: Callable[[], object]
+) -> None:
+    """Fails the flush of `path` once, after `while_visible` ran with every byte of it in place."""
+    real_flush_file = durable_io.flush_file
+
+    def flaky_flush(descriptor: int) -> None:
+        if path.exists() and os.path.samestat(os.fstat(descriptor), path.stat()):
+            monkeypatch.setattr(durable_io, "flush_file", real_flush_file)
+            while_visible()
+            raise OSError(errno.EIO, "Input/output error")
+        real_flush_file(descriptor)
+
+    monkeypatch.setattr(durable_io, "flush_file", flaky_flush)
+
+
+def _shared_blob_lands_twice(root: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Lands B on a blob A created in place while A's flush of that blob fails."""
+    writer, other = FileBackend(root), FileBackend(root)
+    [base] = _landed(writer, 1)
+    shared = b"shared bytes"
+    changes = {}
+    for name in ("a", "b"):
+        path = f"/renders/{name}.txt"
+        changes[name] = (
+            Revision(
+                id=revision_id(base.id, AT, {path: digest(shared)}),
+                parent=base.id,
+                at=AT,
+                changed=(path,),
+            ),
+            {path: digest(shared)},
+            {digest(shared): shared},
+        )
+    blob = root / "shows" / show_folder(SHOW_ID) / "objects" / digest(shared)
+    _fail_flush_while_visible(monkeypatch, blob, lambda: other.commit(SHOW_ID, *changes["b"]))
+    with pytest.raises(StorageError) as caught:
+        writer.commit(SHOW_ID, *changes["a"])
+    assert caught.value.code == "IO"
+    reader = FileBackend(root)
+    landed = changes["b"][0]
+    assert reader.head(SHOW_ID) == landed.id
+    assert reader.blob(SHOW_ID, digest(shared)) == shared
+    return [revision.id for revision in reader.log(SHOW_ID)]
+
+
+def _seen_slot_stays(root: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Lets a warm backend see slot 2 while its flush fails, then commit a child on it."""
+    writer, warm = FileBackend(root), FileBackend(root)
+    [base] = _landed(writer, 1)
+    revision, tree, blobs = _change(base.id, 1)
+    seen: list[str] = []
+    _fail_flush_while_visible(monkeypatch, _slot(root, 2), lambda: seen.append(warm.head(SHOW_ID)))
+    with pytest.raises(StorageError) as caught:
+        writer.commit(SHOW_ID, revision, tree, blobs)
+    assert caught.value.code == "IO"
+    assert seen == [revision.id]
+    _landed(warm, 1, revision.id, 2)
+    return [landed.id for landed in FileBackend(root).log(SHOW_ID)][:2]
+
+
+VISIBLE_FILES: dict[str, Callable[[Path, pytest.MonkeyPatch], list[str]]] = {
+    "shared blob": _shared_blob_lands_twice,
+    "slot a reader saw": _seen_slot_stays,
+}
+
+
+@pytest.mark.parametrize("case", sorted(VISIBLE_FILES))
+def test_regression_failed_flush_keeps_a_visible_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Keeps a file whose bytes were all written when its flush fails: a reader may rely on it."""
+    _without_hard_links(monkeypatch)
+    history = VISIBLE_FILES[case](tmp_path, monkeypatch)
+    assert len(history) == 2
