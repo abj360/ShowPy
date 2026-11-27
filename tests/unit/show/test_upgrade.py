@@ -29,6 +29,8 @@ Contains:
     test_upgrade_keeps_the_read_caps: upgrades a show at the revision cap, refuses one past it,
         a history past the read budget and a blob past its size cap
     test_upgrade_is_deterministic: gives byte-identical targets and equal reports for one source
+    test_upgrade_flushes_every_folder_before_the_layout_file: flushes each show's folders,
+        assets/, shows/, tmp/ and the root before layout.json is placed, then the root fully
 """
 
 import errno
@@ -48,6 +50,7 @@ from e8s.core.errors import StorageError, VersionError
 from e8s.examples import two_set_show
 from e8s.show import durable_io, file_backend, layout1, upgrade
 from e8s.show.backend import digest
+from e8s.show.commit_writes import FilePlacer
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_backend import FileBackend
 from e8s.show.file_repository import FileRepository
@@ -436,3 +439,32 @@ def test_upgrade_is_deterministic(tmp_path: Path) -> None:
     assert isinstance(first, UpgradeReport)
     assert all(isinstance(show, ShowUpgrade) for show in first.shows)
     assert _files(tmp_path / "first") == _files(tmp_path / "second")
+
+
+def test_upgrade_flushes_every_folder_before_the_layout_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = copied(tmp_path), tmp_path / "new"
+    (source / "assets").mkdir()
+    (source / "assets" / digest(b"audio")).write_bytes(b"audio")
+    events: list[tuple[str, Path, bool]] = []
+    real_flush, real_place = durable_io.flush_directory, FilePlacer.place
+
+    def flush(path: Path, *, is_commit_point: bool = False, follows_links: bool = False) -> None:
+        events.append(("flush", path, is_commit_point))
+        real_flush(path, is_commit_point=is_commit_point, follows_links=follows_links)
+
+    def place(placer: FilePlacer, show_id: str, path: Path, data: bytes) -> bool:
+        events.append(("place", path, False))
+        return real_place(placer, show_id, path, data)
+
+    monkeypatch.setattr(durable_io, "flush_directory", flush)
+    monkeypatch.setattr(FilePlacer, "place", place)
+    upgrade_repository(source, target)
+    placed = events.index(("place", target / "layout.json", False))
+    before = {path for kind, path, _ in events[:placed] if kind == "flush"}
+    show = target / "shows" / show_folder(LEGACY_SHOW)
+    expected = {show, show / "log", show / "records", show / "objects"}
+    expected |= {target / "assets", target / "shows", target / "tmp", target}
+    assert expected <= before
+    assert events[placed + 1 :] == [("flush", target, True)]
