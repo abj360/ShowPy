@@ -23,6 +23,7 @@ from e8s.show.durable_reads import (
     file_pieces,
     lies_within,
     listed_entries,
+    lstat_info,
     opened_capped,
     stat_info,
 )
@@ -242,6 +243,9 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
             legacy = seq
         for digest in sorted(set(tree.values()) - blobs):
             source = reader.root / show_id / OBJECT_DIR / digest
+            if lstat_info(show_id, source) is None:
+                reason = f"revision {revision.id} names this blob, which is missing"
+                raise corrupt(show_id, source, reason)
             linked += target.transfer(show_id, source, folder / OBJECT_DIR / digest)
             blobs.add(digest)
         record, slot = record_bytes(revision, seq, tree), slot_bytes(revision)

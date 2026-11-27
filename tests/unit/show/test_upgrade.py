@@ -29,6 +29,8 @@ Contains:
     test_upgrade_keeps_the_read_caps: upgrades a show at the revision cap, refuses one past it,
         a history past the read budget and a blob past its size cap
     test_upgrade_is_deterministic: gives byte-identical targets and equal reports for one source
+    test_regression_a_missing_blob_is_corrupt_naming_its_revision: raises CORRUPT naming the blob
+        and the first revision whose tree names it, not IO, and writes no layout file
     test_upgrade_flushes_every_folder_before_the_layout_file: flushes each show's folders,
         assets/, shows/, tmp/ and the root before layout.json is placed, then the root fully
 """
@@ -468,3 +470,18 @@ def test_upgrade_flushes_every_folder_before_the_layout_file(
     expected |= {target / "assets", target / "shows", target / "tmp", target}
     assert expected <= before
     assert events[placed + 1 :] == [("flush", target, True)]
+
+
+def test_regression_a_missing_blob_is_corrupt_naming_its_revision(tmp_path: Path) -> None:
+    source, target = copied(tmp_path), tmp_path / "new"
+    old = FileRepository(source)
+    history = old.revisions(LEGACY_SHOW)
+    missing = _head_blob(source)
+    first = next(r.id for r in history if missing in old.backend.tree(LEGACY_SHOW, r.id).values())
+    (_objects(source) / missing).unlink()
+    with pytest.raises(StorageError) as caught:
+        upgrade_repository(source, target)
+    assert caught.value.code == "CORRUPT"
+    assert caught.value.context["file"] == missing
+    assert first in caught.value.message
+    expect_unfinished(target)
