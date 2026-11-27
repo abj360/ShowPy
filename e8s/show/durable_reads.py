@@ -249,35 +249,20 @@ def is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
     return file_identity(first) == file_identity(second)
 
 
-def _open_regular(path: Path) -> tuple[BinaryIO, os.stat_result] | None:
+def _open_regular(path: Path) -> BinaryIO | None:
     """Opens a file for reading only if its descriptor is a regular file; else closes it.
 
     A folder, FIFO or device swapped in after the lookup is refused by the descriptor's own
     mode, before `os.fdopen`, which raises on a folder without closing the descriptor.
-
-    Returns:
-        opened: The open file and its descriptor's fstat result, or None for any other kind.
     """
     descriptor = _open_no_follow(path, _refused)
     is_regular = False
     try:
-        info = os.fstat(descriptor)
-        is_regular = stat.S_ISREG(info.st_mode)
+        is_regular = stat.S_ISREG(os.fstat(descriptor).st_mode)
     finally:
         if not is_regular:
             os.close(descriptor)
-    return (os.fdopen(descriptor, "rb"), info) if is_regular else None
-
-
-def _is_one_open_file(first: os.stat_result, second: os.stat_result) -> bool:
-    """Tells whether the fstat results of two descriptors open at once show one file.
-
-    No file system frees a file, or gives its inode to another, while a descriptor holds it
-    open, so two open descriptors with the same non-zero device and inode share one file and
-    its bytes. Lookups by name prove nothing alike: a freed inode may go to the next file, and a
-    coarse clock (Windows) stamps two files written moments apart with the same times.
-    """
-    return first.st_ino != 0 and first.st_dev != 0 and os.path.samestat(first, second)
+    return os.fdopen(descriptor, "rb") if is_regular else None
 
 
 def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
@@ -292,11 +277,13 @@ def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
 def has_same_bytes(first: Path, second: Path) -> bool:
     """Tells whether two regular files hold the same bytes, comparing them a piece at a time.
 
-    Lookups by name answer only "different": files of different sizes differ. They never answer
-    "same", since two files written moments apart can match in every lookup field. Only bytes
-    do, unless both names, once open together, are one file (see _is_one_open_file()); that file
-    is not read. A link, a folder, a missing file or a file swapped for one of those after the
-    lookup never matches. At most COMPARE_PIECE_BYTES of each file are in memory at once.
+    Only the bytes answer "same", even for one file under two names. Metadata answers only
+    "different": files of different sizes differ. A device, inode, size and times never prove
+    equal bytes, since a reused inode and a coarse clock (Windows) let two files written moments
+    apart match in every field, and some file systems (FUSE pass-through, shares spanning several
+    disks) give two different files one device and inode even while both are open. A link, a
+    folder, a missing file or a file swapped for one of those after the lookup never matches. At
+    most COMPARE_PIECE_BYTES of each file are in memory at once.
 
     Args:
         first: One file.
@@ -322,15 +309,11 @@ def has_same_bytes(first: Path, second: Path) -> bool:
         left = _open_regular(first)
         if left is None:
             return False
-        left_file, left_info = left
-        with left_file:
+        with left:
             right = _open_regular(second)
             if right is None:
                 return False
-            right_file, right_info = right
-            with right_file:
-                return _is_one_open_file(left_info, right_info) or _pieces_match(
-                    left_file, right_file
-                )
+            with right:
+                return _pieces_match(left, right)
     except (_RefusedError, FileNotFoundError):
         return False

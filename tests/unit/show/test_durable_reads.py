@@ -4,17 +4,20 @@
 test_durable_reads.py --- tests comparing two stored files in bounded pieces, and folder listings
 
 Contains:
-    test_same_file_under_two_names_has_the_same_bytes: answers from the two open descriptors,
-        reading nothing
+    test_same_file_under_two_names_has_the_same_bytes: answers True for one file under two
+        names from its bytes, which it reads
     test_same_bytes_compares_every_piece: tells equal from unequal files of one size, the
         difference in the last piece
     test_same_bytes_reads_each_file_a_piece_at_a_time: never asks either file for more than
         COMPARE_PIECE_BYTES in one read
     test_regression_same_bytes_never_trusts_an_inode_of_zero: compares the bytes of two files
-        whose file system reports inode 0 for both, by name and by descriptor
+        whose file system reports inode 0 for both
     test_regression_same_bytes_reads_two_files_that_share_a_reused_inode: compares the bytes
         when the second name's lookup matches the first in every field, as a coarse clock and a
         reused inode allow
+    test_regression_same_bytes_reads_two_files_that_share_a_synthetic_inode: compares the bytes
+        when both open descriptors report one device and inode, as some network and FUSE file
+        systems do for different files
     test_same_bytes_tells_files_of_different_sizes_apart_unopened: answers False from the
         sizes, opening neither file
     test_same_bytes_refuses_what_is_not_a_regular_file: answers False for a missing file, a
@@ -71,7 +74,6 @@ class _RecordingReader:
 def test_same_file_under_two_names_has_the_same_bytes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Both names open at once on one inode, which no other file can take while it is open."""
     first, second = tmp_path / "a", tmp_path / "b"
     first.write_bytes(b"same")
     os.link(first, second)
@@ -83,7 +85,7 @@ def test_same_file_under_two_names_has_the_same_bytes(
 
     monkeypatch.setattr(os, "fdopen", recording_fdopen)
     assert has_same_bytes(first, second) is True
-    assert sizes == []
+    assert sizes
 
 
 def test_same_bytes_compares_every_piece(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -131,8 +133,6 @@ def test_regression_same_bytes_never_trusts_an_inode_of_zero(
         return None if info is None else with_zero_inode(info)
 
     monkeypatch.setattr(durable_reads, "lstat_info", zero_inode)
-    real_fstat = os.fstat
-    monkeypatch.setattr(os, "fstat", lambda descriptor: with_zero_inode(real_fstat(descriptor)))
     assert has_same_bytes(first, other) is False
     assert has_same_bytes(first, same) is True
 
@@ -173,6 +173,39 @@ def test_regression_same_bytes_reads_two_files_that_share_a_reused_inode(
     assert looked_up is not None
     assert file_identity(looked_up) == file_identity(one)
     assert has_same_bytes(first, other) is is_same
+
+
+def test_regression_same_bytes_reads_two_files_that_share_a_synthetic_inode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two different files can report one device and inode, even while both are open.
+
+    FUSE pass-through file systems and shares spanning several disks do, so no inode proves
+    that two files hold equal bytes.
+    """
+    first, other = tmp_path / "a", tmp_path / "c"
+    first.write_bytes(b"good bytes")
+    other.write_bytes(b"other byte")
+    one = os.lstat(first)
+    lookup = durable_reads.lstat_info
+
+    def synthetic_inode(info: os.stat_result) -> os.stat_result:
+        return with_stat(
+            info,
+            st_dev=one.st_dev,
+            st_ino=one.st_ino,
+            st_mtime_ns=one.st_mtime_ns,
+            st_ctime_ns=one.st_ctime_ns,
+        )
+
+    def synthetic_lookup(show_id: str, path: Path) -> os.stat_result | None:
+        info = lookup(show_id, path)
+        return None if info is None else synthetic_inode(info)
+
+    real_fstat = os.fstat
+    monkeypatch.setattr(durable_reads, "lstat_info", synthetic_lookup)
+    monkeypatch.setattr(os, "fstat", lambda descriptor: synthetic_inode(real_fstat(descriptor)))
+    assert has_same_bytes(first, other) is False
 
 
 def test_same_bytes_tells_files_of_different_sizes_apart_unopened(
