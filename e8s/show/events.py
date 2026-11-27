@@ -3,8 +3,6 @@ events.py --- canvas events: derives them from revisions and replays them on a s
 
 Contains:
     EVENT_ID_LENGTH: sets how many characters of a revision ID start a derived event ID
-    edit_ops(): lists the placement, form, path and count edits between two shows, form
-        deletions included
     apply_event(): replays one canvas event as a model operation
     delete_form(): removes a form from its owning set and from the show
     decode_event(): decodes stored event JSON, dropping a v0.2 actor field
@@ -23,13 +21,9 @@ from e8s.core.json_types import JsonValue
 from e8s.show.changes import apply_change
 from e8s.show.collab_models import (
     CanvasEvent,
-    ChangeOp,
     Comment,
-    CountsOp,
     FormOp,
     Highlight,
-    PathsOp,
-    PlacementOp,
 )
 from e8s.show.document_reading import reraised_for_show
 from e8s.show.documents import is_show_doc
@@ -125,34 +119,6 @@ def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, *, force: bool
         hint="pass force=True to replay it, or keep the pin as it is",
         context={"target": held.target, "id": held.id, "event": event.id},
     )
-
-
-def edit_ops(before: Show, after: Show) -> list[ChangeOp]:
-    """Lists the path, count, placement and form edits between two shows, for overlap checks.
-
-    A form the later show deleted is listed as a FormOp of the form as it was, so a check of
-    what changed sees the deletion; replaying that op would add the form back.
-    """
-    ops: list[ChangeOp] = []
-    shared = [t for t in after.transition_ids() if t in before.transition_ids()]
-    ops += [
-        PathsOp(spec=after.transition(t))
-        for t in shared
-        if after.transition(t) != before.transition(t)
-    ]
-    old = {s.id: s for s in before.sets}
-    common = [s for s in after.sets if s.id in old]
-    ops += [CountsOp(set_id=s.id, counts=s.counts) for s in common if s.counts != old[s.id].counts]
-    for current in common:
-        previous = {p.entity: p for p in old[current.id].placements}
-        ops += [
-            PlacementOp(set_id=current.id, placement=p)
-            for p in current.placements
-            if p.entity in previous and previous[p.entity] != p
-        ]
-    ops += [FormOp(form=f) for k, f in sorted(after.forms.items()) if before.forms.get(k) != f]
-    ops += [FormOp(form=f) for k, f in sorted(before.forms.items()) if k not in after.forms]
-    return ops
 
 
 def delete_form(show: Show, form_id: FormId, *, force: bool = False) -> Show:
