@@ -41,13 +41,18 @@ Contains:
         and opens a layout-1 root with its own backend
     test_regression_file_repository_writes_beside_housekeeping_entries: stores shows in a root that
         holds .DS_Store or an unreadable lost+found
+    test_regression_repository_backend_is_read_only: refuses to assign a new backend to a repository
+    test_regression_fifo_swapped_in_after_lstat_is_refused: refuses a FIFO swapped in for a slot,
+        record, manifest or blob, naming that file, with the writer thread joined
 """
 
+import contextlib
 import errno
 import json
 import multiprocessing
 import os
 import sys
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -543,3 +548,76 @@ def test_regression_repository_backend_is_read_only(tmp_path: Path) -> None:
     repo = DocumentRepository(FileBackend(tmp_path))
     with pytest.raises(AttributeError):
         object.__setattr__(repo, "backend", FileBackend(tmp_path / "other"))
+
+
+CAN_MAKE_FIFOS = hasattr(os, "mkfifo") and sys.platform != "win32"
+FIFO_JOIN_S = 5.0
+
+
+def _swap_for_fifo_after_lstat(monkeypatch: pytest.MonkeyPatch, target: Path) -> threading.Thread:
+    """Swaps `target` for a FIFO that a writer thread fills once a reader opens it."""
+    content, stale = target.read_bytes(), target.lstat()
+    target.unlink()
+    os.mkfifo(target)
+
+    def fill() -> None:
+        with contextlib.suppress(BrokenPipeError), target.open("wb") as writer:
+            writer.write(content)
+
+    real_lstat = Path.lstat
+    monkeypatch.setattr(Path, "lstat", lambda p: stale if p == target else real_lstat(p))
+    writer = threading.Thread(target=fill, daemon=True)
+    writer.start()
+    return writer
+
+
+def _join_or_release(writer: threading.Thread, target: Path) -> None:
+    """Joins the writer; one still blocked means nothing opened the FIFO, so it is released."""
+    writer.join(FIFO_JOIN_S)
+    if writer.is_alive():
+        os.close(os.open(target, os.O_RDONLY | os.O_NONBLOCK))
+        writer.join(FIFO_JOIN_S)
+    assert not writer.is_alive()
+
+
+def _log(backend: FileBackend, _landed: list[Revision]) -> object:
+    return backend.log(SHOW_ID)
+
+
+def _tree(backend: FileBackend, landed: list[Revision]) -> object:
+    return backend.tree(SHOW_ID, landed[0].id)
+
+
+def _blob(backend: FileBackend, _landed: list[Revision]) -> object:
+    return backend.blob(SHOW_ID, digest(b"render 0"))
+
+
+FIFO_TARGETS: dict[
+    str,
+    tuple[Callable[[Path, list[Revision]], Path], Callable[[FileBackend, list[Revision]], object]],
+] = {
+    "slot": (lambda root, _: _slot(root, 2), _log),
+    "record": (lambda root, landed: _record(root, landed[0].id), _tree),
+    "manifest": (lambda root, _: _folder(root) / "show.json", _log),
+    "blob": (lambda root, _: _folder(root) / "objects" / digest(b"render 0"), _blob),
+}
+
+
+@pytest.mark.skipif(not CAN_MAKE_FIFOS, reason="needs mkfifo, O_NONBLOCK and O_NOFOLLOW")
+@pytest.mark.parametrize("kind", sorted(FIFO_TARGETS))
+def test_regression_fifo_swapped_in_after_lstat_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Refuses a FIFO that holds valid content, naming the file that was swapped."""
+    landed = _landed(FileBackend(tmp_path), 2)
+    locate, read = FIFO_TARGETS[kind]
+    target = locate(tmp_path, landed)
+    writer = _swap_for_fifo_after_lstat(monkeypatch, target)
+    try:
+        with pytest.raises(StorageError) as caught:
+            read(FileBackend(tmp_path), landed)
+    finally:
+        _join_or_release(writer, target)
+    assert caught.value.code == "CORRUPT"
+    assert caught.value.context["file"] == target.name
+    assert "not a regular file" in caught.value.message
