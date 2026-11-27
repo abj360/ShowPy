@@ -11,8 +11,8 @@ Contains:
     test_commit_flushes_each_file_and_directory_before_its_slot: flushes blobs, record and their
         directories before the slot, which gets a full flush
     test_directory_flush_is_skipped_on_windows: opens no directory on Windows
-    test_directory_flush_syncs_an_opened_directory: syncs the descriptor of the
-        directory it opens
+    test_directory_flush_opens_without_following_links_and_syncs: opens the folder with
+        O_NOFOLLOW and syncs its descriptor
     test_macos_flushes_files_and_directories_with_a_barrier_and_the_slot_directory_fully: picks
         the fcntl command per flush on macOS
     test_full_flush_command_is_the_one_the_os_defines: matches F_FULLFSYNC to the fcntl module
@@ -147,7 +147,7 @@ def test_directory_flush_is_skipped_on_windows(
     flush_directory(tmp_path)
 
 
-def test_directory_flush_syncs_an_opened_directory(
+def test_directory_flush_opens_without_following_links_and_syncs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     opened: list[tuple[Path, int]] = []
@@ -165,6 +165,7 @@ def test_directory_flush_syncs_an_opened_directory(
     flush_directory(tmp_path)
     assert synced == [99]
     assert opened[0][0] == tmp_path
+    assert opened[0][1] & getattr(os, "O_NOFOLLOW", 0) == getattr(os, "O_NOFOLLOW", 0)
 
 
 def test_macos_flushes_files_and_directories_with_a_barrier_and_the_slot_directory_fully(

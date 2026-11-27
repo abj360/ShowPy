@@ -16,6 +16,7 @@ Contains:
     lstat_mode(): returns the lstat mode of a path, or None when it is absent
     is_redirect(): tells whether a path is a symlink or a Windows junction
     read_capped(): reads a regular file of at most a given size, reporting problems through a hook
+    DIRECTORY_FLAGS: opens a folder for a flush without following symlinks
     IS_WINDOWS: tells whether the process runs on Windows, which has no directory flush
     IS_MACOS: tells whether the process runs on macOS, which flushes with fcntl commands
     F_FULLFSYNC: names the macOS fcntl command that flushes the drive's cache
@@ -62,6 +63,8 @@ READ_FLAGS = (
 )
 # open(O_NOFOLLOW) on a symlink fails with ELOOP on Linux and macOS, EMLINK on FreeBSD.
 SYMLINK_OPEN_ERRNOS = frozenset({errno.ELOOP, errno.EMLINK})
+# A folder swapped for a symlink after the lstat checks must not be followed and flushed instead.
+DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
 # fcntl commands of macOS (sys/fcntl.h); Python's fcntl module has only F_FULLFSYNC.
@@ -233,7 +236,7 @@ def flush_directory(path: Path, *, is_commit_point: bool = False) -> None:
     """
     if IS_WINDOWS:
         return
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    descriptor = os.open(path, DIRECTORY_FLAGS)
     try:
         if not IS_MACOS:
             os.fsync(descriptor)
