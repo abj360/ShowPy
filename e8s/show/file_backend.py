@@ -14,7 +14,7 @@ from functools import partial
 from pathlib import Path
 
 from e8s.core.canonical import jcs
-from e8s.core.errors import SchemaError, UnknownRefError, VersionError
+from e8s.core.errors import ConflictError, SchemaError, UnknownRefError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_io
@@ -24,24 +24,35 @@ from e8s.show.backend import (
     history_too_long_error,
     unknown_revision_error,
 )
-from e8s.show.backend_checks import ReadBudget, Record, corrupt, require_caller_ids
-from e8s.show.commit_writes import flush_directories, place_file, store_blobs, store_record
+from e8s.show.backend_checks import (
+    ReadBudget,
+    Record,
+    corrupt,
+    refuse_redirect,
+    require_caller_ids,
+    require_plain_folders,
+)
+from e8s.show.commit_writes import (
+    STALE_TEMP_AGE,
+    flush_directories,
+    place_file,
+    remove_lost_record,
+    store_blobs,
+    store_record,
+    write_layout_file,
+)
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import (
-    is_redirect,
     lstat_mode,
     mapped_io,
     read_capped,
+    remove_stale_temps,
 )
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout import (
-    CURRENT_LAYOUT,
     HOUSEKEEPING_NAMES,
-    LAYOUT_FILE,
-    LAYOUT_FORMAT,
     TEMP_DIR,
-    read_layout,
 )
 from e8s.show.layout1 import (
     BLOB_MAX_BYTES,
@@ -70,13 +81,6 @@ LOG_READ_MAX_BYTES = BLOB_MAX_BYTES
 # A manifest holds one show ID; stored layout-1 IDs have no length rule, but a folder name of
 # theirs never passed 255 characters. Rounded up.
 MANIFEST_MAX_BYTES = 4096
-LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
-
-
-def _refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:
-    """Raises CORRUPT when `path`, with stat mode `mode`, is a symlink or a junction."""
-    if is_redirect(path, mode):
-        raise corrupt(show_id, path, "folder is a symbolic link or junction")
 
 
 class FileBackend:
@@ -174,17 +178,15 @@ class FileBackend:
     def _require_plain_folders(self, show_id: str) -> None:
         """Refuses a symlink or junction in place of any folder a read or write passes through."""
         folder = self._folder(show_id)
-        for path in (
+        require_plain_folders(
+            show_id,
             self.root / SHOWS_DIR,
             folder,
             folder / LOG_DIR,
             folder / RECORD_DIR,
             folder / OBJECT_DIR,
             self.root / TEMP_DIR,
-        ):
-            mode = lstat_mode(show_id, path)
-            if mode is not None:
-                _refuse_redirect(path, mode, show_id)
+        )
 
     def shows(self) -> list[str]:
         """Returns the IDs of shows with at least one slot, read from their manifests."""
@@ -193,7 +195,7 @@ class FileBackend:
             mode = lstat_mode("", folder)
             if mode is None:
                 return []
-            _refuse_redirect(folder, mode)
+            refuse_redirect(folder, mode)
             names = sorted(p.name for p in folder.iterdir() if p.name not in HOUSEKEEPING_NAMES)
             return [show for show in map(self._listed_show, names) if show is not None]
 
@@ -204,7 +206,7 @@ class FileBackend:
             raise corrupt("", folder, "entry under shows/ is not a show folder")
         mode = lstat_mode("", folder)
         if mode is not None:
-            _refuse_redirect(folder, mode)
+            refuse_redirect(folder, mode)
         if lstat_mode("", folder / MANIFEST_FILE) is None:
             return None
         show_id, _ = self._manifest("", folder)
@@ -413,11 +415,17 @@ class FileBackend:
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._prepare(show_id)
+            remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
             self._store_blobs(show_id, blobs)
             self._store_record(show_id, revision, seq, tree)
             folder = self._folder(show_id)
             flush_directories(folder / OBJECT_DIR, folder / RECORD_DIR)
-            self._claim_slot(show_id, revision, seq)
+            try:
+                self._claim_slot(show_id, revision, seq)
+            except ConflictError:
+                winner = self._read_slot(show_id, seq).id
+                remove_lost_record(self._record_path(show_id, revision.id), winner, revision.id)
+                raise
             self._remember(show_id, seq, revision.id)
 
     def _parent_seq(self, show_id: str, parent: str) -> int:
@@ -457,15 +465,7 @@ class FileBackend:
         """Links `layout.json` into place, after `tmp/` and before anything else is written."""
         if self._has_layout:
             return
-        if read_layout(self.root) != CURRENT_LAYOUT:
-            raise VersionError(
-                f"repository at {self.root} is layout 1, which this backend does not write",
-                hint="open it with FileRepository, which reads layout 1",
-                context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(self.root)},
-            )
-        durable_io.make_folder(self.root / TEMP_DIR)
-        if not self._place(show_id, self.root / LAYOUT_FILE, LAYOUT_BYTES):
-            read_layout(self.root)
+        write_layout_file(self.root, show_id)
         self._has_layout = True
 
     def _place(self, show_id: str, target: Path, data: bytes) -> bool:
