@@ -88,13 +88,14 @@ from e8s.choreo.path_models import (
 from e8s.core.caps import MAX_COUNTS
 from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
-from e8s.core.validation import ValidationReport
+from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import InMemorySheetStore
 from e8s.show._notes_document import Note, NotesDocument
 from e8s.show.anchors import Anchor
 from e8s.show.change_models import ItemKey
 from e8s.show.collab_models import Comment
 from e8s.show.models import Pin, Show
+from e8s.show.pinning import pin
 from e8s.show.validate import (
     validate_dependencies,
     validate_paths,
@@ -300,23 +301,17 @@ def test_regression_validate_show_reports_members_whose_placements_do_not_point_
     assert _mentions(_formed(points_back=False), FORM_ID)
 
 
-@pytest.mark.defect("UP-9.7-66")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-66")
 def test_regression_validate_show_reports_pins_naming_missing_items() -> None:
     """Reports a form pin on a form that does not exist (audit 9.7 validation gaps)."""
     assert _mentions(_with_pin(two_set_show(), Pin(target="form", id="ghost-form")), "ghost-form")
 
 
-@pytest.mark.defect("UP-9.7-67")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-67")
 def test_regression_validate_show_reports_pins_on_unparsable_transitions() -> None:
     """Reports a transition pin whose ID does not parse (audit 9.7 validation gaps)."""
     show = _with_pin(two_set_show(), Pin(target="transition", id="garbage"))
     assert _mentions(show, "garbage")
 
 
-@pytest.mark.defect("UP-9.7-68")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-68")
 def test_regression_validate_show_reports_pins_that_disagree_with_placement_flags() -> None:
     """Reports a pin record whose placements are not flagged pinned (audit 9.7 validation gaps)."""
     assert _mentions(_with_pin(two_set_show(), Pin(target="entity", id="T1")), "T1")
@@ -346,15 +341,11 @@ def _override(entity: str = "T1", start: float = 1.0, end: float = 2.0) -> Facin
     )
 
 
-@pytest.mark.defect("UP-9.7-71")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-71")
 def test_regression_validate_show_reports_facing_overrides_naming_unknown_spots() -> None:
     """Reports a facing override on a spot that does not exist (audit 9.7 validation gaps)."""
     assert _mentions(_edited(facing_overrides=(_override("ZZ"),)), "ZZ")
 
 
-@pytest.mark.defect("UP-9.7-72")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-72")
 def test_regression_validate_show_reports_facing_overrides_past_the_show() -> None:
     """Reports a facing override that starts after the show ends (audit 9.7 validation gaps)."""
     late = _override(start=PAST_SHOW_COUNT, end=PAST_SHOW_COUNT + 1)
@@ -585,3 +576,47 @@ def test_regression_member_check_runs_for_forms_keyed_apart_from_their_id() -> N
     """Reports a mismatched member of a form stored under a key other than its ID."""
     codes = [i.code for i in validate_show(_formed(key="zz")).issues]
     assert "MEMBER_MISMATCH" in codes
+
+
+def _issues(show: Show, code: str) -> list[ValidationIssue]:
+    return [i for i in validate_show(show).issues if i.code == code]
+
+
+def test_regression_pin_issues_carry_the_pin_item_key() -> None:
+    """Names the pin item in each pin issue, a transition by its stored folder."""
+    pins = (Pin(target="form", id="ghost"), Pin(target="transition", id="1->2"))
+    show = two_set_show().replace(pins=pins)
+    assert _item_of(show, "UNKNOWN_PIN") == ItemKey(kind="pin", path=("form", "ghost"))
+    assert _item_of(show, "PIN_MISMATCH") == ItemKey(kind="pin", path=("transition", "1-2"))
+
+
+def test_regression_validate_show_reports_a_pin_on_a_missing_transition() -> None:
+    """Reports a transition pin that parses but names no consecutive pair."""
+    show = two_set_show().replace(pins=(Pin(target="transition", id="2->1"),))
+    assert [i.code for i in validate_show(show).issues] == ["UNKNOWN_PIN"]
+
+
+def test_regression_validate_show_accepts_a_pin_made_by_pin() -> None:
+    """Reports nothing for pins that pin() flagged, on every target."""
+    show = two_set_show()
+    show = pin(pin(pin(show, "entity", "T1"), "set", "2"), "transition", "1->2")
+    assert validate_show(show).ok
+
+
+def test_regression_validate_show_reports_a_dangling_set_pin_colliding_with_a_key() -> None:
+    """Reports a set pin on a missing set whose ID is another set's key, without raising."""
+    base = two_set_show()
+    renumbered = base.sets[1]._copied(update={"key": "9"})
+    show = base.replace(
+        sets=(base.sets[0], renumbered),
+        pins=(Pin(target="set", id="9"), Pin(target="set", id="2")),
+    )
+    (issue,) = _issues(show, "UNKNOWN_PIN")
+    assert issue.context["id"] == "9"
+
+
+def test_regression_facing_override_issues_carry_the_overrides_item_key() -> None:
+    """Names the facing_override item in override issues."""
+    show = _edited(facing_overrides=(_override("ZZ", start=PAST_SHOW_COUNT, end=800.0),))
+    for code in ("UNKNOWN_SPOT", "PAST_THE_SHOW"):
+        assert _item_of(show, code) == ItemKey(kind="facing_override", path=())
