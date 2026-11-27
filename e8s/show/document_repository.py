@@ -193,8 +193,8 @@ class DocumentRepository:
         >>> repo.documents("s")["/renders/a.txt"]
         b'hi'
         """
-        blob = functools.cache(functools.partial(self._backend.blob, show_id))
-        return LazyBlobs(self._tree(show_id, revision), blob)
+        load = functools.partial(self._backend.blob, show_id)
+        return LazyBlobs(self._tree(show_id, revision), functools.cache(load), uncached=load)
 
     def _require_new_show_id(self, show_id: str) -> None:
         """Refuses a write from the root under an ID a new show may not take.

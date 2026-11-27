@@ -1,8 +1,15 @@
 """
 workspace.py --- the file view of one show at one revision, with its commit and write paths
 
+A workspace keeps per-revision caches and is not thread-safe: use one workspace per thread.
+
 Contains:
     WORKSPACE_DECODE_CACHE_SIZE: bounds the documents one workspace keeps decoded
+    WORKSPACE_TREES: bounds the revision trees one workspace keeps
+    WORKSPACE_VIEWS: bounds the migrated views one workspace keeps
+    WORKSPACE_SHOWS: bounds the decoded shows one workspace keeps
+    WORKSPACE_BLOB_BYTES: bounds the blob bytes one workspace keeps
+    WORKSPACE_CANONICAL_REVISIONS: bounds the revisions remembered as already canonical
     Workspace: exposes one show as files, reading at its own revision like a working copy
     Workspace.read(): returns a file's text or bytes
     Workspace.write(): validates and saves one file
@@ -22,12 +29,11 @@ from e8s.core.util import close_matches
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.documents import (
     SHOW_DOC,
+    MigratedView,
     decode_show,
     encode_documents,
     is_show_doc,
     migrated_view,
-    migration_changes,
-    needs_rewrite,
     split_path,
 )
 from e8s.show.files import (
@@ -41,10 +47,21 @@ from e8s.show.integrity import LazyBlobs
 from e8s.show.models import Show
 from e8s.show.set_keys import SetFolders
 from e8s.show.storage import ROOT_REVISION, Repository
+from e8s.show.workspace_caches import BlobCache, RevisionCache
 
 # A tree keeps three documents per set (set, forms, paths): two trees of a 60-set show are about
 # 360 documents, so 512 holds the revision being read and its parent, about 35 MB at 300 spots.
 WORKSPACE_DECODE_CACHE_SIZE = 512
+# Blame, diff and revert read a revision and its parent, so a few trees stay cached together;
+# a tree holds digests only, never document bytes.
+WORKSPACE_TREES = 8
+WORKSPACE_VIEWS = 2
+WORKSPACE_SHOWS = 2
+# Bounds the blob bytes read through trees, counting blob payload only (not keys or tree
+# records); the 300-spot benchmark show stores 14.7 MiB of documents, so 64 MiB holds it and
+# its parent.
+WORKSPACE_BLOB_BYTES = 64 * 2**20
+WORKSPACE_CANONICAL_REVISIONS = 256
 
 
 class Workspace:
@@ -66,12 +83,13 @@ class Workspace:
         self.repo = repo
         self.show_id = show_id
         self._revision = revision
-        self._trees: dict[str, Mapping[str, bytes]] = {}
-        self._views: dict[str, Mapping[str, bytes]] = {}
-        self._shows: dict[str, Show | None] = {}
+        self._trees = RevisionCache[Mapping[str, bytes]](WORKSPACE_TREES)
+        self._views = RevisionCache[Mapping[str, bytes]](WORKSPACE_VIEWS)
+        self._shows = RevisionCache[Show | None](WORKSPACE_SHOWS)
+        self._blobs = BlobCache(WORKSPACE_BLOB_BYTES)
         # Serves only show_at, which validates with one context, so entries never mix contexts.
         self._decode_cache = DecodeCache(WORKSPACE_DECODE_CACHE_SIZE)
-        self._canonical_revisions: set[str] = set()
+        self._canonical_revisions = RevisionCache[bool](WORKSPACE_CANONICAL_REVISIONS)
 
     @property
     def revision(self) -> str:
@@ -86,12 +104,16 @@ class Workspace:
     def tree_at(self, revision: str) -> Mapping[str, bytes]:
         """Returns the stored documents at a revision, reading each file's bytes on lookup.
 
-        Revisions never change, so the last tree is cached.
+        Revisions never change, so recently read trees are cached, and so are the blobs read
+        through them.
         """
         if revision == ROOT_REVISION:
             return {}
         if revision not in self._trees:
-            self._trees = {revision: self.repo.documents(self.show_id, revision)}
+            tree = self.repo.documents(self.show_id, revision)
+            self._trees[revision] = (
+                tree.cached(self._blobs) if isinstance(tree, LazyBlobs) else tree
+            )
         return self._trees[revision]
 
     def show_at(self, revision: str) -> Show | None:
@@ -102,7 +124,7 @@ class Workspace:
         """
         if revision not in self._shows:
             tree = self.tree_at(revision)
-            self._shows = {revision: self._decoded(tree, revision) if SHOW_DOC in tree else None}
+            self._shows[revision] = self._decoded(tree, revision) if SHOW_DOC in tree else None
         return self._shows[revision]
 
     def _decoded(self, tree: Mapping[str, bytes], revision: str) -> Show:
@@ -118,9 +140,13 @@ class Workspace:
 
     def _view(self) -> Mapping[str, bytes]:
         """Returns the tree at the workspace revision as the first save would store it."""
-        if self._revision not in self._views:
-            self._views = {self._revision: migrated_view(self._tree())}
-        return self._views[self._revision]
+        return self._view_at(self._revision)
+
+    def _view_at(self, revision: str) -> Mapping[str, bytes]:
+        """Returns a revision's tree as the first save would store it, migrating it once."""
+        if revision not in self._views:
+            self._views[revision] = migrated_view(self.tree_at(revision))
+        return self._views[revision]
 
     def read(self, path: str) -> str | bytes:
         """Returns a file: text for documents, bytes for binary renders and exports.
@@ -253,7 +279,7 @@ class Workspace:
                 is_complete=is_complete,
             )
         normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
-        self._canonical_revisions.add(normalized.id)
+        self._canonical_revisions[normalized.id] = True
         stored = self.tree_at(normalized.id)
         remaining = {p: d for p, d in changes.items() if stored.get(p) != d}
         return self._remembered(
@@ -269,15 +295,16 @@ class Workspace:
         if base in self._canonical_revisions:
             return {}
         tree = self.tree_at(base)
-        if needs_rewrite(tree):
-            return migration_changes(tree)
+        view = self._view_at(base)
+        if isinstance(view, MigratedView):
+            return dict(view.changes)
         if is_complete:
             paths = [p for p, d in changes.items() if d is not None and p in tree and tree[p] != d]
         else:
             paths = [p for p in tree if is_show_doc(p)]
         normalizing = _normalizing_changes(self.show_at(base), tree, paths)
         if not normalizing:
-            self._canonical_revisions.add(base)
+            self._canonical_revisions[base] = True
         return normalizing
 
     def _remembered(
@@ -285,7 +312,7 @@ class Workspace:
     ) -> Revision:
         """Remembers a new revision as canonical when its change wrote only canonical documents."""
         if is_complete or not any(is_show_doc(p) for p in changes):
-            self._canonical_revisions.add(revision.id)
+            self._canonical_revisions[revision.id] = True
         return revision
 
     def write(
