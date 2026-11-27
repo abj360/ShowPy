@@ -275,6 +275,24 @@ def _first_set_counts(show: Show) -> list[ValidationIssue]:
     ]
 
 
+def _negative_counts(show: Show) -> list[ValidationIssue]:
+    return [
+        make_issue(
+            ERROR,
+            ErrorCode.TIME_RANGE,
+            f"set {later.id}",
+            f"set {later.id} arrives in {later.counts:g} counts",
+            "give every set after the first counts > 0",
+            {
+                "item": ItemKey(kind="set", path=(set_key(later),), role=TIMING).to_json(),
+                "counts": later.counts,
+            },
+        )
+        for later in show.sets[1:]
+        if later.counts < 0
+    ]
+
+
 def _form_keys(show: Show) -> list[ValidationIssue]:
     return [
         ValidationIssue(
@@ -402,6 +420,8 @@ def _path_reports(show: Show) -> list[ValidationReport]:
         parts = (show.set(tid.from_set), show.set(tid.to_set), stored)
         if any(part is not None and _has_non_finite(part) for part in parts):
             continue
+        if show.set(tid.to_set).counts < 0:
+            continue
         reports.append(validate_paths(show, show.transition(tid)))
     return reports
 
@@ -433,7 +453,8 @@ def validate_show(
     too_long = _too_long(show)
     if not too_long:
         reports += _path_reports(show)
-    extra = too_long + _sequence(show) + _first_set_counts(show) + _form_keys(show)
+    extra = too_long + _sequence(show) + _first_set_counts(show) + _negative_counts(show)
+    extra += _form_keys(show)
     extra += _selections(show) + _ids(show)
     extra += _non_finite(show) + reference_issues(show) + placement_issues(show)
     extra += comment_issues(show, comments)

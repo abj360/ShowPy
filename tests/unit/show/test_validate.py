@@ -56,6 +56,8 @@ Contains:
         counts
     test_regression_first_set_count_issue_carries_the_set_timing_item: gives the first-set count
         issue the timing item of the first set and skips non-finite counts
+    test_regression_validate_show_reports_negative_set_counts_without_raising: reports a later
+        set with negative counts as TIME_RANGE instead of raising while checking its paths
     test_regression_validate_show_reports_nan_counts_on_the_first_set: reports NaN counts on the
         first set by name
     test_regression_validate_show_reports_nan_waypoints: reports a path waypoint with a NaN
@@ -497,6 +499,16 @@ def test_regression_first_set_count_issue_carries_the_set_timing_item() -> None:
     )
     nan_first = _edited(sets=(show.sets[0]._copied(update={"counts": math.nan}), show.sets[1]))
     assert "TIME_RANGE" not in _codes(validate_show(nan_first))
+
+
+def test_regression_validate_show_reports_negative_set_counts_without_raising() -> None:
+    """Reports a later set with negative counts as TIME_RANGE instead of raising."""
+    report = validate_show(_edited(sets=_set_two_with(counts=-4.0)))
+    (issue,) = [i for i in report.issues if i.code == "TIME_RANGE"]
+    assert "-4" in issue.message
+    assert ItemKey.model_validate(issue.context["item"]) == ItemKey(
+        kind="set", path=("2",), role="timing"
+    )
 
 
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
