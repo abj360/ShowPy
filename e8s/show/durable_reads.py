@@ -12,6 +12,9 @@ Contains:
     lstat_mode(): returns the lstat mode of a path, or None when it is absent
     listed_entries(): lists a folder's entries with their lstat results, sorted by name
     is_redirect(): tells whether a path is a symlink or a Windows junction
+    moved_file_identity(): returns the lstat fields a move keeps: device, inode, size, mtime
+    file_identity(): returns the lstat fields that tell a file and its state apart
+    is_same_file(): tells whether two lstat results show one file in one state
     COMPARE_PIECE_BYTES: sets how many bytes of each file one step of a comparison reads
     has_same_bytes(): tells whether two regular files hold the same bytes, reading in pieces
 """
@@ -193,13 +196,32 @@ def _refused(_path: Path, _reason: str) -> _RefusedError:
     return _RefusedError()
 
 
-def _is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
-    """Tells whether two lstat results name one file; an inode of 0 never proves it.
+def moved_file_identity(info: os.stat_result) -> tuple[int, int, int, int]:
+    """Returns what a move keeps of a file and its state: device, inode, size, modification time.
 
-    Python documents st_ino as unique only when non-zero; some Windows file systems and network
-    shares report 0 for every file.
+    A link, unlink or rename sets the file's change time on POSIX, so this leaves it out.
     """
-    return first.st_ino != 0 and (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+def file_identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
+    """Returns what tells a file and its state apart: moved_file_identity() and the change time.
+
+    A file system may give a freed inode to the next file it creates, so the inode never proves
+    alone that a name still holds the file it held. A replacement or a write changes the size or
+    a time, and the change time moves even where a writer sets the modification time back.
+    Windows reports the creation time instead, which a replacement also changes.
+    """
+    return (*moved_file_identity(info), info.st_ctime_ns)
+
+
+def is_same_file(first: os.stat_result, second: os.stat_result) -> bool:
+    """Tells whether two lstat results show one file in one state, by file_identity().
+
+    Python documents st_ino as unique only when non-zero; where a file system reports 0, the
+    device, size and times must still all match, and a result with 0 never matches one without.
+    """
+    return file_identity(first) == file_identity(second)
 
 
 def _open_regular(path: Path) -> BinaryIO | None:
@@ -230,10 +252,10 @@ def _pieces_match(first: BinaryIO, second: BinaryIO) -> bool:
 def has_same_bytes(first: Path, second: Path) -> bool:
     """Tells whether two regular files hold the same bytes, comparing them a piece at a time.
 
-    One file under two names, known by a non-zero inode, holds the same bytes and is not read;
-    files of different sizes differ. A link, a folder, a missing file or a file swapped for one
-    of those after the lookup never matches. At most COMPARE_PIECE_BYTES of each file are in
-    memory at once.
+    One file under two names, known by a non-zero inode and the same size and times, holds the
+    same bytes and is not read; files of different sizes differ. A link, a folder, a missing file
+    or a file swapped for one of those after the lookup never matches. At most
+    COMPARE_PIECE_BYTES of each file are in memory at once.
 
     Args:
         first: One file.
@@ -253,7 +275,7 @@ def has_same_bytes(first: Path, second: Path) -> bool:
     if not all(info is not None and stat.S_ISREG(info.st_mode) for info in infos):
         return False
     one, other = (info for info in infos if info is not None)
-    if _is_same_file(one, other):
+    if one.st_ino != 0 and is_same_file(one, other):
         return True
     if one.st_size != other.st_size:
         return False

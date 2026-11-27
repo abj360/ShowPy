@@ -20,6 +20,10 @@ Contains:
     test_gc_keeps_a_file_that_changed_after_the_check: keeps a file a writer touched or replaced
     test_regression_gc_never_trusts_an_inode_of_zero: tells a replaced or retimed file from the
         listed one by size and time where the file system reports inode 0
+    test_regression_gc_keeps_a_file_replaced_with_a_reused_inode: keeps a file replaced by one
+        the file system gave the freed inode, which differs in size or change time only
+    test_regression_gc_keeps_a_file_replaced_with_a_reused_inode_as_it_moves: keeps such a file
+        replaced between gc's last check of its name and its move aside
     test_gc_never_follows_a_link: keeps old temp files behind a symlinked tmp folder
     test_gc_refuses_layout_1_and_a_time_without_a_zone: raises VersionError and SchemaError
 """
@@ -35,18 +39,18 @@ import pytest
 
 from e8s.core.errors import ConflictError, SchemaError, VersionError
 from e8s.examples import two_set_show
-from e8s.show import durable_reads, fsck_scan
+from e8s.show import durable_io, durable_reads, fsck_scan
 from e8s.show import gc as gc_module
 from e8s.show.backend import digest
 from e8s.show.document_repository import DocumentRepository, revision_id
 from e8s.show.file_backend import FileBackend
 from e8s.show.fsck import fsck
-from e8s.show.fsck_findings import Leftover
+from e8s.show.fsck_findings import SET_ASIDE_PREFIX, Leftover
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder
-from tests.fixtures.fsck_repos import with_zero_inode
+from tests.fixtures.fsck_repos import with_stat, with_zero_inode
 
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 SHOW_ID = "show_1"
@@ -314,6 +318,109 @@ def test_regression_gc_never_trusts_an_inode_of_zero(
     assert gc_module._is_unchanged(stray, listed, cutoff) is True
     change(stray)
     assert gc_module._is_unchanged(stray, listed, cutoff) is False
+
+
+def _as_written(_listed: os.stat_result) -> dict[str, int]:
+    return {}
+
+
+def _only_ctime_differs(listed: os.stat_result) -> dict[str, int]:
+    return {
+        "st_size": listed.st_size,
+        "st_mtime_ns": listed.st_mtime_ns,
+        "st_ctime_ns": listed.st_ctime_ns + 1,
+    }
+
+
+def _only_size_differs(listed: os.stat_result) -> dict[str, int]:
+    return {
+        "st_size": listed.st_size + 1,
+        "st_mtime_ns": listed.st_mtime_ns,
+        "st_ctime_ns": listed.st_ctime_ns,
+    }
+
+
+def _replace_reusing_inode(
+    monkeypatch: pytest.MonkeyPatch,
+    stray: Path,
+    fields: Callable[[os.stat_result], dict[str, int]],
+) -> Callable[[], None]:
+    """Returns a replace of `stray` whose new file gc sees with the listed device and inode."""
+    names = {stray, stray.with_name(SET_ASIDE_PREFIX + stray.name)}
+    listed = os.lstat(stray)
+    lookup = durable_reads.lstat_info
+    replaced: list[bool] = []
+
+    def reused_inode(show_id: str, path: Path) -> os.stat_result | None:
+        info = lookup(show_id, path)
+        if info is None or path not in names or not replaced:
+            return info
+        return with_stat(info, st_dev=listed.st_dev, st_ino=listed.st_ino, **fields(listed))
+
+    def replace() -> None:
+        _replace(stray)
+        replaced.append(True)
+
+    monkeypatch.setattr(gc_module, "lstat_info", reused_inode)
+    return replace
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [_as_written, _only_ctime_differs, _only_size_differs],
+    ids=["replaced", "only_ctime", "only_size"],
+)
+def test_regression_gc_keeps_a_file_replaced_with_a_reused_inode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fields: Callable[[os.stat_result], dict[str, int]],
+) -> None:
+    """Linux and Windows file systems may give a replaced file's freed inode to its replacement.
+
+    The replacement reports the listed file's device and inode, under its name and once set
+    aside, so only its size or its change time tells it apart.
+    """
+    _, landed = _repository(tmp_path)
+    garbage = _garbage(tmp_path, landed)
+    stray = garbage[-2]
+    scan = fsck_scan.scan_repository
+    replace = _replace_reusing_inode(monkeypatch, stray, fields)
+
+    def scan_then_replace(root: Path, show_id: str | None, at: datetime | None) -> object:
+        found = scan(root, show_id, at)
+        replace()
+        return found
+
+    monkeypatch.setattr(gc_module, "scan_repository", scan_then_replace)
+    report = gc(tmp_path, at=AT, confirm=True)
+    assert _relative(tmp_path, stray) not in report.removed
+    assert stray.read_bytes() == b"new"
+    assert len(report.removed) == len(garbage) - 1
+
+
+@pytest.mark.parametrize("fields", [_as_written, _only_size_differs], ids=["replaced", "only_size"])
+def test_regression_gc_keeps_a_file_replaced_with_a_reused_inode_as_it_moves(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fields: Callable[[os.stat_result], dict[str, int]],
+) -> None:
+    """The replacement lands after gc's last check of the name, just before gc moves it aside."""
+    _, landed = _repository(tmp_path)
+    garbage = _garbage(tmp_path, landed)
+    stray = garbage[-2]
+    move = durable_io.move_new
+    replace = _replace_reusing_inode(monkeypatch, stray, fields)
+
+    def replace_then_move(source: Path, target: Path) -> bool:
+        if source == stray and not target.exists():
+            replace()
+        return move(source, target)
+
+    monkeypatch.setattr(durable_io, "move_new", replace_then_move)
+    report = gc(tmp_path, at=AT, confirm=True)
+    assert _relative(tmp_path, stray) not in report.removed
+    assert stray.read_bytes() == b"new"
+    assert len(report.removed) == len(garbage) - 1
 
 
 @SKIP_LINKS

@@ -11,6 +11,8 @@ Contains:
         COMPARE_PIECE_BYTES in one read
     test_regression_same_bytes_never_trusts_an_inode_of_zero: compares the bytes of two files
         whose file system reports inode 0 for both
+    test_regression_same_bytes_reads_two_files_that_share_a_reused_inode: compares the bytes
+        when the second name holds a file given the first one's freed inode
     test_same_bytes_refuses_what_is_not_a_regular_file: answers False for a missing file, a
         folder, a symlink and files of different sizes
     test_same_bytes_refuses_a_file_swapped_after_its_lookup: answers False for a link, a FIFO or
@@ -31,7 +33,7 @@ import pytest
 
 from e8s.show import durable_reads
 from e8s.show.durable_reads import has_same_bytes
-from tests.fixtures.fsck_repos import with_zero_inode
+from tests.fixtures.fsck_repos import with_stat, with_zero_inode
 
 PIECE = 4
 
@@ -118,6 +120,26 @@ def test_regression_same_bytes_never_trusts_an_inode_of_zero(
     monkeypatch.setattr(durable_reads, "lstat_info", zero_inode)
     assert has_same_bytes(first, other) is False
     assert has_same_bytes(first, same) is True
+
+
+def test_regression_same_bytes_reads_two_files_that_share_a_reused_inode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The first file is freed between the two lookups and the second gets its inode."""
+    first, other = tmp_path / "a", tmp_path / "c"
+    first.write_bytes(b"good bytes")
+    other.write_bytes(b"other byte")
+    one = os.lstat(first)
+    lookup = durable_reads.lstat_info
+
+    def reused_inode(show_id: str, path: Path) -> os.stat_result | None:
+        info = lookup(show_id, path)
+        if info is None or path != other:
+            return info
+        return with_stat(info, st_dev=one.st_dev, st_ino=one.st_ino, st_mtime_ns=one.st_mtime_ns)
+
+    monkeypatch.setattr(durable_reads, "lstat_info", reused_inode)
+    assert has_same_bytes(first, other) is False
 
 
 def test_same_bytes_refuses_what_is_not_a_regular_file(tmp_path: Path) -> None:

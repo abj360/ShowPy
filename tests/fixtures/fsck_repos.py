@@ -9,6 +9,9 @@ Contains:
     OTHER_ID: names a second show
     STATIC_BYTES: holds the blob every revision's tree keeps
     DAY: is one day, the age a torn or stale file must pass
+    STAT_FIELDS: names the lstat fields with_stat() changes by their place in the result
+    STAT_TIMES: names the lstat times with_stat() copies and changes
+    NS_PER_SECOND: converts a nanosecond time to the float seconds of an lstat time
     numbered_change(): builds revision n, which changes the render path only after the first
     landed_revisions(): commits revisions 0 to count - 1 through FileBackend
     show_path(): names a show's folder
@@ -19,6 +22,7 @@ Contains:
     age_by(): sets a file's times to a moment before AT
     snapshot(): maps every path under a root to its bytes and modification time
     codes(): lists the code and path of each finding fsck reports
+    with_stat(): returns an lstat result with some fields changed, as another file reports them
     with_zero_inode(): returns an lstat result whose inode is 0
 """
 
@@ -38,6 +42,9 @@ SHOW_ID = "fsck_show"
 OTHER_ID = "other_show"
 STATIC = "/static.txt"
 RENDER = "/render.txt"
+STAT_FIELDS = ("st_mode", "st_ino", "st_dev", "st_nlink", "st_uid", "st_gid", "st_size")
+STAT_TIMES = ("st_atime", "st_mtime", "st_ctime", "st_atime_ns", "st_mtime_ns", "st_ctime_ns")
+NS_PER_SECOND = 10**9
 STATIC_BYTES = b"static"
 DAY = timedelta(days=1)
 
@@ -103,9 +110,25 @@ def codes(root: Path, *, at: datetime | None = None) -> list[tuple[str, str]]:
     return [(item.code, item.path) for item in fsck(root, at=at).findings]
 
 
+def with_stat(info: os.stat_result, **changes: int) -> os.stat_result:
+    """Returns a copy of an lstat result with some fields changed, as another file reports them.
+
+    Args:
+        info: The lstat result to copy.
+        changes: New values by field name: a field of STAT_FIELDS, or a time in nanoseconds
+            (`st_mtime_ns`, `st_ctime_ns`, `st_atime_ns`), which sets its float time too.
+    """
+    fields = list(info)
+    times: dict[str, float | int] = {name: getattr(info, name) for name in STAT_TIMES}
+    for name, value in changes.items():
+        if name in STAT_TIMES:
+            times[name] = value
+            times[name.removesuffix("_ns")] = value / NS_PER_SECOND
+        else:
+            fields[STAT_FIELDS.index(name)] = value
+    return os.stat_result(fields, times)
+
+
 def with_zero_inode(info: os.stat_result) -> os.stat_result:
     """Returns an lstat result with st_ino 0, as some Windows and network file systems report."""
-    fields = list(info)
-    fields[1] = 0
-    times = ("st_atime", "st_mtime", "st_ctime", "st_atime_ns", "st_mtime_ns", "st_ctime_ns")
-    return os.stat_result(fields, {name: getattr(info, name) for name in times})
+    return with_stat(info, st_ino=0)
