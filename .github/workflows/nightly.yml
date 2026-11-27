@@ -13,6 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every check runs even after an earlier one fails, so one failing check never hides another.
+  # The job still fails when any step fails.
   nightly:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -27,13 +29,18 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - name: tests
+        if: ${{ !cancelled() }}
         run: uv run nox -s tests
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: slow
+        if: ${{ !cancelled() }}
         run: uv run nox -s slow
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: fuzz
+        if: ${{ !cancelled() }}
         run: uv run nox -s fuzz
-      - run: uv run nox -s bench -- --tier L
+      - name: bench
+        if: ${{ !cancelled() }}
+        run: uv run nox -s bench -- --tier L
