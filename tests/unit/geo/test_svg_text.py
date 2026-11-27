@@ -51,8 +51,10 @@ Contains:
     test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises an E8sError for
         50,000 pieces
     test_regression_simplex_tables_are_read_only: refuses item assignment on SIMPLEX and FONTS
-    test_regression_svg_arc_with_negative_radius_round_trips: re-parses the written path data of an
+    test_regression_svg_arc_with_scaled_radii_round_trips: re-parses the written path data of an
         arc whose radii were scaled to reach its end into the same arc
+    test_regression_scaled_arc_center_is_the_chord_midpoint: centers an arc whose radii were scaled
+        to reach its end exactly on the chord midpoint
 """
 
 import math
@@ -86,6 +88,7 @@ FIT_TOL_M = 1e-6
 ROUND_TRIP_ABS_TOL = 1e-6
 ROUND_TRIP_REL_TOL = 1e-9
 SCALED_ARC_PATH = "M 0 0 M 0 0 A 0.4 -2E-1 1 0 0 2 -12"
+SHORT_RADII_ARC_PATH = "M 0 0 A 6.1 3 1 0 0 2 -12"
 FLATTEN_TOL_M = 0.001
 BAD_PATH_INDEX = 5
 VIEWBOX_SVG = '<svg viewBox="0 0 100 100"><path d="M10 10 L20 10 L20 20"/></svg>'
@@ -383,10 +386,11 @@ def test_regression_parse_path_numbers_after_close_name_the_token() -> None:
     assert "command letter" in caught.value.hint
 
 
-def test_regression_svg_arc_with_negative_radius_round_trips() -> None:
-    """Re-parses an arc whose negative, too-small radii were scaled up into the same arc."""
-    first = parse_path(SCALED_ARC_PATH)[0].pieces[0]
-    second = parse_path(parse_path(SCALED_ARC_PATH)[0].to_d())[0].pieces[0]
+def test_regression_svg_arc_with_scaled_radii_round_trips() -> None:
+    """Re-parses an arc whose too-small radii were scaled up into the same arc."""
+    subpath = parse_path(SCALED_ARC_PATH)[0]
+    first = subpath.pieces[0]
+    second = parse_path(subpath.to_d())[0].pieces[0]
     assert isinstance(first, ArcPiece)
     assert isinstance(second, ArcPiece)
     assert approx_equal(
@@ -395,3 +399,10 @@ def test_regression_svg_arc_with_negative_radius_round_trips() -> None:
         abs_tol=ROUND_TRIP_ABS_TOL,
         rel_tol=ROUND_TRIP_REL_TOL,
     )
+
+
+def test_regression_scaled_arc_center_is_the_chord_midpoint() -> None:
+    """Centers an arc on the chord midpoint once its too-small radii are scaled to fit."""
+    piece = parse_path(SHORT_RADII_ARC_PATH)[0].pieces[0]
+    assert isinstance(piece, ArcPiece)
+    assert piece.center == (1.0, -6.0)
