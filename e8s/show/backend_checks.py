@@ -13,6 +13,7 @@ Contains:
     stored_revision(): checks a stored revision and returns it
     parsed_slot(): checks the bytes of a slot and returns its revision, or raises TORN_SLOT
     parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
+    require_legacy_bound(): raises CORRUPT when `legacy_before` passes the slot after the last
     require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
     Record: holds a revision record's slot number, revision and tree
     parsed_record(): checks a parsed revision record against its name and returns it
@@ -180,6 +181,24 @@ def parsed_manifest(show_id: str, path: Path, stored: JsonValue) -> tuple[str, i
     if not isinstance(legacy_before, int) or isinstance(legacy_before, bool) or legacy_before < 1:
         raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
     return listed, legacy_before
+
+
+def require_legacy_bound(show_id: str, path: Path, legacy_before: int, last: int) -> None:
+    """Raises CORRUPT when a manifest's `legacy_before` passes the slot after the last.
+
+    An upgrade writes `legacy_before` as one past its last slot and later slots only follow it,
+    so a larger value names slots that do not exist yet, whose records would then be read
+    without their IDs checked.
+
+    Args:
+        show_id: Show the manifest belongs to, named in the error.
+        path: The manifest file.
+        legacy_before: First slot whose revision ID must be recomputable from its record.
+        last: Number of the show's last slot; 0 before the first.
+    """
+    if legacy_before > last + 1:
+        reason = f"legacy_before {legacy_before} is past slot {last + 1}, the slot after the last"
+        raise corrupt(show_id, path, reason)
 
 
 def require_blob_digest(show_id: str, path: Path, data: bytes) -> None:

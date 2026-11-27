@@ -36,6 +36,7 @@ from e8s.show.backend_checks import (
     refuse_redirect,
     require_blob_digest,
     require_caller_ids,
+    require_legacy_bound,
     require_plain_folders,
     require_slot_record,
 )
@@ -162,6 +163,17 @@ class FileBackend:
             raise corrupt(show_id, folder / MANIFEST_FILE, "manifest names another show")
         self._manifests[show_id] = legacy_before
 
+    def _require_legacy_bound(self, show_id: str, last: int | None = None) -> None:
+        """Refuses a manifest whose `legacy_before` passes the slot after the last slot.
+
+        Only an upgraded show's manifest names legacy slots, so no other show looks anything up.
+        """
+        legacy_before = self._manifests.get(show_id, FIRST_SEQ)
+        if legacy_before == FIRST_SEQ:
+            return
+        seq = self._head(show_id)[0] if last is None else last
+        require_legacy_bound(show_id, self._folder(show_id) / MANIFEST_FILE, legacy_before, seq)
+
     def _require_plain_folders(self, show_id: str) -> None:
         """Refuses a symlink or junction in place of any folder a read or write passes through."""
         folder = self._folder(show_id)
@@ -221,7 +233,9 @@ class FileBackend:
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
-            return self._head(show_id)[1]
+            seq, revision_id = self._head(show_id)
+            self._require_legacy_bound(show_id, seq)
+            return revision_id
 
     def _head(self, show_id: str) -> tuple[int, str]:
         """Finds the last slot: one lookup when warm, a gallop and a bisection otherwise.
@@ -277,6 +291,7 @@ class FileBackend:
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
             last, head = self._head(show_id)
+            self._require_legacy_bound(show_id, last)
             if last > MAX_REVISIONS:
                 raise history_too_long_error(show_id, MAX_REVISIONS)
             if since == head:
@@ -344,6 +359,7 @@ class FileBackend:
         """Returns path to blob digest at a landed revision, read from its record."""
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
+            self._require_legacy_bound(show_id)
             if self._has_record(show_id, revision_id):
                 stored = self._record(show_id, revision_id)
                 if self._has_slot(show_id, stored.seq) and (
@@ -388,6 +404,7 @@ class FileBackend:
             require_caller_ids(show_id, revision, tree, blobs)
             _require_readable_sizes(show_id, tree, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
+            self._require_legacy_bound(show_id, seq - 1)
             self._prepare(show_id)
             remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
             self._store_blobs(show_id, blobs)

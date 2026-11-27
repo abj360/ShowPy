@@ -53,6 +53,8 @@ Contains:
     test_current_ids_are_required_when_the_manifest_has_no_legacy_before: refuses an old-scheme ID
         when the manifest names no legacy slots
     test_regression_cold_commit_on_a_legacy_head_lands: commits on a legacy head from a cold backend
+    test_regression_reads_refuse_legacy_before_past_the_slot_after_the_head: refuses a manifest
+        whose legacy_before passes the slot after the last, on every read and on a commit
     test_manifest_legacy_before_must_be_a_positive_integer: refuses a manifest whose legacy_before
         is not a positive integer
     test_regression_symlinked_show_folder_is_refused: refuses a symlinked shows, show, log, records,
@@ -671,6 +673,29 @@ def test_regression_cold_commit_on_a_legacy_head_lands(tmp_path: Path) -> None:
     revision, tree, blobs = _change(landed[-1].id, 7)
     FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
     assert FileBackend(tmp_path).log(SHOW_ID) == [*landed, revision]
+
+
+def test_regression_reads_refuse_legacy_before_past_the_slot_after_the_head(
+    tmp_path: Path,
+) -> None:
+    """Refuses a manifest whose legacy_before passes the slot after the last, which no upgrade
+    writes, so a forged record in a slot past the head is never read unverified."""
+    landed = _mixed_history(tmp_path, legacy=2, total=2)
+    _set_manifest(tmp_path, legacy_before=4)
+    revision, tree, blobs = _change(landed[-1].id, 7)
+    for read in (
+        lambda: FileBackend(tmp_path).head(SHOW_ID),
+        lambda: FileBackend(tmp_path).log(SHOW_ID),
+        lambda: FileBackend(tmp_path).tree(SHOW_ID, landed[0].id),
+        lambda: FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs),
+    ):
+        with pytest.raises(StorageError) as caught:
+            read()
+        assert caught.value.code == "CORRUPT"
+        assert caught.value.context["file"] == "show.json"
+        assert "legacy_before 4" in caught.value.message
+    _set_manifest(tmp_path, legacy_before=3)
+    assert FileBackend(tmp_path).log(SHOW_ID) == landed
 
 
 @pytest.mark.parametrize("legacy_before", [0, -1, True, "2", 1.5, None])
