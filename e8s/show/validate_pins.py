@@ -12,11 +12,11 @@ Contains:
 """
 
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping
 from typing import NamedTuple
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import E8sError, SchemaError
+from e8s.core.errors import E8sError, SchemaError, UnknownRefError
 from e8s.core.ids import parse_tid
 from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey
@@ -51,7 +51,33 @@ class _PinScope(NamedTuple):
     forms: Mapping[str, list[str]]
 
 
-def _pin_scope(show: Show) -> _PinScope:
+def _placements_under(show: Show, name: str) -> list[tuple[str, str]]:
+    found: list[tuple[str, str]] = []
+    for owner in show.sets:
+        if owner.id == name:
+            found += [(owner.id, p.entity) for p in owner.placements if not p.pinned]
+            continue
+        try:
+            placement = owner.get(name)
+        except UnknownRefError:
+            continue
+        if not placement.pinned:
+            found.append((owner.id, placement.entity))
+    return found
+
+
+def _named_scope(
+    show: Show, names: Collection[str]
+) -> tuple[dict[str, list[tuple[str, str]]], dict[str, list[str]]]:
+    placements = {name: _placements_under(show, name) for name in names}
+    unlocked: list[tuple[str, str]] = [
+        (key, form.set) for key, form in show.forms.items() if not form.locked
+    ]
+    forms = {name: [key for key, owner in unlocked if name in (key, owner)] for name in names}
+    return placements, forms
+
+
+def _whole_scope(show: Show) -> tuple[dict[str, list[tuple[str, str]]], dict[str, list[str]]]:
     placements: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for owner in show.sets:
         for placement in owner.placements:
@@ -65,6 +91,11 @@ def _pin_scope(show: Show) -> _PinScope:
             continue
         for name in dict.fromkeys((key, form.set)):
             forms[name].append(key)
+    return placements, forms
+
+
+def _pin_scope(show: Show, names: Collection[str] | None = None) -> _PinScope:
+    placements, forms = _whole_scope(show) if names is None else _named_scope(show, names)
     return _PinScope(
         keys=set_keys_by_id(show),
         cast_ids=frozenset(show.cast.ids()),
@@ -181,22 +212,28 @@ def pin_item_path(keys: Mapping[str, str], record: Pin) -> tuple[str, ...]:
     return pin_path(keys, record)
 
 
-def pin_issues(show: Show, records: Iterable[Pin]) -> list[ValidationIssue]:
+def pin_issues(
+    show: Show, records: Collection[Pin], *, scoped: bool = False
+) -> list[ValidationIssue]:
     """Reports pins that name missing items, do not parse, or leave covered flags unset.
 
     >>> from e8s.examples import two_set_show
-    >>> show = two_set_show()
-    >>> pin_issues(show, show.pins)
-    []
+    >>> from e8s.show.pinning import pin
+    >>> show = pin(two_set_show(), "entity", "T1")
+    >>> pin_issues(show, show.pins, scoped=True) == pin_issues(show, show.pins) == []
+    True
 
     Args:
         show: The show that holds the pins.
         records: Pins of the show to check, in report order.
+        scoped: Whether to index only the placements and forms the given pins can cover, which
+            costs a pass over the sets per pin instead of one pass over every placement; the
+            issues are the same either way.
 
     Returns:
         issues: Per pin, at most one issue.
     """
-    scope = _pin_scope(show)
+    scope = _pin_scope(show, {record.id for record in records} if scoped else None)
     return [issue for record in records for issue in _pin_issues(show, record, scope)]
 
 
