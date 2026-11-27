@@ -17,6 +17,8 @@ Contains:
         released fixture after its upgrade, whose ID and older-scheme IDs import refuses
     test_regression_export_refuses_a_tree_with_an_injected_unchanged_entry: refuses a record
         whose tree gained a path its revision did not change, which reads accept
+    test_export_refuses_a_blob_whose_bytes_do_not_hash_to_its_digest: refuses a backend that
+        returns other bytes than a tree names
     test_export_refuses_a_history_over_the_archive_caps: refuses a history with more entries
         than an archive holds
 """
@@ -143,6 +145,18 @@ def test_regression_export_refuses_a_tree_with_an_injected_unchanged_entry(
         export_archive(FileRepository(tmp_path), SHOW_ID)
     assert caught.value.code == ErrorCode.CORRUPT
     assert caught.value.context["entry"] == f"records/{landed[1].id}.json"
+
+
+def test_export_refuses_a_blob_whose_bytes_do_not_hash_to_its_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = InMemoryRepository()
+    with_history(repo, 2)
+    monkeypatch.setattr(repo.backend, "blob", lambda _show, _digest: b"other bytes")
+    with pytest.raises(StorageError) as caught:
+        export_archive(repo, SHOW_ID)
+    assert caught.value.code == ErrorCode.CORRUPT
+    assert str(caught.value.context["entry"]).startswith("objects/")
 
 
 def test_export_refuses_a_history_over_the_archive_caps(monkeypatch: pytest.MonkeyPatch) -> None:

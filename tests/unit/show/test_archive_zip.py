@@ -18,6 +18,10 @@ Contains:
     test_regression_too_many_entries_are_refused_before_the_walk: refuses an end record counting
         more entries than the cap before reading any central header
     test_regression_overlapping_entries_are_refused: refuses two entries sharing local bytes
+    test_regression_an_entry_count_that_disagrees_is_refused: refuses an end record counting
+        more or fewer entries than the central directory holds
+    test_regression_an_entry_running_past_its_end_is_refused: refuses a declared size that runs
+        into the central directory
     test_regression_duplicate_entry_names_are_refused: refuses a name written twice
     test_regression_unsorted_entry_names_are_refused: refuses names out of ascending order, on
         writing and on reading
@@ -165,6 +169,24 @@ def test_regression_overlapping_entries_are_refused() -> None:
     error = _refused(overlapping)
     assert error.code == ErrorCode.CORRUPT
     assert error.context["entry"] == "b"
+
+
+def test_regression_an_entry_count_that_disagrees_is_refused() -> None:
+    data = _archive()
+    end = len(data) - END_RECORD_SIZE
+    for count in (len(ENTRIES) + 1, len(ENTRIES) - 1):
+        recounted = data[: end + 8] + struct.pack("<HH", count, count) + data[end + 12 :]
+        assert _refused(recounted).code == ErrorCode.CORRUPT
+
+
+def test_regression_an_entry_running_past_its_end_is_refused() -> None:
+    data = _archive((("a", b"x" * 8),))
+    central = _central_offset(data)
+    longer = struct.pack("<II", 64, 64)
+    for at in (18, central + 20):
+        data = data[:at] + longer + data[at + 8 :]
+    error = _refused(data)
+    assert "runs past" in error.message
 
 
 def test_regression_duplicate_entry_names_are_refused() -> None:
