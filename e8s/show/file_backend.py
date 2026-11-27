@@ -16,7 +16,7 @@ from pathlib import Path
 from e8s.core.canonical import jcs
 from e8s.core.errors import ConflictError, UnknownRefError
 from e8s.core.json_types import JsonValue
-from e8s.show import document_repository, durable_io
+from e8s.show import durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
     conflict_error,
@@ -30,12 +30,13 @@ from e8s.show.backend_checks import (
     corrupt,
     parsed_json,
     parsed_manifest,
+    parsed_record,
     parsed_slot,
     refuse_redirect,
     require_blob_digest,
     require_caller_ids,
     require_plain_folders,
-    stored_revision,
+    require_slot_record,
 )
 from e8s.show.commit_writes import (
     STALE_TEMP_AGE,
@@ -75,7 +76,6 @@ LOG_DIR = "log"
 RECORD_DIR = "records"
 OBJECT_DIR = "objects"
 MANIFEST_FILE = "show.json"
-RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 # A slot names at most one changed path per tree entry, so the tree record's cap bounds it too.
 SLOT_MAX_BYTES = TREE_MAX_BYTES
 # A log call reads every slot after `since` and its record. The bytes it reads are capped at the
@@ -317,42 +317,16 @@ class FileBackend:
         """Requires the slot's revision to have a record that holds the same revision and seq."""
         if lstat_mode(show_id, self._record_path(show_id, revision.id)) is None:
             raise corrupt(show_id, path, "slot names a revision that has no record")
-        stored = self._record(show_id, revision.id, budget)
-        if stored.seq != seq:
-            raise corrupt(show_id, path, f"record of this slot holds seq {stored.seq}, not {seq}")
-        if stored.revision != revision:
-            raise corrupt(show_id, path, "slot differs from the revision in its record")
+        require_slot_record(
+            show_id, path, seq, revision, self._record(show_id, revision.id, budget)
+        )
 
     def _record(self, show_id: str, revision_id: str, budget: ReadBudget | None = None) -> Record:
         """Reads a revision record, checking it names itself and that its ID is verified."""
         path = self._record_path(show_id, revision_id)
         stored = self._read(show_id, path, "revision record", TREE_MAX_BYTES, budget)
-        if not isinstance(stored, dict) or stored.keys() != RECORD_KEYS:
-            raise corrupt(show_id, path, f"record must hold exactly {sorted(RECORD_KEYS)}")
-        seq, tree = stored["seq"], stored["tree"]
-        if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
-            raise corrupt(show_id, path, "record seq is not a positive integer")
-        revision = stored_revision(show_id, path, stored["revision"])
-        if revision.id != revision_id:
-            raise corrupt(show_id, path, "record holds another revision than its name")
-        if not isinstance(tree, dict) or not all(
-            isinstance(value, str) and REVISION_ID_PATTERN.fullmatch(value)
-            for value in tree.values()
-        ):
-            raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
-        checked = {key: str(value) for key, value in tree.items()}
-        self._require_scheme_id(show_id, path, seq, revision, checked)
-        return Record(seq, revision, checked)
-
-    def _require_scheme_id(
-        self, show_id: str, path: Path, seq: int, revision: Revision, tree: Mapping[str, str]
-    ) -> None:
-        """Requires the ID to be recomputable from the record, except before `legacy_before`."""
-        if seq < self._manifests.get(show_id, FIRST_SEQ):
-            return
-        changes = {changed: tree.get(changed) for changed in revision.changed}
-        if document_repository.revision_id(revision.parent, revision.at, changes) != revision.id:
-            raise corrupt(show_id, path, "record does not hash to its name")
+        legacy_before = self._manifests.get(show_id, FIRST_SEQ)
+        return parsed_record(show_id, path, stored, revision_id, legacy_before)
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         """Returns path to blob digest at a landed revision, read from its record."""

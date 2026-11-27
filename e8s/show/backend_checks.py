@@ -13,6 +13,8 @@ Contains:
     parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
     require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
     Record: holds a revision record's slot number, revision and tree
+    parsed_record(): checks a parsed revision record against its name and returns it
+    require_slot_record(): raises CORRUPT unless a slot's record holds its number and revision
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     refuse_redirect(): refuses a folder that is a symlink or a junction
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
@@ -28,7 +30,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show import durable_io
+from e8s.show import document_repository, durable_io
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import REVISION_ID_PATTERN
@@ -38,6 +40,7 @@ from e8s.show.torn_reads import is_unfinished_line
 
 CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
 MANIFEST_KEYS = frozenset({"id", "legacy_before"})
+RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 FIRST_SEQ = 1
 TORN_SLOT_HINT = (
@@ -166,6 +169,66 @@ class Record(NamedTuple):
     seq: int
     revision: Revision
     tree: dict[str, str]
+
+
+def _require_scheme_id(show_id: str, path: Path, record: Record, legacy_before: int) -> None:
+    """Requires the ID to be recomputable from the record, except before `legacy_before`."""
+    revision = record.revision
+    if record.seq < legacy_before:
+        return
+    changes = {changed: record.tree.get(changed) for changed in revision.changed}
+    if document_repository.revision_id(revision.parent, revision.at, changes) != revision.id:
+        raise corrupt(show_id, path, "record does not hash to its name")
+
+
+def parsed_record(
+    show_id: str, path: Path, stored: JsonValue, revision_id: str, legacy_before: int
+) -> Record:
+    """Checks a parsed revision record and returns it.
+
+    Args:
+        show_id: Show the record belongs to, named in errors.
+        path: The record file.
+        stored: Parsed JSON of the record.
+        revision_id: Revision the record's name gives; the record must hold it.
+        legacy_before: First slot whose revision ID must be recomputable from its record.
+
+    Returns:
+        record: The record's slot number, revision and tree, each checked.
+    """
+    if not isinstance(stored, dict) or stored.keys() != RECORD_KEYS:
+        raise corrupt(show_id, path, f"record must hold exactly {sorted(RECORD_KEYS)}")
+    seq, tree = stored["seq"], stored["tree"]
+    if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
+        raise corrupt(show_id, path, "record seq is not a positive integer")
+    revision = stored_revision(show_id, path, stored["revision"])
+    if revision.id != revision_id:
+        raise corrupt(show_id, path, "record holds another revision than its name")
+    if not isinstance(tree, dict) or not all(
+        isinstance(value, str) and REVISION_ID_PATTERN.fullmatch(value) for value in tree.values()
+    ):
+        raise corrupt(show_id, path, "tree is not a mapping of paths to digests")
+    record = Record(seq, revision, {key: str(value) for key, value in tree.items()})
+    _require_scheme_id(show_id, path, record, legacy_before)
+    return record
+
+
+def require_slot_record(
+    show_id: str, path: Path, seq: int, revision: Revision, record: Record
+) -> None:
+    """Raises CORRUPT unless the record a slot names holds the slot's number and revision.
+
+    Args:
+        show_id: Show the slot belongs to, named in errors.
+        path: The slot file, named in errors.
+        seq: The slot's number.
+        revision: The revision the slot holds.
+        record: The record of that revision.
+    """
+    if record.seq != seq:
+        raise corrupt(show_id, path, f"record of this slot holds seq {record.seq}, not {seq}")
+    if record.revision != revision:
+        raise corrupt(show_id, path, "slot differs from the revision in its record")
 
 
 class ReadBudget:
