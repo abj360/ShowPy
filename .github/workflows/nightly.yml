@@ -14,8 +14,9 @@ concurrency:
 
 jobs:
   # Every check runs even after an earlier one fails, so one failing check never hides another.
-  # The job still fails when any step fails.
+  # The job still fails when any step fails. Without a synced environment no check runs.
   nightly:
+    name: tests, slow, fuzz and large benchmarks
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -27,20 +28,21 @@ jobs:
         with:
           version: "0.13.8"
           enable-cache: true
-      - run: uv sync --locked
+      - id: sync
+        run: uv sync --locked
       - name: tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s tests
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: slow
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s slow
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: fuzz
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s fuzz
       - name: bench
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s bench -- --tier L

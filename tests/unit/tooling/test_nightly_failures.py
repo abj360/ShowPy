@@ -5,7 +5,8 @@ test_nightly_failures.py --- checks that a nightly failure hides no later check 
 
 Contains:
     test_regression_nightly_runs_every_check_after_an_earlier_failure: tests, slow, fuzz and
-        bench each run unless the run is cancelled, and no step tolerates its own failure
+        bench each run unless the run is cancelled or uv sync failed, and no step tolerates its
+        own failure
     workflow_name(): returns the top-level `name:` of one workflow
     step_script(): returns the literal block of one step's `run: |` script
     job_permissions(): reads one job's permissions, comments dropped
@@ -52,7 +53,9 @@ ALERT_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-alert.yml"
 NIGHTLY_JOB = "nightly"
 CHECK_SESSIONS = ("tests", "slow", "fuzz", "bench")
 NOX_SESSION = re.compile(r"\bnox -s (\w+)")
-NOT_CANCELLED = "${{ !cancelled() }}"
+SYNCED = "${{ !cancelled() && steps.sync.outcome == 'success' }}"
+SYNC_STEP = "id: sync\n        run: uv sync --locked\n"
+NIGHTLY_JOB_NAME = "tests, slow, fuzz and large benchmarks"
 ALERT_JOB = "alert"
 ALERT_TRIGGERS = (
     "on:\n"
@@ -110,13 +113,17 @@ def _alert() -> str:
 def test_regression_nightly_runs_every_check_after_an_earlier_failure() -> None:
     """A failing fuzz step skipped the large benchmarks every night for five days."""
     workflow = _nightly()
-    steps = job_steps(ci_job(workflow, NIGHTLY_JOB))
+    job = ci_job(workflow, NIGHTLY_JOB)
+    assert job_value(job, "name", JOB_KEY_INDENT) == NIGHTLY_JOB_NAME
+    steps = job_steps(job)
+    sync = steps.index(SYNC_STEP)
     checks = {
         found[1]: step for step in steps if (found := NOX_SESSION.search(step_value(step, "run")))
     }
     assert tuple(checks) == CHECK_SESSIONS
     for session, step in checks.items():
-        assert step_value(step, "if") == NOT_CANCELLED, session
+        assert steps.index(step) > sync, session
+        assert step_value(step, "if") == SYNCED, session
     assert "continue-on-error" not in workflow
 
 
