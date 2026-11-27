@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from e8s.cast.spots import delete_spots
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
@@ -143,9 +144,10 @@ def test_join_disjoint_sections_and_clashes() -> None:
     relabelled = second.replace(sets=tuple(s.replace(id=f"B{s.id}") for s in second.sets))
     joined = join_sections(first, relabelled)
     assert joined.set_ids() == ["1", "2", "B1", "B2", "B3"]
-    other_cast = relabelled._copied(update={"cast": first.cast.replace(spots=())})
-    with pytest.raises(SchemaError):
+    other_cast = delete_spots(relabelled, "T4")
+    with pytest.raises(SchemaError) as differ:
         join_sections(first, other_cast)
+    assert differ.value.context["differ"] == ["cast"]
     moved = relabelled.sets[0].with_placements({"T1": PlacementPatch(x=9.0)})
     bad_boundary = second._copied(
         update={
