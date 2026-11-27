@@ -20,7 +20,9 @@ Contains:
     test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside: puts back a blob gc held
         aside when a commit that did not pass it, so never freshened it, landed naming it
     test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back: reports the
-        set-aside file, then puts it back and removes it when no slot reaches it
+        set-aside file, then puts it back fresh and removes it once it is old again
+    test_regression_gc_keeps_a_writers_file_its_put_back_renamed_over: keeps a blob a writer
+        placed between a rename put-back's lookup and its rename, which swapped in the old copy
     test_gc_puts_back_a_set_aside_file_a_slot_reaches: restores a set-aside blob a tree names
     test_regression_a_read_of_a_file_a_stopped_gc_holds_aside_names_fsck_and_gc: hints at
         fsck and gc, not at a backup restore, when a blob or record is missing
@@ -60,6 +62,7 @@ from e8s.show.fsck import fsck
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.show_folders import show_folder
+from e8s.show.storage_models import GcReport
 
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 type StrPath = str | PathLike[str]
@@ -308,6 +311,7 @@ def test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside(
 def test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The put-back freshens the file, so a later gc removes it only once it is old again."""
     now = datetime.now(UTC)
     _, blob = _unreachable_blob(tmp_path, now)
 
@@ -327,11 +331,54 @@ def test_regression_a_stopped_gc_leaves_a_set_aside_file_the_next_gc_puts_back(
     assert report.ok
     assert gc(tmp_path, at=now).removed == ()
     assert aside.exists()
-    swept = gc(tmp_path, at=now, confirm=True)
+    restored = gc(tmp_path, at=now, confirm=True)
+    assert restored.removed == ()
+    assert blob.read_bytes() == REDO
+    assert not aside.exists()
+    swept = gc(tmp_path, at=now + OLD, confirm=True)
     assert swept.removed == (blob.relative_to(tmp_path).as_posix(),)
     assert not blob.exists()
     assert not aside.exists()
     assert fsck(tmp_path).findings == ()
+
+
+def test_regression_gc_keeps_a_writers_file_its_put_back_renamed_over(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without hard links a put-back renames; a writer may place the name after its lookup.
+
+    The rename then swaps the old set-aside copy, with its old time, over the writer's fresh
+    file, and the same gc run must still keep it until the writer's slot lands.
+    """
+    now = datetime.now(UTC)
+    first, blob = _unreachable_blob(tmp_path, now)
+    blob.rename(blob.with_name(".gc-" + blob.name))
+    second = _change(first.id, REDO)
+    real_lexists = os.path.lexists
+    reports: list[GcReport] = []
+
+    def refused(*_args: object) -> None:
+        raise OSError(errno.EPERM, "no hard links")
+
+    def lexists_before_the_writer(path: StrPath) -> bool:
+        if Path(path) == blob and not reports:
+            return False
+        return real_lexists(path)
+
+    def gc_then_claim(backend: FileBackend, show_id: str, revision: Revision, seq: int) -> None:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(os, "link", refused)
+            patch.setattr(os.path, "lexists", lexists_before_the_writer)
+            reports.append(gc(tmp_path, at=now, confirm=True))
+        claim(backend, show_id, revision, seq)
+
+    claim = FileBackend._claim_slot
+    monkeypatch.setattr(FileBackend, "_claim_slot", gc_then_claim)
+    FileBackend(tmp_path).commit(SHOW_ID, *second)
+    monkeypatch.undo()
+    assert reports[0].removed == ()
+    assert fsck(tmp_path).findings == ()
+    assert FileBackend(tmp_path).blob(SHOW_ID, digest(REDO)) == REDO
 
 
 def test_gc_puts_back_a_set_aside_file_a_slot_reaches(tmp_path: Path) -> None:

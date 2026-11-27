@@ -64,8 +64,13 @@ def _removed_temps(temps: list[Leftover], cutoff: datetime) -> list[Leftover]:
 
 
 def _put_back(aside: Path, origin: Path) -> None:
-    """Moves a set-aside file back; when a writer placed its name again, drops the copy."""
+    """Moves a set-aside file back, fresh; when a writer placed its name again, drops the copy.
+
+    A move by rename may replace a file a writer placed meanwhile with the old copy and its old
+    time, so the restored file is freshened: no gc removes it before its age passes again.
+    """
     if durable_io.move_new(aside, origin):
+        durable_io.freshen(origin)
         return
     if has_same_bytes(aside, origin):
         durable_io.remove_file(aside)
@@ -151,7 +156,7 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
     only if it is still the old file it was and no slot landed meanwhile; otherwise it goes back.
     A commit that reuses such a file freshens it, and one that finds it gone places it again, so
     neither loses it. A gc that stops part way leaves `.gc-` files, which fsck reports and the
-    next confirmed gc puts back before it checks again.
+    next confirmed gc puts back, freshened, before it checks again.
 
     Args:
         root: Repository root folder; a symlinked root is followed.

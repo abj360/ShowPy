@@ -338,8 +338,10 @@ def move_new(source: Path, target: Path) -> bool:
     replaces a file, and the old name is then removed; at every moment one name or both point
     at it. Where the link is refused (MOVE_FALLBACK_ERRNOS), it is renamed once a lookup finds
     the new name free. On POSIX a file a writer places under that name between the lookup and
-    the rename is replaced, which loses nothing where a name fixes its bytes, as it does for
-    blobs and records. Windows refuses the rename onto a taken name, and the file stays.
+    the rename is replaced: where a name fixes its bytes, as it does for blobs and records, the
+    bytes under the name stay the same, but the writer's file and its times are lost, so the
+    name may then carry the moved file's older time. Windows refuses the rename onto a taken
+    name, and the file stays.
 
     Args:
         source: The file; one already gone is not moved.
