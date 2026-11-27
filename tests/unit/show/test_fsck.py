@@ -39,11 +39,15 @@ Contains:
     test_fsck_of_one_show_checks_only_that_show: leaves other shows out and refuses an unknown one
     test_regression_fsck_of_a_show_id_no_show_can_have_is_an_unknown_ref: refuses a show ID
         that cannot be encoded with a teaching error, never a raw UnicodeEncodeError
+    test_fsck_reports_a_fifo_in_place_of_a_stored_file: reports a FIFO as a blob, record, slot,
+        manifest or temp file, or refuses it as the layout file, without blocking on it
     test_findings_are_sorted_by_show_code_and_path: orders findings deterministically
     test_fsck_refuses_a_time_without_a_zone: refuses a naive `at`
 """
 
 import json
+import os
+import signal
 import sys
 import time
 from collections.abc import Callable
@@ -84,6 +88,7 @@ from tests.fixtures.fsck_repos import (
     snapshot,
 )
 
+FIFO_TIMEOUT_S = 10
 SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
 
 
@@ -529,6 +534,44 @@ def test_regression_fsck_of_a_show_id_no_show_can_have_is_an_unknown_ref(
         fsck(tmp_path, show_id)
     assert json.loads(json.dumps(caught.value.to_dict()))["code"] == "UNKNOWN_REF"
     assert "fsck(root)" in caught.value.hint
+
+
+def _fifo_places(root: Path, landed: list[Revision]) -> dict[str, tuple[Path, str | None]]:
+    return {
+        "blob": (blob_path(root, b"render 1"), "BAD_BLOB"),
+        "record": (record_path(root, landed[1]), "BAD_RECORD"),
+        "slot": (slot_path(root, 2), "BAD_RECORD"),
+        "manifest": (show_path(root) / "show.json", "BAD_RECORD"),
+        "temp": (root / "tmp" / ".tmp-fifo", "UNKNOWN_FILE"),
+        "layout": (root / "layout.json", None),
+    }
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no FIFOs")
+@pytest.mark.parametrize("place", ["blob", "record", "slot", "manifest", "temp", "layout"])
+def test_fsck_reports_a_fifo_in_place_of_a_stored_file(tmp_path: Path, place: str) -> None:
+    """A FIFO opened for reading blocks until a writer comes; fsck must never wait on one."""
+    landed = landed_revisions(tmp_path, 2)
+    path, code = _fifo_places(tmp_path, landed)[place]
+    path.unlink(missing_ok=True)
+    os.mkfifo(path)
+
+    def blocked(_signal: int, _frame: object) -> None:
+        raise TimeoutError(f"fsck blocked on the FIFO at {place}")
+
+    previous = signal.signal(signal.SIGALRM, blocked)
+    signal.alarm(FIFO_TIMEOUT_S)
+    try:
+        if code is None:
+            with pytest.raises(StorageError):
+                fsck(tmp_path)
+        else:
+            report = fsck(tmp_path)
+            assert (code, relative(tmp_path, path)) in [(f.code, f.path) for f in report.findings]
+            assert not report.ok
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def test_findings_are_sorted_by_show_code_and_path(tmp_path: Path) -> None:
