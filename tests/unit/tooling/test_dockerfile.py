@@ -23,12 +23,16 @@ Contains:
     test_image_copies_every_tracked_top_level_entry: fails when the image skips a tracked
         top-level entry that NOT_IN_IMAGE does not name, or NOT_IN_IMAGE names a stale entry
     test_top_level_check_flags_a_dropped_copy_and_a_new_folder: proves the check can fail
+    stage_text(): returns the lines of one Dockerfile stage
+    test_runtime_image_installs_jq_for_the_report_tests: the nightly report tests apply the fake
+        gh's --jq filters with jq, so the image the suite runs in must hold it
     unlocked_builds(): lists the stages that run `uv build` without cargo's --locked
     test_image_build_fails_on_a_stale_cargo_lock: the builder never rewrites Cargo.lock
     test_unlocked_builds_sees_a_missing_or_late_lock: proves the lock check can fail
 """
 
 import ast
+import re
 import subprocess
 from pathlib import Path
 
@@ -47,6 +51,7 @@ NIGHTLY_WORKFLOWS = {
     ".github/workflows/report-nightly.yml",
 }
 RUNTIME_STAGE = "runtime"
+JQ_INSTALL = re.compile(r"apt-get install [^&]*\bjq\b")
 BUILDER_STAGE = "builder"
 LOCKED_BUILD_ENV = "MATURIN_PEP517_ARGS=--locked"
 UV_BUILD = "uv build"
@@ -274,6 +279,20 @@ def test_top_level_check_flags_a_dropped_copy_and_a_new_folder() -> None:
     assert skipped_entries(entries, copied, ["docs/"]) == set()
     assert skipped_entries(entries, copied[1:], ["docs/"]) == {"scripts"}
     assert skipped_entries(entries | {"assets"}, copied, ["docs/"]) == {"assets"}
+
+
+def stage_text(dockerfile: str, stage: str = RUNTIME_STAGE) -> str:
+    """Returns the text of one stage of a Dockerfile, from its FROM line to the next."""
+    blocks = re.split(r"^(?=FROM )", dockerfile, flags=re.MULTILINE)
+    return next((block for block in blocks if block.split("\n", 1)[0].endswith(f" AS {stage}")), "")
+
+
+def test_runtime_image_installs_jq_for_the_report_tests() -> None:
+    runtime = stage_text(DOCKERFILE.read_text(encoding="utf-8"))
+    assert runtime.startswith("FROM ")
+    assert JQ_INSTALL.search(runtime), "E: docker/Dockerfile's runtime stage does not install jq"
+    assert not JQ_INSTALL.search(stage_text("FROM a AS runtime\nRUN apt-get install gcc\n"))
+    assert stage_text("FROM a AS builder\n") == ""
 
 
 def unlocked_builds(dockerfile: str) -> list[str]:

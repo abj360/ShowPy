@@ -17,7 +17,8 @@ Contains:
         script; every input and run field it reads comes from env
     test_step_script_reads_a_literal_block: proves the script reader can fail
     test_job_permissions_stop_at_the_next_key: proves the permissions reader can fail
-    run_report(): runs the report script against a fake gh that applies its filters with jq
+    run_report(): runs the report script against a fake gh that applies its filters with jq; a
+        missing jq fails the report tests instead of skipping them
     test_report_opens_an_issue_when_none_is_open: labels it and names the run and the failed job
     test_report_comments_on_the_open_issue_for_any_result_but_success: a repeated failure,
         cancellation, timeout or skipped check opens no second issue
@@ -28,7 +29,6 @@ Contains:
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -327,13 +327,12 @@ def _body(call: list[str], flag: str = "--body") -> str:
     return call[call.index(flag) + 1]
 
 
-needs_jq = pytest.mark.skipif(
-    sys.platform == "win32" or shutil.which("jq") is None,
-    reason="the fake gh is a POSIX script that applies --jq with jq",
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="the fake gh is an executable script with a shebang"
 )
 
 
-@needs_jq
+@posix_only
 def test_report_opens_an_issue_when_none_is_open(tmp_path: Path) -> None:
     calls = run_report(tmp_path, "failure", NONE_OPEN)
     assert calls[0][: len(ISSUE_LIST)] == ISSUE_LIST
@@ -352,7 +351,7 @@ def test_report_opens_an_issue_when_none_is_open(tmp_path: Path) -> None:
     )
 
 
-@needs_jq
+@posix_only
 @pytest.mark.parametrize("result", NOT_SUCCESS)
 def test_report_comments_on_the_open_issue_for_any_result_but_success(
     tmp_path: Path, result: str
@@ -365,7 +364,7 @@ def test_report_comments_on_the_open_issue_for_any_result_but_success(
     assert _body(calls[-1]).endswith(f"Jobs:\n{FAILED_JOB}")
 
 
-@needs_jq
+@posix_only
 def test_report_closes_the_open_issue_on_success(tmp_path: Path) -> None:
     calls = run_report(tmp_path, "success", ISSUES)
     assert calls[0][: len(ISSUE_LIST)] == ISSUE_LIST
@@ -374,7 +373,7 @@ def test_report_closes_the_open_issue_on_success(tmp_path: Path) -> None:
     ]
 
 
-@needs_jq
+@posix_only
 def test_report_leaves_a_success_without_an_issue_alone(tmp_path: Path) -> None:
     calls = run_report(tmp_path, "success", NONE_OPEN)
     assert [call[:2] for call in calls] == [["issue", "list"]]
