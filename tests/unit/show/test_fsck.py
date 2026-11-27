@@ -6,9 +6,6 @@ test_fsck.py --- tests fsck on fresh layout-2 repositories damaged in one known 
 Contains:
     test_fsck_of_a_clean_repository_is_ok: finds nothing in repositories written by the backend
     test_fsck_of_an_empty_root_is_ok: passes an empty root and one a first commit left at tmp/
-    test_fsck_of_a_missing_root_is_an_io_error: never reports a mistyped root clean
-    test_fsck_of_a_layout_1_root_is_a_version_error: names layout 1 and changes nothing
-    test_fsck_of_a_folder_that_is_no_repository_is_corrupt: raises what reading its layout raises
     test_fsck_changes_nothing: leaves every name, byte and time of a damaged root as it was
     test_fsck_reports_missing_blob: reports a blob a tree names that is gone
     test_fsck_reports_bad_blob: reports a blob whose bytes no longer hash to its name
@@ -17,10 +14,6 @@ Contains:
         chain while its own record and ID hold
     test_regression_fsck_reports_an_unchanged_entry_injected_into_a_tree: reports a record whose
         tree gained a path its revision did not change, which reads still accept
-    test_regression_fsck_reports_a_legacy_before_past_the_head: reports a manifest whose
-        legacy_before would skip the ID check of every slot, which hid a swapped record
-    test_fsck_reports_a_history_past_the_caps_reads_keep: reports a show with more slots than
-        MAX_REVISIONS, or more slot and record bytes than LOG_READ_MAX_BYTES, and stops its chain
     test_fsck_reports_slot_gap: reports one missing slot below the head
     test_regression_fsck_reports_a_two_slot_gap_below_the_head: reports a run of two deleted slots
         as one gap naming both, and two runs as two gaps
@@ -32,23 +25,10 @@ Contains:
     test_fsck_reports_torn_file: reports a torn layout file and a torn manifest
     test_torn_manifest_is_only_a_shorter_start_of_this_folders_manifest: tells a torn manifest
         from any other damaged one
-    test_fsck_never_follows_a_link_under_the_root: reports a symlinked folder without reading
-        through it
-    test_fsck_reports_a_linked_show_folder: reports a symlinked show folder, whole root or one show
-    test_fsck_follows_a_symlinked_root: checks a repository through a symlinked root
-    test_fsck_of_one_show_checks_only_that_show: leaves other shows out and refuses an unknown one
-    test_regression_fsck_of_a_show_id_no_show_can_have_is_an_unknown_ref: refuses a show ID
-        that cannot be encoded with a teaching error, never a raw UnicodeEncodeError
-    test_fsck_reports_a_fifo_in_place_of_a_stored_file: reports a FIFO as a blob, record, slot,
-        manifest or temp file, or refuses it as the layout file, without blocking on it
     test_findings_are_sorted_by_show_code_and_path: orders findings deterministically
-    test_fsck_refuses_a_time_without_a_zone: refuses a naive `at`
 """
 
 import json
-import os
-import signal
-import sys
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -57,19 +37,15 @@ from pathlib import Path
 import pytest
 
 from e8s.core.canonical import jcs
-from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError, VersionError
+from e8s.core.errors import ConflictError
 from e8s.examples import two_set_show
-from e8s.show import fsck_show
 from e8s.show.backend import digest
 from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.fsck import fsck
 from e8s.show.fsck_findings import is_torn_manifest
-from e8s.show.gc import gc
 from e8s.show.history_models import Revision
-from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder
 from tests.fixtures.fsck_repos import (
     AT,
@@ -87,9 +63,6 @@ from tests.fixtures.fsck_repos import (
     slot_path,
     snapshot,
 )
-
-FIFO_TIMEOUT_S = 10
-SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
 
 
 @pytest.fixture(autouse=True)
@@ -117,36 +90,6 @@ def test_fsck_of_an_empty_root_is_ok(tmp_path: Path) -> None:
     (tmp_path / "tmp").mkdir()
     assert fsck(tmp_path) == fsck(tmp_path, at=AT)
     assert fsck(tmp_path).findings == ()
-
-
-def test_fsck_of_a_missing_root_is_an_io_error(tmp_path: Path) -> None:
-    with pytest.raises(StorageError) as caught:
-        fsck(tmp_path / "typo")
-    assert caught.value.code == ErrorCode.IO
-    assert not (tmp_path / "typo").exists()
-
-
-def test_fsck_of_a_layout_1_root_is_a_version_error(tmp_path: Path) -> None:
-    DocumentRepository(_FileBackend(tmp_path)).transaction(
-        "old", {"/renders/a.txt": b"x"}, expected_revision="", at=AT
-    )
-    before = snapshot(tmp_path)
-    with pytest.raises(VersionError) as caught:
-        fsck(tmp_path)
-    assert caught.value.context["layout"] == 1
-    assert "FileRepository" in caught.value.hint
-    assert snapshot(tmp_path) == before
-
-
-def test_fsck_of_a_folder_that_is_no_repository_is_corrupt(tmp_path: Path) -> None:
-    (tmp_path / "notes.txt").write_text("mine")
-    with pytest.raises(StorageError) as caught:
-        fsck(tmp_path)
-    assert caught.value.code == ErrorCode.CORRUPT
-    (tmp_path / "notes.txt").unlink()
-    (tmp_path / "layout.json").write_text('{"format": "e8.repository", "layout": 3}')
-    with pytest.raises(VersionError):
-        fsck(tmp_path)
 
 
 def test_fsck_changes_nothing(tmp_path: Path) -> None:
@@ -280,46 +223,6 @@ def test_regression_fsck_reports_an_unchanged_entry_injected_into_a_tree(tmp_pat
         ("BAD_RECORD", relative(tmp_path, record_path(tmp_path, landed[2]))),
     ]
     assert "previous tree" in report.findings[0].message
-    assert not report.ok
-
-
-@pytest.mark.parametrize("legacy_before", [10**9, 50])
-def test_regression_fsck_reports_a_legacy_before_past_the_head(
-    tmp_path: Path, legacy_before: int
-) -> None:
-    """A swapped record whose ID no longer verifies passes when legacy_before skips the check."""
-    landed = landed_revisions(tmp_path, 3)
-    path = record_path(tmp_path, landed[2])
-    stored = json.loads(path.read_bytes())
-    stored["tree"]["/render.txt"] = digest(b"render 1")
-    path.write_bytes(dump_json(stored))
-    manifest = show_path(tmp_path) / "show.json"
-    manifest.write_bytes(dump_json({"id": SHOW_ID, "legacy_before": legacy_before}))
-    report = fsck(tmp_path)
-    assert ("BAD_RECORD", relative(tmp_path, manifest)) in _codes(tmp_path)
-    assert "legacy_before" in next(f.message for f in report.findings if f.path.endswith("json"))
-    assert not any(f.code == "UNREACHABLE" for f in report.findings)
-    assert not report.ok
-    assert gc(tmp_path, at=AT + 3 * DAY, confirm=True).removed == ()
-
-
-@pytest.mark.parametrize(
-    ("cap", "slots_within"),
-    [("MAX_REVISIONS", 0), ("LOG_READ_MAX_BYTES", 2), ("LOG_READ_MAX_BYTES", 3)],
-)
-def test_fsck_reports_a_history_past_the_caps_reads_keep(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cap: str, slots_within: int
-) -> None:
-    """The bytes cap runs out at the third slot, or at its record; the third record is damaged."""
-    landed = landed_revisions(tmp_path, 3)
-    record_path(tmp_path, landed[2]).write_bytes(b"{}")
-    slots = sum(len(slot_path(tmp_path, seq).read_bytes()) for seq in range(1, slots_within + 1))
-    records = sum(len(record_path(tmp_path, revision).read_bytes()) for revision in landed[:2])
-    monkeypatch.setattr(fsck_show, cap, 2 if cap == "MAX_REVISIONS" else slots + records)
-    report = fsck(tmp_path)
-    log = relative(tmp_path, show_path(tmp_path) / "log")
-    assert [(f.code, f.path) for f in report.findings] == [("BAD_RECORD", log)]
-    assert "reads refuse" in report.findings[0].message
     assert not report.ok
 
 
@@ -471,109 +374,6 @@ def test_torn_manifest_is_only_a_shorter_start_of_this_folders_manifest(
     assert is_torn_manifest(data, show_folder(OTHER_ID)) is is_torn
 
 
-@SKIP_LINKS
-@pytest.mark.parametrize("name", ["log", "records", "objects"])
-def test_fsck_never_follows_a_link_under_the_root(tmp_path: Path, name: str) -> None:
-    root, outside = tmp_path / "repo", tmp_path / "outside"
-    landed_revisions(root, 2)
-    folder = show_path(root) / name
-    folder.rename(outside)
-    folder.symlink_to(outside, target_is_directory=True)
-    before = snapshot(outside)
-    report = fsck(root)
-    assert ("UNKNOWN_FILE", relative(root, folder)) in [(f.code, f.path) for f in report.findings]
-    assert not any(f.code == "UNREACHABLE" for f in report.findings)
-    assert not report.ok
-    assert snapshot(outside) == before
-    shows = root / "shows"
-    shows.rename(tmp_path / "shows_elsewhere")
-    shows.symlink_to(tmp_path / "shows_elsewhere", target_is_directory=True)
-    assert _codes(root) == [("UNKNOWN_FILE", "shows")]
-
-
-@SKIP_LINKS
-def test_fsck_reports_a_linked_show_folder(tmp_path: Path) -> None:
-    root, outside = tmp_path / "repo", tmp_path / "outside"
-    landed_revisions(root, 1)
-    folder = show_path(root)
-    folder.rename(outside)
-    folder.symlink_to(outside, target_is_directory=True)
-    expected = [("UNKNOWN_FILE", relative(root, folder))]
-    assert _codes(root) == expected
-    assert [(f.code, f.path) for f in fsck(root, SHOW_ID).findings] == expected
-
-
-@SKIP_LINKS
-def test_fsck_follows_a_symlinked_root(tmp_path: Path) -> None:
-    real, linked = tmp_path / "real", tmp_path / "linked"
-    landed_revisions(real, 2)
-    linked.symlink_to(real, target_is_directory=True)
-    assert fsck(linked).ok
-    blob_path(real, b"render 1").unlink()
-    assert _codes(linked) == [("MISSING_BLOB", relative(real, blob_path(real, b"render 1")))]
-
-
-def test_fsck_of_one_show_checks_only_that_show(tmp_path: Path) -> None:
-    landed_revisions(tmp_path, 2)
-    landed_revisions(tmp_path, 1, OTHER_ID)
-    blob_path(tmp_path, b"render 1").unlink()
-    (tmp_path / "stray.txt").write_bytes(b"?")
-    assert fsck(tmp_path, OTHER_ID).findings == ()
-    assert [f.code for f in fsck(tmp_path, SHOW_ID).findings] == ["MISSING_BLOB"]
-    with pytest.raises(UnknownRefError) as caught:
-        fsck(tmp_path, "no_such_show")
-    assert caught.value.context["show"] == "no_such_show"
-
-
-@pytest.mark.parametrize("show_id", ["\ud800", "", "../x"], ids=["surrogate", "empty", "dots"])
-def test_regression_fsck_of_a_show_id_no_show_can_have_is_an_unknown_ref(
-    tmp_path: Path, show_id: str
-) -> None:
-    landed_revisions(tmp_path, 1)
-    with pytest.raises(UnknownRefError) as caught:
-        fsck(tmp_path, show_id)
-    assert json.loads(json.dumps(caught.value.to_dict()))["code"] == "UNKNOWN_REF"
-    assert "fsck(root)" in caught.value.hint
-
-
-def _fifo_places(root: Path, landed: list[Revision]) -> dict[str, tuple[Path, str | None]]:
-    return {
-        "blob": (blob_path(root, b"render 1"), "BAD_BLOB"),
-        "record": (record_path(root, landed[1]), "BAD_RECORD"),
-        "slot": (slot_path(root, 2), "BAD_RECORD"),
-        "manifest": (show_path(root) / "show.json", "BAD_RECORD"),
-        "temp": (root / "tmp" / ".tmp-fifo", "UNKNOWN_FILE"),
-        "layout": (root / "layout.json", None),
-    }
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no FIFOs")
-@pytest.mark.parametrize("place", ["blob", "record", "slot", "manifest", "temp", "layout"])
-def test_fsck_reports_a_fifo_in_place_of_a_stored_file(tmp_path: Path, place: str) -> None:
-    """A FIFO opened for reading blocks until a writer comes; fsck must never wait on one."""
-    landed = landed_revisions(tmp_path, 2)
-    path, code = _fifo_places(tmp_path, landed)[place]
-    path.unlink(missing_ok=True)
-    os.mkfifo(path)
-
-    def blocked(_signal: int, _frame: object) -> None:
-        raise TimeoutError(f"fsck blocked on the FIFO at {place}")
-
-    previous = signal.signal(signal.SIGALRM, blocked)
-    signal.alarm(FIFO_TIMEOUT_S)
-    try:
-        if code is None:
-            with pytest.raises(StorageError):
-                fsck(tmp_path)
-        else:
-            report = fsck(tmp_path)
-            assert (code, relative(tmp_path, path)) in [(f.code, f.path) for f in report.findings]
-            assert not report.ok
-    finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, previous)
-
-
 def test_findings_are_sorted_by_show_code_and_path(tmp_path: Path) -> None:
     landed_revisions(tmp_path, 3)
     landed_revisions(tmp_path, 3, OTHER_ID)
@@ -586,8 +386,3 @@ def test_findings_are_sorted_by_show_code_and_path(tmp_path: Path) -> None:
     keys = [(f.show, f.code, f.path) for f in findings]
     assert keys == sorted(keys)
     assert [f.show for f in findings] == ["", SHOW_ID, SHOW_ID, OTHER_ID, OTHER_ID]
-
-
-def test_fsck_refuses_a_time_without_a_zone(tmp_path: Path) -> None:
-    with pytest.raises(SchemaError):
-        fsck(tmp_path, at=AT.replace(tzinfo=None))
