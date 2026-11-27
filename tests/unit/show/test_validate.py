@@ -66,6 +66,8 @@ Contains:
         anchored to a set that does not exist
     test_regression_validate_show_reports_a_show_longer_than_max_counts: reports a show whose set
         counts add up past MAX_COUNTS
+    test_regression_validate_show_reports_counts_whose_sum_overflows: reports set counts whose sum
+        overflows a float as SHOW_TOO_LONG instead of raising OverflowError
     test_regression_validate_show_warns_about_stale_forms: warns about a form its set no longer
         lists
     test_validate_show_accepts_a_set_whose_forms_are_all_listed: raises no stale-form warning when
@@ -222,6 +224,7 @@ def test_show_flags_stale_transitions_and_zero_counts() -> None:
 NOTE_AT = datetime(2026, 11, 11, tzinfo=UTC)
 FAR_OFF_SHEET_M = 1_000_000.0
 PAST_SHOW_COUNT = 777.0
+HUGE_COUNTS = 1e308
 FORM_ID = "f1"
 SET_TWO = "2"
 GHOST = "GHOST"
@@ -550,6 +553,16 @@ def test_regression_validate_show_reports_a_show_longer_than_max_counts() -> Non
     assert "MAX_COUNTS" in issue.message
     assert f"{MAX_COUNTS:,}" in issue.hint
     assert dict(issue.context) == {"total": MAX_COUNTS + 1.0, "max": MAX_COUNTS}
+
+
+def test_regression_validate_show_reports_counts_whose_sum_overflows() -> None:
+    """Reports set counts whose sum overflows a float as SHOW_TOO_LONG, never OverflowError."""
+    show = two_set_show()
+    huge = show.sets[1]._copied(update={"counts": HUGE_COUNTS})
+    third = huge._copied(update={"id": "3", "key": "3"})
+    report = validate_show(show._copied(update={"sets": (show.sets[0], huge, third)}))
+    (issue,) = [i for i in report.issues if i.code == "SHOW_TOO_LONG"]
+    assert dict(issue.context) == {"total": "inf", "max": MAX_COUNTS}
 
 
 def test_regression_validate_show_warns_about_stale_forms() -> None:

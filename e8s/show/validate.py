@@ -398,7 +398,10 @@ def _non_finite(show: Show) -> list[ValidationIssue]:
 
 
 def _too_long(show: Show) -> list[ValidationIssue]:
-    total = math.fsum(s.counts for s in show.sets if math.isfinite(s.counts))
+    try:
+        total = math.fsum(s.counts for s in show.sets if math.isfinite(s.counts))
+    except OverflowError:
+        total = math.inf
     if total <= MAX_COUNTS:
         return []
     return [
@@ -408,7 +411,7 @@ def _too_long(show: Show) -> list[ValidationIssue]:
             where="sets",
             message=f"set counts add up to {total:g}, past MAX_COUNTS",
             hint=f"keep the whole show within MAX_COUNTS ({MAX_COUNTS:,} counts)",
-            context={"total": total, "max": MAX_COUNTS},
+            context={"total": total if math.isfinite(total) else str(total), "max": MAX_COUNTS},
         )
     ]
 
