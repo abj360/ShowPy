@@ -8,9 +8,10 @@ the stored item it names in `context["item"]`. Issues of items the edit cannot r
 A check is rerun when any item it reads changed, not only the item it reports: a set's checks
 when its placements or the forms it lists or stamps change, a form's member check when its
 set's placements change, a pin when the placements, forms or rows it covers change, facing
-overrides when set counts or the cast change. Paths are recompiled through the engine's
-per-spot compile for the spots whose placements or rows changed; a transition whose counts,
-routes or destination counts changed is checked whole.
+overrides when set counts or the cast change, or a form changes while an override selects spots
+by text (a `form:` word resolves against the show's forms). Paths are recompiled through the
+engine's per-spot compile for the spots whose placements or rows changed; a transition whose
+counts, routes or destination counts changed is checked whole.
 
 Where the work cannot be bounded by item, or a kept issue cannot be trusted, validate_show runs
 in full: reordering, adding, removing or renumbering sets or spots; a sheet or timeline edit; a
@@ -360,12 +361,24 @@ def _pin_issues(run: _Run) -> list[ValidationIssue]:
     ]
 
 
+def _overrides_touched(run: _Run) -> bool:
+    """Returns whether the edit changed anything the facing override check reads.
+
+    Selector text resolves against the forms as well as the cast, so a form edit reruns the
+    check whenever an override selects its spots by text.
+    """
+    touched = run.touched
+    if touched.overrides or touched.set_roles.get(TIMING):
+        return True
+    overrides = run.after.facing_overrides
+    return bool(touched.forms) and any(isinstance(o.entities, str) for o in overrides)
+
+
 def _references(run: _Run) -> list[ValidationIssue]:
     issues = _form_issues(run) + set_form_issues(run.after)
     if run.after.pins:
         issues += _pin_issues(run)
-    touched = run.touched
-    if touched.overrides or touched.set_roles.get(TIMING):
+    if _overrides_touched(run):
         return issues + override_issues(run.after)
     return issues + list(run.previous(OVERRIDES, ()))
 

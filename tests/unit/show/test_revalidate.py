@@ -15,6 +15,8 @@ Contains:
         repeated in both shows
     test_one_spot_revalidation_under_50_ms_at_300_by_60: revalidates a one-spot move of a 300
         spot, 60 set show within 50 ms
+    test_regression_revalidate_reruns_overrides_that_select_a_changed_form: reports a facing
+        override whose form: selector stops resolving once the form is removed
 """
 
 import time
@@ -25,7 +27,7 @@ import pytest
 from e8s.choreo.engine import PathEngine
 from e8s.choreo.engine_models import MotionPlan
 from e8s.choreo.models import PlacementPatch
-from e8s.choreo.path_models import PathRow, PathStyle
+from e8s.choreo.path_models import FacingMode, FacingOverride, PathRow, PathStyle
 from e8s.core.caps import MAX_COUNTS
 from e8s.core.error_codes import ErrorCode
 from e8s.core.ids import SpotId
@@ -49,6 +51,7 @@ BUDGET_SETS = 60
 BUDGET_SEED = 11
 BUDGET_S = 0.05
 BUDGET_RUNS = 5
+SELECTED_FORM = "brass_2"
 
 
 def _moved(show: Show, position: int, spot: str, dx: float) -> Show:
@@ -236,3 +239,16 @@ def test_one_spot_revalidation_under_50_ms_at_300_by_60(budget_show: Show) -> No
         revalidate(previous, before, after)
         times.append(time.perf_counter() - start)
     assert min(times) < BUDGET_S, f"best of {BUDGET_RUNS}: {min(times) * 1e3:.1f} ms"
+
+
+def test_regression_revalidate_reruns_overrides_that_select_a_changed_form() -> None:
+    """Reports a facing override whose form: selector stops resolving once the form is removed."""
+    override = FacingOverride(
+        entities=f"form:{SELECTED_FORM}", mode=FacingMode.AUDIENCE, start=0.0, end=1.0
+    )
+    before = seeded_show(0, 6, 4)._copied(update={"facing_overrides": (override,)})
+    forms = {key: form for key, form in before.forms.items() if key != SELECTED_FORM}
+    after = before._copied(update={"forms": forms})
+    expected = validate_show(after)
+    assert "facing override 0" in [issue.where for issue in expected.issues]
+    assert revalidate(validate_show(before), before, after) == expected
