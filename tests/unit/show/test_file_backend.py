@@ -57,6 +57,8 @@ Contains:
         is not a positive integer
     test_regression_symlinked_show_folder_is_refused: refuses a symlinked shows, show, log, records,
         objects or tmp folder for reads and writes, leaving the target untouched
+    test_regression_shows_refuses_a_symlinked_folder: refuses to list shows through a symlinked
+        shows/ or show folder
     test_regression_junction_under_the_root_is_refused: refuses a junction in place of the show
         folder (Windows only)
     test_log_longer_than_max_revisions_is_refused: refuses a log over MAX_REVISIONS
@@ -747,6 +749,19 @@ def test_regression_symlinked_show_folder_is_refused(tmp_path: Path, kind: str) 
             FileBackend(root).log(SHOW_ID)
         assert read.value.code == "CORRUPT"
         assert read.value.context["show"] == SHOW_ID
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs privilege on Windows")
+@pytest.mark.parametrize("kind", ["shows", "show folder"])
+def test_regression_shows_refuses_a_symlinked_folder(tmp_path: Path, kind: str) -> None:
+    """Lists no show through a symlinked shows/ or show folder, so nothing outside the root."""
+    root = tmp_path / "root"
+    _landed(FileBackend(root), 1)
+    SYMLINKS[kind](root, _outside_folder(tmp_path))
+    with pytest.raises(StorageError) as caught:
+        FileBackend(root).shows()
+    assert caught.value.code == "CORRUPT"
+    assert "symbolic link" in caught.value.message
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="junctions exist only on Windows")

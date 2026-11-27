@@ -75,6 +75,12 @@ MANIFEST_MAX_BYTES = 4096
 LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
 
 
+def _refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:
+    """Raises CORRUPT when `path`, with stat mode `mode`, is a symlink or a junction."""
+    if is_redirect(path, mode):
+        raise corrupt(show_id, path, "folder is a symbolic link or junction")
+
+
 class FileBackend:
     """Stores shows under `<root>/shows/<folder>/` as numbered slots, records and blobs.
 
@@ -178,15 +184,17 @@ class FileBackend:
             self.root / TEMP_DIR,
         ):
             mode = lstat_mode(show_id, path)
-            if mode is not None and is_redirect(path, mode):
-                raise corrupt(show_id, path, "folder is a symbolic link or junction")
+            if mode is not None:
+                _refuse_redirect(path, mode, show_id)
 
     def shows(self) -> list[str]:
         """Returns the IDs of shows with at least one slot, read from their manifests."""
         folder = self.root / SHOWS_DIR
         with mapped_io("", folder):
-            if lstat_mode("", folder) is None:
+            mode = lstat_mode("", folder)
+            if mode is None:
                 return []
+            _refuse_redirect(folder, mode)
             names = sorted(p.name for p in folder.iterdir() if p.name not in HOUSEKEEPING_NAMES)
             return [show for show in map(self._listed_show, names) if show is not None]
 
@@ -195,6 +203,9 @@ class FileBackend:
         folder = self.root / SHOWS_DIR / name
         if not SHOW_FOLDER_PATTERN.fullmatch(name):
             raise corrupt("", folder, "entry under shows/ is not a show folder")
+        mode = lstat_mode("", folder)
+        if mode is not None:
+            _refuse_redirect(folder, mode)
         if lstat_mode("", folder / MANIFEST_FILE) is None:
             return None
         show_id, _ = self._manifest("", folder)
