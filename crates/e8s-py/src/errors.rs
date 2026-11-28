@@ -11,8 +11,9 @@
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::panic::{self, PanicHookInfo, UnwindSafe};
-use std::sync::Once;
+use std::sync::{Mutex, Once};
 
 use e8s_core::base::{ContextValue, CoreError, CoreResult, ErrorCode, ErrorKind, require_finite};
 use pyo3::intern;
@@ -40,6 +41,9 @@ thread_local! {
 }
 
 static QUIET_HOOK: Once = Once::new();
+/// Holds the interned names of the error classes and codes raised so far, so raising an error
+/// builds no new string.
+static NAMES: Mutex<Option<HashMap<&'static str, Py<PyString>>>> = Mutex::new(None);
 
 /// Runs one core call and raises its error, or a panic it caught, as an e8s exception.
 ///
@@ -93,9 +97,21 @@ pub fn loaded<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
     }
 }
 
+/// Returns the interned Python string of a class or code name, interning it on first use.
+fn interned<'py>(py: Python<'py>, name: &'static str) -> Bound<'py, PyString> {
+    let Ok(mut names) = NAMES.lock() else {
+        return PyString::intern(py, name);
+    };
+    names
+        .get_or_insert_with(HashMap::new)
+        .entry(name)
+        .or_insert_with(|| PyString::intern(py, name).unbind())
+        .bind(py)
+        .clone()
+}
+
 fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
-    let class =
-        loaded(py, ERRORS_MODULE)?.getattr(PyString::intern(py, err.kind().class_name()))?;
+    let class = loaded(py, ERRORS_MODULE)?.getattr(interned(py, err.kind().class_name()))?;
     let context = PyDict::new(py);
     for (key, value) in err.context() {
         match value {
@@ -112,7 +128,7 @@ fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
     if !has_default_code(&class, err)? {
         let code = loaded(py, CODES_MODULE)?
             .getattr(CODE_ENUM)?
-            .getattr(PyString::intern(py, err.code().as_str()))?;
+            .getattr(interned(py, err.code().as_str()))?;
         kwargs.set_item(intern!(py, "code"), code)?;
     }
     Ok(PyErr::from_value(
