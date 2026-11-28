@@ -55,7 +55,9 @@ from e8s.core.errors import SchemaError
 DOC = "d.json"
 GIL_FREE_BYTES = 2048
 LARGE_PAYLOAD = 4 * 2**20
-SWITCH_INTERVAL_S = 0.05
+SWITCH_INTERVAL_S = 30.0
+HASHING_BUDGET_S = 5.0
+COUNTER_NAP_S = 0.0001
 WAIT_STEP_S = 0.001
 SMALL_DIGIT_LIMIT = 640
 DIGITS_PAST_SMALL_LIMIT = 641
@@ -220,10 +222,13 @@ def test_regression_canonical_value_refuses_endless_unwrapping(value: object) ->
 
 
 def _hashes_while_counting(data: bytes) -> int:
-    """Hashes data while a second thread counts, returning how far it counted meanwhile.
+    """Hashes data again and again while a second thread counts, returning how far it counted.
 
-    The switch interval is long enough that the thread counts during the call only if the
-    hash lets go of the GIL.
+    The counter naps after each count, so it hands the GIL back by itself, and the switch
+    interval outlasts the measurement, so the hashing thread is never made to give the GIL up.
+    The count can grow during the hashing only while a hash lets go of the GIL; a hash that holds
+    it leaves the count at exactly 0. Hashing stops at the first count or after HASHING_BUDGET_S,
+    so a loaded machine gets hundreds of chances to run the counter.
     """
     count = [0]
     stop = threading.Event()
@@ -231,21 +236,25 @@ def _hashes_while_counting(data: bytes) -> int:
     def counting() -> None:
         while not stop.is_set():
             count[0] += 1
+            time.sleep(COUNTER_NAP_S)
 
     interval = sys.getswitchinterval()
-    sys.setswitchinterval(SWITCH_INTERVAL_S)
     thread = threading.Thread(target=counting)
     try:
+        sys.setswitchinterval(SWITCH_INTERVAL_S)
         thread.start()
         while count[0] == 0:
             time.sleep(WAIT_STEP_S)
         before = count[0]
-        content_hash(data)
+        deadline = time.monotonic() + HASHING_BUDGET_S
+        while count[0] == before and time.monotonic() < deadline:
+            content_hash(data)
         during = count[0] - before
     finally:
-        stop.set()
-        thread.join()
         sys.setswitchinterval(interval)
+        stop.set()
+        if thread.is_alive():
+            thread.join()
     return during
 
 
