@@ -13,10 +13,18 @@ Contains:
     test_commit_with_unknown_parent_reports_every_landed_revision: keeps the memory conflict
     test_regression_memory_commit_refuses_a_revision_that_is_its_own_parent: refuses a self-parent
     test_regression_memory_commit_refuses_a_revision_id_already_stored: refuses a repeated ID
+    test_regression_memory_commit_that_lost_its_slot_is_a_conflict: raises ConflictError, not
+        BAD_ID, for a revision another writer already landed on a parent that is no longer head
     test_regression_memory_log_fails_closed_on_a_parent_cycle: raises CORRUPT on a cycle
     test_memory_tree_and_blob_fail_closed_on_unknown_ids: raises on unknown IDs
     test_regression_memory_commit_verifies_its_inputs: checks IDs, blobs and tree digests
     test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs: accepts a valid tree
+    test_regression_memory_commit_keeps_a_copy_of_its_blobs: ignores a later bytearray change
+    test_regression_memory_repository_keeps_a_copy_of_written_bytes: ignores a later change
+    test_regression_memory_backend_keeps_each_shows_blobs_apart: refuses another show's blob
+    test_regression_memory_commit_stores_the_bytes_it_verified: reads each blob once
+    test_regression_repository_hands_its_backend_a_copy_of_written_bytes: keeps a stored blob
+        when the caller changes its bytearray, even over a backend that copies nothing
     test_tree_of_an_unknown_revision_is_unknown_ref: raises UnknownRefError in both adapters
     test_repository_reads_and_writes_at_the_head_touch_a_constant_number_of_revisions:
         reads O(1) entries
@@ -24,7 +32,7 @@ Contains:
         reads O(landed) entries
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -39,6 +47,7 @@ from e8s.core.errors import (
     StorageError,
     UnknownRefError,
 )
+from e8s.show import document_repository
 from e8s.show.backend import RepositoryBackend
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_repository import FileRepository
@@ -49,7 +58,7 @@ from e8s.show.storage import ROOT_REVISION
 from tests.helpers import context_entries
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 HISTORY = 1_000
 
 type BackendFactory = Callable[[], RepositoryBackend]
@@ -62,8 +71,9 @@ def _revision_id(position: int) -> str:
 def _fill(backend: RepositoryBackend, count: int) -> list[str]:
     ids: list[str] = []
     parent = ROOT_REVISION
-    for position in range(1, count + 1):
-        revision = Revision(id=_revision_id(position), parent=parent, at=AT, changed=("/a",))
+    for _ in range(count):
+        revision_id = document_repository.revision_id(parent, AT, {"/a": None})
+        revision = Revision(id=revision_id, parent=parent, at=AT, changed=("/a",))
         backend.commit(SHOW_ID, revision, {}, {})
         ids.append(revision.id)
         parent = revision.id
@@ -196,6 +206,18 @@ def test_regression_memory_commit_refuses_a_revision_id_already_stored() -> None
     assert [r.id for r in backend.log(SHOW_ID)] == ids
 
 
+def test_regression_memory_commit_that_lost_its_slot_is_a_conflict() -> None:
+    backend = _MemoryBackend()
+    ids = _fill(backend, 3)
+    landed = backend.log(SHOW_ID)[1]
+    with pytest.raises(ConflictError):
+        _commit(backend, landed)
+    with pytest.raises(StorageError) as caught:
+        _commit(backend, Revision(id=ids[0], parent=ids[-1], at=AT))
+    assert "already stored" in caught.value.message
+    assert [r.id for r in backend.log(SHOW_ID)] == ids
+
+
 def test_regression_memory_log_fails_closed_on_a_parent_cycle() -> None:
     backend = _MemoryBackend()
     ids = _fill(backend, 3)
@@ -265,6 +287,94 @@ def test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs() -> None:
     _commit(backend, second, tree=tree, blobs={blob_digest(new): new})
     assert backend.tree(SHOW_ID, second.id) == tree
     assert backend.blob(SHOW_ID, blob_digest(new)) == new
+
+
+def test_regression_memory_commit_keeps_a_copy_of_its_blobs() -> None:
+    backend = _MemoryBackend()
+    buffer = bytearray(b"kept")
+    digest = blob_digest(b"kept")
+    revision = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
+    _commit(backend, revision, tree={"/a": digest}, blobs={digest: buffer})
+    buffer[:] = b"lost"
+    assert backend.blob(SHOW_ID, digest) == b"kept"
+
+
+def test_regression_memory_repository_keeps_a_copy_of_written_bytes() -> None:
+    repo = InMemoryRepository()
+    buffer = bytearray(b"kept")
+    repo.transaction(SHOW_ID, {"/renders/a.txt": cast(bytes, buffer)}, expected_revision="", at=AT)
+    buffer[:] = b"lost"
+    assert repo.read(SHOW_ID, "/renders/a.txt") == b"kept"
+    assert repo.documents(SHOW_ID)["/renders/a.txt"] == b"kept"
+
+
+def test_regression_memory_backend_keeps_each_shows_blobs_apart() -> None:
+    backend = _MemoryBackend()
+    data = b"only in show_1"
+    digest = blob_digest(data)
+    first = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
+    _commit(backend, first, tree={"/a": digest}, blobs={digest: data})
+    with pytest.raises(StorageError) as read:
+        backend.blob("show_2", digest)
+    assert read.value.code == ErrorCode.CORRUPT
+    borrowed = Revision(id=_revision_id(2), parent="", at=AT, changed=("/a",))
+    with pytest.raises(StorageError) as written:
+        backend.commit("show_2", borrowed, {"/a": digest}, {})
+    assert written.value.code == ErrorCode.CORRUPT
+    assert backend.shows() == [SHOW_ID]
+    assert backend.head("show_2") == ROOT_REVISION
+    backend.commit("show_2", borrowed, {"/a": digest}, {digest: data})
+    assert backend.blob("show_2", digest) == data
+
+
+class _ShiftingBlobs(Mapping[str, bytes]):
+    """Hands out the claimed bytes on the first lookup and other bytes on every later one."""
+
+    def __init__(self, claimed: bytes, later: bytes) -> None:
+        self.claimed, self.later, self.lookups = claimed, later, 0
+
+    def __getitem__(self, key: str) -> bytes:
+        self.lookups += 1
+        return self.claimed if self.lookups == 1 else self.later
+
+    def __iter__(self) -> Iterator[str]:
+        return iter([blob_digest(self.claimed)])
+
+    def __len__(self) -> int:
+        return 1
+
+
+def test_regression_memory_commit_stores_the_bytes_it_verified() -> None:
+    backend = _MemoryBackend()
+    digest = blob_digest(b"claimed")
+    revision = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
+    backend.commit(SHOW_ID, revision, {"/a": digest}, _ShiftingBlobs(b"claimed", b"swapped"))
+    assert backend.blob(SHOW_ID, digest) == b"claimed"
+
+
+class _KeepsReferences(_MemoryBackend):
+    """Serves blobs from the objects its callers handed in, as a backend that copies nothing."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.handed: dict[str, bytes] = {}
+
+    def blob(self, show_id: str, digest: str) -> bytes:
+        return self.handed.get(digest) or super().blob(show_id, digest)
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        super().commit(show_id, revision, tree, blobs)
+        self.handed.update(blobs)
+
+
+def test_regression_repository_hands_its_backend_a_copy_of_written_bytes() -> None:
+    repo = DocumentRepository(_KeepsReferences())
+    buffer = bytearray(b"kept")
+    repo.transaction(SHOW_ID, {"/renders/a.txt": cast(bytes, buffer)}, expected_revision="", at=AT)
+    buffer[:] = b"lost"
+    assert repo.read(SHOW_ID, "/renders/a.txt") == b"kept"
 
 
 def test_tree_of_an_unknown_revision_is_unknown_ref(backend_factory: BackendFactory) -> None:

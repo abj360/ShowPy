@@ -8,13 +8,24 @@ Contains:
 """
 
 import copy
+import json
+import shutil
+from pathlib import Path
 
 import pytest
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError
 from e8s.core.json_types import JsonValue
+from e8s.show.documents import decode_show, migrate_documents
+from e8s.show.file_repository import FileRepository
 from e8s.show.migrate import SHOW_DOC, ReportBuilder
 from e8s.show.migrations.v1_to_v2_cast import NOTES_DOC, migrate_cast
+from e8s.show.validate import validate_show
+
+V030_FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.3.0"
+STRAY_SET_DOC = "/sets/1/set.json"
+STRAY_SPOT = "ZZ9"
 
 
 def _docs(**cast: JsonValue) -> dict[str, JsonValue]:
@@ -196,3 +207,34 @@ def test_regression_a_cast_without_claimable_lists_nothing_dropped() -> None:
     report = ReportBuilder(1)
     migrate_cast(_docs(), report)
     assert report.build().dropped == ()
+
+
+def _v030_head(tmp_path: Path) -> dict[str, bytes]:
+    shutil.copytree(V030_FIXTURE / "repo", tmp_path / "repo")
+    expected = json.loads((V030_FIXTURE / "expected.json").read_text())
+    return dict(FileRepository(tmp_path / "repo").documents(expected["show_id"]))
+
+
+def _with_stray_placement(docs: dict[str, bytes]) -> tuple[dict[str, bytes], JsonValue]:
+    """Adds a placement of a spot the cast lacks to the first set, as a v1 tree could hold."""
+    set_doc = json.loads(docs[STRAY_SET_DOC])
+    stray = {**set_doc["placements"][0], "entity": STRAY_SPOT}
+    set_doc["placements"].append(stray)
+    return {**docs, STRAY_SET_DOC: json.dumps(set_doc).encode()}, stray
+
+
+def test_regression_v1_placement_of_a_spot_outside_the_cast_is_dropped(tmp_path: Path) -> None:
+    """Drops a v1 placement naming a spot the cast lacks and lists it; the show validates."""
+    head = _v030_head(tmp_path)
+    docs, stray = _with_stray_placement(head)
+    position = len(json.loads(head[STRAY_SET_DOC])["placements"])
+    migrated, report = migrate_documents(docs)
+    show = decode_show(migrated)
+    assert all(STRAY_SPOT not in owner.entity_ids() for owner in show.sets)
+    codes = {issue.code for issue in validate_show(show).issues}
+    assert ErrorCode.UNKNOWN_SPOT not in codes
+    listed = [d for d in report.dropped if d.stored_id == STRAY_SPOT]
+    assert [(d.document, d.location, d.fields) for d in listed] == [
+        (STRAY_SET_DOC, f"placements[{position}]", stray)
+    ]
+    assert migrate_documents(head)[1].dropped == report.dropped[: len(report.dropped) - 1]

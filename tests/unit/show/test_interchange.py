@@ -173,8 +173,6 @@ def test_import_positions_inserts_new_sets_where_the_file_puts_them() -> None:
 SIMPLE_TEXT = "set,counts,entity,x,y\n3,4,T1,1,1\n"
 
 
-@pytest.mark.defect("UP-9.5-41")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-41")
 def test_regression_import_positions_reads_a_utf8_bom() -> None:
     """Reads a CSV that starts with a UTF-8 byte order mark, as Excel writes it (audit 9.5)."""
     plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
@@ -182,13 +180,18 @@ def test_regression_import_positions_reads_a_utf8_bom() -> None:
     assert bom == plain
 
 
-@pytest.mark.defect("UP-9.5-42")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-42")
 def test_regression_import_positions_reads_semicolon_delimited_csv() -> None:
     """Reads a semicolon-delimited CSV, as Excel writes in many locales (audit 9.5)."""
     plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
     semicolons = import_positions(two_set_show(), SIMPLE_TEXT.replace(",", ";"), "trumpets")
     assert semicolons == plain
+
+
+def test_import_positions_keeps_a_semicolon_in_a_quoted_cell_of_a_comma_file() -> None:
+    """Keeps `;` in the body of a comma file as data: the header alone picks the delimiter."""
+    text = 'set,counts,entity,x,y,note\n3,4,T1,1,1,"a;b;c;d;e;f"\n'
+    plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
+    assert import_positions(two_set_show(), text, group="trumpets") == plain
 
 
 def test_regression_import_positions_normalizes_facing() -> None:
@@ -407,6 +410,13 @@ def test_import_json_rejects_the_old_stage_tag() -> None:
         import_json(document)
     assert "showpy.show.v1" in str(caught.value)
     assert "showpy.show.v1" in (caught.value.hint or "")
+
+
+def test_regression_include_typo_gets_a_close_match_hint() -> None:
+    """Hints `extensions` for an include name one transposition away from it."""
+    with pytest.raises(UnknownRefError) as caught:
+        export_json(two_set_show(), include=["extensoins"])
+    assert caught.value.hint.startswith("did you mean extensions")
 
 
 def test_regression_export_json_include_accepts_a_single_field_name() -> None:
@@ -715,3 +725,50 @@ def test_migrate_json_of_a_current_document_reports_nothing() -> None:
     assert show == two_set_show()
     assert report == MigrationReport(from_version=CURRENT_VERSION)
     assert notes is None
+
+
+def _reversed_id_maps(dumped: dict[str, Any]) -> dict[str, Any]:
+    """Returns a copy of a show dump with every ID-keyed mapping in reverse key order."""
+
+    def flip(mapping: dict[str, Any]) -> dict[str, Any]:
+        return dict(reversed(mapping.items()))
+
+    flipped = {**dumped}
+    cast = dumped["cast"]
+    flipped["cast"] = {
+        **cast,
+        "groups": {
+            key: {**group, "limits": flip(group["limits"])}
+            for key, group in flip(cast["groups"]).items()
+        },
+        "selections": flip(cast["selections"]),
+        "label_scheme": {
+            **cast["label_scheme"],
+            "prefixes": flip(cast["label_scheme"]["prefixes"]),
+        },
+    }
+    flipped["forms"] = flip(dumped["forms"])
+    flipped["dependencies"] = flip(dumped["dependencies"])
+    flipped["transitions"] = [
+        {**spec, "rows": flip(spec["rows"]), "routes": flip(spec["routes"])}
+        for spec in dumped["transitions"]
+    ]
+    return flipped
+
+
+def test_regression_equal_shows_export_equal_bytes() -> None:
+    dumped: dict[str, Any] = rich_show().to_json()
+    forms = dumped["forms"]
+    forms["line2"] = {**forms["line1"], "id": "line2"}
+    dumped["cast"]["selections"]["other"] = dumped["cast"]["selections"]["pair"]
+    groups = dumped["cast"]["groups"]
+    groups["brass"] = {**groups["trumpets"], "key": "brass", "name": "Brass", "label_prefix": "B"}
+    dumped["cast"]["label_scheme"]["prefixes"] = {"trumpets": "T", "brass": "B"}
+    dumped["cast"]["groups"]["trumpets"]["limits"] = {"speed": 2.0, "accel": 1.0}
+    dumped["dependencies"] = {"sheet:b": "1.0.0", "sheet:a": "1.0.0"}
+    show_a = Show.from_json(dumped)
+    show_b = Show.from_json(_reversed_id_maps(dumped))
+    assert show_a == show_b
+    assert list(show_a.forms) != list(show_b.forms)
+    assert list(show_a.cast.selections) != list(show_b.cast.selections)
+    assert json.dumps(export_json(show_a)) == json.dumps(export_json(show_b))

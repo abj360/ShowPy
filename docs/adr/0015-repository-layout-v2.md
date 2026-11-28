@@ -492,3 +492,176 @@ retires at 2.0.0, it accepts the layout-1 documents (`set.json` holding `placeme
 `facing.json`, `labels.json` and `/cast/cast.json`), so older trees still validate. A tree that
 holds both forms of one set still fails to decode. Model and interchange shapes are unchanged:
 the schema's model definitions stay as they are, and `export_json` writes the same bytes.
+
+### Addendum 2026-11-27: `events_since` decodes the show documents each revision changed
+
+Decision 10 ships in part. `events_since` finds what each revision changed by comparing the blob
+digests of its tree and its parent's tree, never from the revision record's `changed` list. A
+revision that changed a show document gets its show from `Workspace.show_at`. The decode cache
+decodes only the documents that revision changed, but the show is still assembled and validated
+whole. Events come from `changes()` between that show and the one before it. A revision that
+changed no show document, such as a comment-only revision, decodes nothing. Its comment events
+come from the two comment documents.
+
+Measured on 2026-11-27 on an Apple M4, Python 3.14.8, load average 3.2 to 3.8. The show is
+`seeded_show(11, 300, 60)` with 200 one-spot revisions, each moving one spot in one set. Times
+are the minimum of 3 rounds, with the base revision's show already decoded. That first decode
+adds 0.20 s.
+
+| Operation                                       | Before (4f4cda58) | After  | Budget |
+| ----------------------------------------------- | ----------------- | ------ | ------ |
+| `events_since`, 200 revisions, memory           | 4.99 s            | 1.32 s | < 1 s  |
+| `events_since`, 200 revisions, files            |                   | 1.54 s | < 1 s  |
+| Documents decoded (decode cache misses), memory | 200               | 200    |        |
+
+Where the 1.32 s goes: `show_at` assembling and validating each whole show takes 0.80 s, and
+`changes()` between two whole shows takes 0.50 s. The budget is not met. Meeting it means
+deriving events from the item values of the changed documents alone, without assembling either
+show. That needs a document-level item reader, which belongs with the item table. It is
+follow-up work, to start once the item reader of the Phase 3 diff and merge work (lane C) is on
+`main`.
+
+### Addendum 2026-11-27: `events_since` reads only the documents each revision changed
+
+Decision 10 now ships for the revisions an editing session makes. A revision that changed set,
+role, forms, paths, sheet or timeline documents, and kept every set's ID, is read part by part
+through the workspace's decode cache. Each changed document is decoded and checked as a
+whole-show decode checks it. The items the revision changed are listed from those documents
+alone (`tree_changes`, which a property test holds equal to `changes()` of the two whole shows),
+and the events come from those items. The payloads read only the sets, paths and forms the events
+name. The one wider read is the stored paths into a set whose counts changed, since they take the
+new counts. No show is assembled or validated for such a revision.
+
+A revision that changed show.json, the cast document or a set's ID is still compared as two
+whole shows, and so is a tree of an older format or of layout 1. Those changes reach items stored
+in other documents: the set order, the pins, the transitions and forms that name a set. A
+revision whose parent holds no show is decoded whole once, as before. A parity property test
+compares `events_since` with a frozen copy of the whole-show derivation over random edits of
+every kind, renumbers, pins, removed sets and cast edits included.
+
+Limitation: a revision read part by part does not rerun the `Show` model's cross-document rules.
+None can break from the documents such a revision changes. Form keys follow form IDs, set IDs and
+keys are unchanged, and the set count and extensions live in show.json. The tree-wide path checks
+of a whole-show decode do run on every such revision. A future `Show` rule that reads a set,
+forms, paths, sheet or timeline document together with another document must also be checked by
+the part reader, or such revisions must be read whole.
+
+Measured on 2026-11-27 on an Apple M4, Python 3.14.8, with other lanes running (load average 4 to
+8). The probe is the one of the previous addendum: `seeded_show(11, 300, 60)`, 200 one-spot
+revisions moving one spot in one set to two alternating positions, minimum of 3 rounds, base
+revision's show already decoded. The last two rows give every revision new bytes, so each one
+misses the decode cache once.
+
+| Operation                                        | Before (686d2abc) | After  | Budget |
+| ------------------------------------------------ | ----------------- | ------ | ------ |
+| `events_since`, 200 revisions, memory            | 1.81 s            | 0.11 s | < 1 s  |
+| `events_since`, 200 revisions, files             | 1.29 s            | 0.35 s | < 1 s  |
+| `events_since`, 200 revisions, new bytes, memory | 1.18 s            | 0.40 s | < 1 s  |
+| `events_since`, 200 revisions, new bytes, files  | 2.43 s            | 0.62 s | < 1 s  |
+| Shows assembled and validated, 200 revisions     | 200               | 0      |        |
+
+The new-bytes Before figures were measured in review, on the same probe. The table gives the
+fastest round. Repeated calls in one process cost more. Over six new-bytes calls in memory with a
+collection forced before each, the calls after the first took 0.36 to 0.38 s. Without forced
+collections, three of six calls took 0.68 to 0.69 s: the garbage collector's full pass over the
+cached decodes ran inside them. The review measured about 0.75 s with collections and up to about
+1.0 s on repeated calls without them. The margin to the 1 s budget is thin there. Profiled, about
+two thirds of that case is decoding the changed set: a set decodes from set.json and its three role
+documents together, so the unchanged facing and labels documents are parsed again. About a fifth
+is comparing the set's 300 placements. Caching each role document's parsed rows by digest would
+remove the first part.
+
+### Addendum 2026-11-27: what lane A built differs from decisions 3, 5, 7 and 15
+
+Decisions 3, 5, 7 and 15 are kept. Building them changed these details; the code is the source
+of truth, and this addendum records where it departs from the text above.
+
+- **Decision 5, repair.** `fsck(root, repair=True, confirm=True, at=...)` needs the caller's
+  time `at`, keyword-only and with a time zone; a repair without it, or `confirm` without
+  `repair`, raises `StorageError` (code `NOT_CONFIRMED`). A torn file is removed only once it was
+  last modified more than `STALE_TEMP_AGE` (24 hours) before `at`, so a writer that is only
+  paused keeps its file. Besides a torn last slot, a repair removes a torn `show.json` of a show
+  with no slot and a torn `layout.json` of a root with no show folder: the only states those
+  files reach are a first write that stopped part way.
+- **Decision 7, torn slots and links.** A slot that stays empty or cut short after three rereads
+  (pauses of 1, 10 and 100 ms) raises `StorageError` with code `TORN_SLOT`, not `CORRUPT`, and
+  the hint names the repair call. A slot holds the revision's `changed` paths, so it can pass
+  4 KB; a torn slot is one that is not one finished line of canonical JSON, found by parsing,
+  never by size. A commit never raises `NO_HARDLINKS`: a link refused with `EPERM`, `EXDEV` or
+  `ENOTSUP`, by the first probe or by a later link, switches that writer to exclusive creates.
+- **Decision 5, gc.** `gc` moves an unreachable record or blob aside in its own folder as
+  `.gc-<name>` and removes it only if it is still the file it moved and no slot landed
+  meanwhile; otherwise the file goes back. A gc that stops part way leaves `.gc-` files, which
+  `fsck` reports and the next confirmed `gc` puts back, freshened. A stored file counts as the
+  same file across time only when its device, inode, size, modification time and change time
+  are all unchanged (`durable_reads.file_identity`); an inode of 0 never proves it. Whether two
+  files hold the same content is decided by their bytes alone, never by metadata.
+- **Decision 3, `legacy_before`.** An upgrade writes `legacy_before` as one past the last copied
+  slot whose revision ID does not recompute under the current scheme, so every later copied
+  record is checked like a native one; a history with no such slot gets no `legacy_before` at
+  all. The v0.4.0 fixture gets 3 (only its second revision is old-scheme), v0.3.0 gets 3, v0.1.1
+  and v0.2.0 get 4.
+- **Decision 3, the legacy prefix in the manifest.** `show.json` of an upgraded show holds three
+  keys together, or none: `legacy_before`, `legacy_count` (`legacy_before - 1`) and
+  `legacy_digest`, the SHA-256 of the canonical JSON list of the legacy slots' revision IDs in
+  order. A native show's manifest holds only `id`. A manifest with some of the keys, or keys
+  that disagree with each other, is `CORRUPT` on every read. `head` and `commit` check only
+  that, and that `legacy_before` is at most the slot after the last, so a cold `head` stays at
+  `2 log2(n) + 2` lookups. `log` (whenever it reads a legacy slot) and `tree` of a legacy
+  revision check the digest once per backend; `fsck` checks it over the slots its walk reads and
+  reports `BAD_RECORD` on `show.json`. A `legacy_before` moved within the legacy range or onto
+  the slot after the last, or a legacy record swapped for another revision, is refused. Layout 2
+  is unreleased, so the keys need no migration.
+- **Decision 15, the upgrade.** `upgrade_repository` refuses a target that names the source in
+  another case, Unicode normalization, through a symlink or `..`, by comparing files, not
+  spellings. It refuses a symlink or special file anywhere it lists the source. It lists the
+  source again and reads every head again just before it places `layout.json`, and raises
+  `StorageError` (code `CONFLICT`) when a writer changed anything. It carries `<root>/assets/`.
+  It links only blobs and assets the current user owns, since a later commit that reuses a blob
+  sets its modification time; it copies the others. It lists the revision fields it drops (the
+  v0.1 and v0.2 authorship keys) in `ShowUpgrade.dropped`. On a layout-1 root, `FileRepository`
+  writes, `FileAssetStore.put`, `fsck` and `gc` all raise `VersionError` (code `OLD_LAYOUT`)
+  whose hint is the runnable upgrade call.
+- **Correction 2026-11-27, decision 15.** Comparing files covers only the folders of the target
+  that exist. A target that spells `..` or `.` below a folder that does not exist yet, or runs
+  through a symlink to nothing, is refused by its spelling (`StorageError`, code `BAD_PATH`)
+  before anything is written, even where it would land outside the source: creating the missing
+  folders would let the file system follow `..` into the source.
+- **Correction 2026-11-27, decision 15.** Only `..` is refused below a missing folder. A `.`
+  never reaches the check: `x/./y` names `x/y`, and the upgrade creates and writes `x/y`.
+
+### Addendum 2026-11-27: what the archive built differs from decisions 6 and 16 and D9
+
+Decisions 6 and 16 and D9 are kept. Building the archive changed these details; the code is the
+source of truth.
+
+- **D9, the ZIP reader and writer.** The archive is a ZIP, but `e8s.show.archive_zip` writes and
+  reads it by hand instead of through `zipfile`. `zipfile` reads the whole central directory into
+  objects before any cap applies, walks it by size rather than by the entry count, and accepts
+  overlapping entries, bytes before the first entry, comments and ZIP64. The reader accepts the
+  one canonical form the writer emits: stored entries in ascending name order, the ZIP epoch as
+  every time, no flag, no extra field, no comment, entries that tile with no gap or overlap. It
+  checks the end record and the entry count before it walks the central directory, each entry's
+  size cap before it reads the entry, and every CRC. The bytes equal what `zipfile` writes given
+  the same fixed fields, and `zipfile` opens every archive.
+- **Decision 16, limits.** An archive holds at most 65,534 entries and 2,147,483,647 bytes, so
+  no field needs ZIP64. A revision adds a slot and a record, so at most 32,766 revisions fit and
+  about 20,000 to 30,000 in practice, as blobs add entries: below `MAX_REVISIONS` (100,000).
+  Export refuses a longer history before it reads it. An archive holds only a history whose
+  every revision ID recomputes, under a show ID a new show may take; a show with a hyphenated ID
+  or older-scheme IDs is refused at export with a message saying to save its head as a new show.
+  None of the four released fixtures (v0.1.1, v0.2.0, v0.3.0, v0.4.0) exports after its upgrade.
+- **Decision 16, import.** `import_archive` checks every entry before it writes anything, then
+  commits each revision through the backend. It is resumable and idempotent, not atomic: a
+  backend has no commit of several revisions. An import that stops leaves the revisions that
+  landed, a complete shorter history; importing the same archive again finishes it, and an
+  import into a show that holds the whole history writes nothing. Any other show under the ID is
+  refused with `ConflictError`. The checks prove an archive consistent, not authentic: a
+  self-consistent forged history imports, and no digest covers the show ID in the manifest.
+- **Decision 6, the stale-temp cut-off.** A commit removes temp files modified more than
+  `STALE_TEMP_AGE` before the earlier of its own time and the file system's now, clamped to the
+  earliest time a datetime holds. The library reads no clock: the file system's now is the
+  modification time of an empty temp file the commit writes, only when some temp file is old
+  enough by the caller's time. A time far ahead of the file system's clock, as an imported
+  archive may carry, no longer removes other writers' fresh temp files, and a time within a day
+  of year one no longer overflows.

@@ -19,12 +19,15 @@ Contains:
         restores the show
     test_regression_join_keeps_one_pin_per_target: keeps the first half's pin when both halves pin
         one spot or the shared set, so the joined show can be stored
+    test_regression_join_never_brings_a_stale_transition_to_life: drops a stale spec with locked
+        rows and its pin on the pair a join makes adjacent
 """
 
 from datetime import UTC, datetime
 
 import pytest
 
+from e8s.cast.spots import delete_spots
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
@@ -32,14 +35,21 @@ from e8s.core.errors import SchemaError, TimelineError
 from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.core.util import approx_equal
 from e8s.show.documents import encode_show
-from e8s.show.manage import add_set
+from e8s.show.manage import add_set, remove_set
 from e8s.show.models import Pin, PinTarget, Show
 from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
 from e8s.show.sections import join_sections, split_section
 from e8s.show.set_queries import index
-from e8s.time.clock import count_to_seconds
-from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
+from e8s.time.clock import count_to_seconds, tempo_at
+from e8s.time.models import (
+    AudioTrack,
+    Cue,
+    Hold,
+    Marker,
+    MeasureSetting,
+    TempoSection,
+)
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show
@@ -136,9 +146,10 @@ def test_join_disjoint_sections_and_clashes() -> None:
     relabelled = second.replace(sets=tuple(s.replace(id=f"B{s.id}") for s in second.sets))
     joined = join_sections(first, relabelled)
     assert joined.set_ids() == ["1", "2", "B1", "B2", "B3"]
-    other_cast = relabelled.replace(cast=first.cast.replace(spots=()))
-    with pytest.raises(SchemaError):
+    other_cast = delete_spots(relabelled, "T4")
+    with pytest.raises(SchemaError) as differ:
         join_sections(first, other_cast)
+    assert differ.value.context["differ"] == ["cast"]
     moved = relabelled.sets[0].with_placements({"T1": PlacementPatch(x=9.0)})
     bad_boundary = second._copied(
         update={
@@ -160,6 +171,7 @@ def test_regression_join_after_split_restores_the_show() -> None:
 
 
 SPLIT_SET = "3"
+SPLIT_COUNT = 12.0
 WINDOW_ACROSS_SPLIT = (4.0, 16.0)
 RAMP_COUNTS = 16.0
 
@@ -173,8 +185,6 @@ def _three_sets_with(**timeline_fields: object) -> Show:
     return show.replace(timeline=show.timeline.replace(**timeline_fields))
 
 
-@pytest.mark.defect("UP-9.7-48")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-48")
 def test_regression_join_after_split_keeps_markers_that_repeat_a_label() -> None:
     """Keeps a marker whose label repeats at another count across split and join (audit 9.7)."""
     markers = (Marker(label="hit", at_count=4.0), Marker(label="hit", at_count=14.0))
@@ -182,8 +192,12 @@ def test_regression_join_after_split_keeps_markers_that_repeat_a_label() -> None
     assert _round_trip(show).timeline.markers == markers
 
 
-@pytest.mark.defect("UP-9.7-49")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-49")
+def test_join_after_split_keeps_a_marker_on_the_boundary_once() -> None:
+    """Keeps a marker that sits on the split count once, not once per half."""
+    markers = (Marker(label="hit", at_count=4.0), Marker(label="hit", at_count=12.0))
+    assert _round_trip(_three_sets_with(markers=markers)).timeline.markers == markers
+
+
 def test_regression_join_after_split_keeps_one_facing_override_across_the_split() -> None:
     """Rejoins a facing override cut by a split into one override (audit 9.7 sections)."""
     show = _three_sets_with()
@@ -198,8 +212,22 @@ def test_regression_join_after_split_keeps_one_facing_override_across_the_split(
     assert _round_trip(show).facing_overrides == (override,)
 
 
-@pytest.mark.defect("UP-9.7-50")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-50")
+def test_join_keeps_adjacent_facing_overrides_that_differ() -> None:
+    """Keeps two overrides apart when one turns to another angle where the first ends."""
+    show = _three_sets_with()
+    overrides = tuple(
+        FacingOverride(
+            entities=(SpotId("T1"),),
+            mode=FacingMode.FIXED,
+            value=FixedFacing(degrees=degrees),
+            start=start,
+            end=end,
+        )
+        for degrees, start, end in ((90.0, 4.0, 12.0), (45.0, 12.0, 16.0))
+    )
+    assert _round_trip(show.replace(facing_overrides=overrides)).facing_overrides == overrides
+
+
 def test_regression_split_does_not_leave_a_ramp_longer_than_its_section() -> None:
     """Clips a tempo ramp to the length of the section it ends up in (audit 9.7 sections)."""
     ramp = TempoSection(
@@ -210,8 +238,23 @@ def test_regression_split_does_not_leave_a_ramp_longer_than_its_section() -> Non
     assert longest <= index(first).total_counts + TOL
 
 
-@pytest.mark.defect("UP-9.7-86")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-86")
+def test_split_ends_a_ramp_at_the_tempo_reached_on_the_split_count() -> None:
+    """Ends the first half's ramp at the split with the tempo the whole show has there."""
+    ramp = TempoSection(
+        at_count=0.0, counts_per_minute=120.0, ramp_to=60.0, ramp_counts=RAMP_COUNTS
+    )
+    show = _three_sets_with(tempos=(ramp,))
+    first, _ = split_section(show, SPLIT_SET)
+    clipped = first.timeline.tempos[0]
+    assert clipped.ramp_counts == index(first).total_counts
+    assert approx_equal(clipped.ramp_to or 0.0, tempo_at(show.timeline, SPLIT_COUNT), abs_tol=TOL)
+    assert approx_equal(
+        count_to_seconds(first.timeline, SPLIT_COUNT),
+        count_to_seconds(show.timeline, SPLIT_COUNT),
+        abs_tol=TOL,
+    )
+
+
 def test_regression_split_drops_audio_whose_section_starts_after_the_half_ends() -> None:
     """Keeps an audio track out of a half that ends before the track's section (audit 9.7)."""
     late_track = AudioTrack(file="late.wav", label="late", section=(14.0, 20.0))
@@ -221,8 +264,34 @@ def test_regression_split_drops_audio_whose_section_starts_after_the_half_ends()
     assert stranded == []
 
 
-@pytest.mark.defect("UP-9.7-87")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-87")
+def test_split_gives_an_audio_track_to_every_half_its_section_overlaps() -> None:
+    """Clips a track's section to each half, and leaves a track with no section in both."""
+    across = AudioTrack(file="x.wav", label="across", sync_offset_s=1.0, section=(4.0, 16.0))
+    whole = AudioTrack(file="w.wav", label="whole")
+    show = _three_sets_with(audio=(across, whole))
+    first, second = split_section(show, SPLIT_SET)
+    assert [(t.label, t.section) for t in first.timeline.audio] == [
+        ("across", (4.0, SPLIT_COUNT)),
+        ("whole", None),
+    ]
+    assert [(t.label, t.section) for t in second.timeline.audio] == [
+        ("across", (0.0, 4.0)),
+        ("whole", None),
+    ]
+
+
+@pytest.mark.parametrize(
+    "section", [None, (4.0, 16.0), (14.0, 20.0), (0.0, 6.0), (12.0, 20.0), (2.0, 12.0)]
+)
+def test_regression_join_after_split_restores_audio_tracks(
+    section: tuple[float, float] | None,
+) -> None:
+    """Restores each audio track, section and sync offset, after a split and a join."""
+    track = AudioTrack(file="a.wav", label="music", sync_offset_s=1.0, section=section)
+    show = _three_sets_with(audio=(track,))
+    assert _round_trip(show).timeline.audio == (track,)
+
+
 def test_regression_split_puts_a_cue_in_one_half_only() -> None:
     """Keeps cue c1 in a single half of a split (audit 9.7 sections)."""
     cue = Cue(label="c1", order=1, estimated_seconds=2.0)
@@ -248,3 +317,79 @@ def test_regression_join_keeps_one_pin_per_target(target: PinTarget, pin_id: str
     joined = join_sections(a, pin(b, target, pin_id, reason="second"))
     assert [(p.target, p.id, p.reason) for p in joined.pins] == [(target, pin_id, "first")]
     assert encode_show(joined)
+
+
+def _cue_show(*cues: Cue) -> Show:
+    return _three_sets_with(cues=cues)
+
+
+def _relabelled(show: Show) -> Show:
+    return show.replace(sets=tuple(s.replace(id=f"B{s.id}") for s in show.sets))
+
+
+def test_split_sends_each_cue_to_the_half_its_start_falls_in() -> None:
+    """Splits cues at the boundary time: an early cue stays first, a later one goes second."""
+    early = Cue(label="early", order=1, estimated_seconds=8.0)
+    late = Cue(label="late", order=2, estimated_seconds=2.0)
+    first, second = split_section(_cue_show(early, late), SPLIT_SET)
+    assert [c.label for c in first.timeline.cues] == ["early"]
+    assert [c.label for c in second.timeline.cues] == ["late"]
+    assert second.timeline.cues[0].order == late.order
+
+
+def test_regression_join_after_split_restores_cues() -> None:
+    """Restores every cue once, in order, after a split and a join."""
+    cues = (
+        Cue(label="early", order=1, estimated_seconds=8.0),
+        Cue(label="late", order=2, estimated_seconds=2.0),
+    )
+    assert _round_trip(_cue_show(*cues)).timeline.cues == cues
+
+
+def test_join_moves_cue_orders_after_the_first_section_on_an_order_clash() -> None:
+    """Shifts the second section's cue orders after the first's, keeping their relative order."""
+    one = _cue_show(Cue(label="a", order=1, estimated_seconds=1.0))
+    two = _cue_show(
+        Cue(label="b", order=1, estimated_seconds=1.0),
+        Cue(label="c", order=3, estimated_seconds=1.0),
+    )
+    joined = join_sections(one, _relabelled(two))
+    assert [(c.label, c.order) for c in joined.timeline.cues] == [("a", 1), ("b", 2), ("c", 4)]
+
+
+def test_join_rejects_a_cue_label_both_sections_hold() -> None:
+    """Raises SchemaError when both sections hold a cue with one label."""
+    cue = Cue(label="a", order=1, estimated_seconds=1.0)
+    with pytest.raises(SchemaError):
+        join_sections(_cue_show(cue), _relabelled(_cue_show(cue.replace(order=2))))
+
+
+def test_regression_join_after_split_restores_second_half_audio_within_tolerance() -> None:
+    """Restores a track only the second half holds within 1e-9, other fields exactly."""
+    ramp = TempoSection(at_count=0.0, counts_per_minute=123.0, ramp_to=71.0, ramp_counts=18.0)
+    track = AudioTrack(
+        file="late.wav", label="late", sync_offset_s=0.1, gain=0.3, section=(14.3, 19.7)
+    )
+    show = _three_sets_with(tempos=(ramp,), audio=(track,))
+    (restored,) = _round_trip(show).timeline.audio
+    assert (restored.file, restored.label, restored.gain) == (track.file, track.label, 0.3)
+    assert approx_equal(restored.sync_offset_s, track.sync_offset_s, abs_tol=TOL)
+    assert track.section is not None
+    assert restored.section is not None
+    assert approx_equal(restored.section[0], track.section[0], abs_tol=TOL)
+    assert approx_equal(restored.section[1], track.section[1], abs_tol=TOL)
+
+
+def test_regression_join_never_brings_a_stale_transition_to_life() -> None:
+    """Drops a stale 2→3 spec with locked rows and its pin when the join makes 2 and 3 adjacent."""
+    whole = add_set(two_set_show(), "3", 4.0)
+    first, second = split_section(whole, "3")
+    first = remove_set(first, "3")
+    locked = pin(whole, "transition", "1→2").transition(("1", "2"))
+    stale = first.replace(
+        transitions=(*first.transitions, locked.replace(id=("2", "3"))),
+        pins=(*first.pins, Pin(target="transition", id="2→3")),
+    )
+    joined = join_sections(stale, second)
+    assert joined == join_sections(first, second)
+    assert not any(row.locked for row in joined.transition(("2", "3")).rows.values())

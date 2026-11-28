@@ -6,7 +6,8 @@ test_nightly_core.py --- checks the fuzz crate, the rustfuzz and mutants session
 Contains:
     test_fuzz_crate_declares_one_target_per_parser: fuzz/ is a cargo-fuzz crate outside the
         workspace, with a lock file and exactly the six parser targets the session runs
-    test_fuzz_targets_are_empty_until_their_lanes_fill_them: each target ignores its input
+    test_fuzz_targets_are_empty_until_their_lanes_fill_them: each target ignores its input until
+        its lane fills it, and a filled target reads its input
     function_source(): returns the unparsed source of one noxfile function
     session_calls(): lists the source of every `session.run` call one noxfile function makes
     test_rustfuzz_session_runs_each_target_on_the_pinned_nightly: a dated nightly, a locked
@@ -25,7 +26,7 @@ Contains:
     test_nightly_core_runs_fuzz_and_mutants: daily and on dispatch only, 10 minutes per target,
         then the scores, with crash inputs and the summary uploaded
     test_nightly_core_keeps_the_workflow_conventions: SHA pins, no persisted credentials,
-        read-only permissions, the pinned toolchain and Rust cache before uv
+        read-only permissions but for the report job, the pinned toolchain and Rust cache before uv
     test_nightly_core_saves_caches_only_from_main: the Rust, uv and cargo tool caches
     test_regression_nightly_core_saves_tools_after_a_failure_and_never_cancels: a crash or a
         tool that cannot run still saves the cargo tools, and a dispatch never cancels the
@@ -74,6 +75,7 @@ FUZZ_ROOT = ROOT / "fuzz"
 FUZZ_MANIFEST = FUZZ_ROOT / "Cargo.toml"
 WORKSPACE_MANIFEST = ROOT / "Cargo.toml"
 EMPTY_TARGET = "fuzz_target!(|_data: &[u8]| {});"
+FILLED_TARGETS = frozenset({"refs", "strict_json"})
 DATED_NIGHTLY = re.compile(r"^nightly-\d{4}-\d{2}-\d{2}$")
 RUSTFUZZ_SESSION = "rustfuzz"
 MUTANTS_SESSION = "mutants"
@@ -98,6 +100,8 @@ NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-core.yml"
 NIGHTLY_TRIGGERS = 'on:\n  schedule:\n    - cron: "17 4 * * *"\n  workflow_dispatch:\n'
 NIGHTLY_PERMISSIONS = "permissions:\n  contents: read\n"
 NIGHTLY_JOB = "core"
+REPORT_JOB = "report"
+REPORT_CALL = "uses: $/.github/workflows/report-nightly.yml"
 NIGHTLY_CONCURRENCY = (
     "concurrency:\n  group: nightly-core-${{ github.ref }}\n  cancel-in-progress: false\n"
 )
@@ -154,7 +158,11 @@ def test_fuzz_targets_are_empty_until_their_lanes_fill_them() -> None:
         target = (FUZZ_ROOT / "fuzz_targets" / f"{name}.rs").read_text(encoding="utf-8")
         assert target.startswith(f"//! {name}.rs --- "), name
         assert "#![no_main]" in target, name
-        assert target.rstrip().endswith(EMPTY_TARGET), name
+        if name in FILLED_TARGETS:
+            assert "fuzz_target!(|data: &[u8]| {" in target, name
+            assert "_data" not in target, name
+        else:
+            assert target.rstrip().endswith(EMPTY_TARGET), name
 
 
 def function_source(source: str, function_name: str) -> str:
@@ -305,7 +313,7 @@ def _nightly() -> str:
 def test_nightly_core_runs_fuzz_and_mutants() -> None:
     workflow = _nightly()
     assert workflow_section(workflow, "on") == NIGHTLY_TRIGGERS
-    assert ci_job_names(workflow) == [NIGHTLY_JOB]
+    assert ci_job_names(workflow) == [NIGHTLY_JOB, REPORT_JOB]
     steps = job_steps(ci_job(workflow, NIGHTLY_JOB))
     fuzz = next(index for index, step in enumerate(steps) if FUZZ_STEP in step)
     scores = next(index for index, step in enumerate(steps) if MUTANTS_STEP in step)
@@ -321,8 +329,9 @@ def test_nightly_core_runs_fuzz_and_mutants() -> None:
 def test_nightly_core_keeps_the_workflow_conventions() -> None:
     workflow = _nightly()
     assert workflow_section(workflow, "permissions") == NIGHTLY_PERMISSIONS
-    assert workflow.count("permissions:") == 1
-    assert unpinned_actions(workflow) == []
+    assert workflow.count("permissions:") == 2
+    assert "permissions:" not in ci_job(workflow, NIGHTLY_JOB)
+    assert unpinned_actions(workflow) == [REPORT_CALL]
     checkouts = workflow.count("uses: actions/checkout@")
     assert checkouts == 1
     assert workflow.count("persist-credentials: false") == checkouts

@@ -21,19 +21,40 @@ Contains:
     test_read_layout_maps_a_too_long_name_to_io: raises IO
     test_read_layout_maps_an_unreadable_root_to_io: raises IO
     test_read_layout_maps_an_unreadable_layout_file_to_io: raises IO
+    test_read_layout_file_refuses_a_missing_file_and_maps_os_errors_to_io: raises CORRUPT where
+        read_layout would report an empty root, and IO for an unreadable file
+    test_regression_root_holding_only_ds_store_is_empty: reads a root holding only .DS_Store as an
+        empty root of the current layout
+    test_regression_unreadable_lost_and_found_is_skipped: reads past a lost+found it cannot open
+    test_read_layout_skips_housekeeping_names_only: skips every housekeeping name beside a layout-1
+        show, and still refuses any other stray entry
+    test_regression_root_holding_only_tmp_is_current: reads the root a first commit left
+        before linking its layout file as the current layout
+    test_regression_layout_file_linked_while_listing_is_read: reads a layout file a concurrent
+        first commit linked after its name was looked up
 """
 
+import errno
 import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError, VersionError
-from e8s.show.layout import CURRENT_LAYOUT, LAYOUT_FILE, LAYOUT_FORMAT, read_layout
+from e8s.show.layout import (
+    CURRENT_LAYOUT,
+    HOUSEKEEPING_NAMES,
+    LAYOUT_FILE,
+    LAYOUT_FORMAT,
+    TEMP_DIR,
+    read_layout,
+    read_layout_file,
+)
 
 FIXTURE_REPO = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.4.0" / "repo"
 
@@ -92,7 +113,10 @@ OTHER_CONTENT = {
 
 
 @pytest.mark.parametrize("content", OTHER_CONTENT.values(), ids=OTHER_CONTENT.keys())
-def test_read_layout_refuses_other_content(tmp_path: Path, content: str) -> None:
+def test_read_layout_refuses_other_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
     _write_layout(tmp_path, content)
     with pytest.raises(StorageError) as caught:
         read_layout(tmp_path)
@@ -208,3 +232,85 @@ def test_read_layout_maps_an_unreadable_layout_file_to_io(tmp_path: Path) -> Non
     finally:
         path.chmod(0o600)
     assert caught.value.code == ErrorCode.IO
+
+
+def test_read_layout_file_refuses_a_missing_file_and_maps_os_errors_to_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    with pytest.raises(StorageError) as missing:
+        read_layout_file(tmp_path)
+    assert missing.value.code == ErrorCode.CORRUPT
+    path = _write_layout(tmp_path, _layout_json(2))
+    assert read_layout_file(tmp_path) == CURRENT_LAYOUT
+
+    def deny(*_args: object, **_kwargs: object) -> int:
+        raise PermissionError(errno.EACCES, "Permission denied", str(path))
+
+    monkeypatch.setattr(os, "open", deny)
+    with pytest.raises(StorageError) as denied:
+        read_layout_file(tmp_path)
+    assert denied.value.code == ErrorCode.IO
+
+
+def test_regression_root_holding_only_ds_store_is_empty(tmp_path: Path) -> None:
+    """Reads a root that holds only Finder's .DS_Store as an empty root, not as corrupt."""
+    (tmp_path / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1")
+    assert read_layout(tmp_path) == CURRENT_LAYOUT
+
+
+@pytest.mark.skipif(CANNOT_CHMOD, reason="needs permission checks that bind this user")
+def test_regression_unreadable_lost_and_found_is_skipped(tmp_path: Path) -> None:
+    """Reads past a lost+found folder it cannot open, alone or beside a layout-1 show."""
+    lost = tmp_path / "lost+found"
+    lost.mkdir()
+    (lost / "next").mkdir()
+    lost.chmod(0)
+    try:
+        assert read_layout(tmp_path) == CURRENT_LAYOUT
+        _legacy_show(tmp_path)
+        assert read_layout(tmp_path) == 1
+    finally:
+        lost.chmod(0o700)
+
+
+def test_read_layout_skips_housekeeping_names_only(tmp_path: Path) -> None:
+    for name in sorted(HOUSEKEEPING_NAMES):
+        (tmp_path / name).mkdir()
+    assert read_layout(tmp_path) == CURRENT_LAYOUT
+    (tmp_path / ".DS_Store_old").write_text("x")
+    with pytest.raises(StorageError) as caught:
+        read_layout(tmp_path)
+    assert caught.value.code == ErrorCode.CORRUPT
+
+
+def test_regression_root_holding_only_tmp_is_current(tmp_path: Path) -> None:
+    (tmp_path / TEMP_DIR).mkdir()
+    (tmp_path / TEMP_DIR / ".tmp-left").write_bytes(b"x")
+    assert read_layout(tmp_path) == CURRENT_LAYOUT
+    (tmp_path / TEMP_DIR / ".tmp-left").unlink()
+    (tmp_path / TEMP_DIR).rmdir()
+    (tmp_path / TEMP_DIR).write_bytes(b"not a folder")
+    with pytest.raises(StorageError) as caught:
+        read_layout(tmp_path)
+    assert caught.value.code == ErrorCode.CORRUPT
+
+
+def test_regression_layout_file_linked_while_listing_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reads a layout file that a racing first commit linked after its name was looked up."""
+    _write_layout(tmp_path, _layout_json(3))
+    (tmp_path / TEMP_DIR).mkdir()
+    real_lstat = Path.lstat
+    looked_up: list[Path] = []
+
+    def not_yet_linked(path: Path) -> os.stat_result:
+        if path.name == LAYOUT_FILE and not looked_up:
+            looked_up.append(path)
+            raise FileNotFoundError(path)
+        return real_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", not_yet_linked)
+    with pytest.raises(VersionError):
+        read_layout(tmp_path)

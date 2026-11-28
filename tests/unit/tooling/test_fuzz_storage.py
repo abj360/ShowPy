@@ -64,6 +64,7 @@ from tests.unit.tooling.test_noxfile import (
 
 SCRIPT = ROOT / "scripts" / "fuzz_storage.py"
 NIGHTLY = ROOT / ".github" / "workflows" / "nightly.yml"
+NIGHTLY_STORAGE = ROOT / ".github" / "workflows" / "nightly-storage.yml"
 STORAGE_FUZZ_SESSION = "storagefuzz"
 LIST_JOB = "storage-fuzz-list"
 FUZZ_JOB = "storage-fuzz"
@@ -435,12 +436,12 @@ def test_atheris_is_a_linux_x86_64_dev_dependency() -> None:
 
 
 def _nightly() -> str:
-    return NIGHTLY.read_text(encoding="utf-8")
+    return NIGHTLY_STORAGE.read_text(encoding="utf-8")
 
 
 def test_storage_fuzz_workflow_lists_then_fuzzes_each_test() -> None:
     workflow = _nightly()
-    assert ci_job_names(workflow) == ["nightly", LIST_JOB, FUZZ_JOB]
+    assert ci_job_names(workflow) == [LIST_JOB, FUZZ_JOB]
     listing = ci_job(workflow, LIST_JOB)
     assert "runs-on: ubuntu-24.04" in listing
     assert "run: uv sync --locked" in listing
@@ -501,7 +502,7 @@ def test_storage_fuzz_workflow_keeps_the_conventions() -> None:
 
 
 def test_nightly_job_keeps_its_steps() -> None:
-    steps = job_steps(ci_job(_nightly(), "nightly"))
+    steps = job_steps(ci_job(NIGHTLY.read_text(encoding="utf-8"), "nightly"))
     runs = [step_value(step, "run") for step in steps]
     assert runs[-4:] == [
         "uv run nox -s tests",

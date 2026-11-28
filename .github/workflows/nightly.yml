@@ -13,7 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every check runs even after an earlier one fails, so one failing check never hides another.
+  # The job still fails when any step fails. Without a synced environment no check runs.
   nightly:
+    name: tests, slow, fuzz and large benchmarks
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -25,92 +28,35 @@ jobs:
         with:
           version: "0.13.8"
           enable-cache: true
-      - run: uv sync --locked
+      - id: sync
+        run: uv sync --locked
       - name: tests
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s tests
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: slow
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s slow
         env:
           HYPOTHESIS_PROFILE: nightly
       - name: fuzz
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run nox -s fuzz
-      - run: uv run nox -s bench -- --tier L
+      - name: bench
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run nox -s bench -- --tier L
 
-  # Lists the storage property tests that libFuzzer fuzzes. An empty glob fails this job.
-  storage-fuzz-list:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    outputs:
-      targets: ${{ steps.list.outputs.targets }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the pinned Rust toolchain
-        run: rustup toolchain install
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          version: "0.13.8"
-          enable-cache: true
-          save-cache: ${{ github.ref == 'refs/heads/main' }}
-      - run: uv sync --locked
-      - id: list
-        run: |
-          uv run nox -s storagefuzz -- --list > targets.txt
-          echo "targets=$(grep -m 1 '^\[' targets.txt)" >> "$GITHUB_OUTPUT"
-
-  # Fuzzes each storage test for 300 s under libFuzzer, with one corpus cache per test. A crash
-  # fails only its own job and its input is uploaded. The corpus is saved only from main.
-  storage-fuzz:
-    name: storage fuzz ${{ matrix.test }}
-    needs: storage-fuzz-list
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        test: ${{ fromJSON(needs.storage-fuzz-list.outputs.targets) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the pinned Rust toolchain
-        run: rustup toolchain install
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          version: "0.13.8"
-          enable-cache: true
-          save-cache: ${{ github.ref == 'refs/heads/main' }}
-      - run: uv sync --locked
-      - id: slug
-        run: echo "slug=${TARGET//::/__}" >> "$GITHUB_OUTPUT"
-        env:
-          TARGET: ${{ matrix.test }}
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: fuzz-corpus/
-          key: storage-fuzz-corpus-${{ steps.slug.outputs.slug }}-${{ github.run_id }}
-          restore-keys: storage-fuzz-corpus-${{ steps.slug.outputs.slug }}-
-      - name: Fuzz the test for 300 s
-        run: uv run nox -s storagefuzz -- --target "$TARGET"
-        env:
-          TARGET: ${{ matrix.test }}
-      - if: ${{ always() && github.ref == 'refs/heads/main' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: fuzz-corpus/
-          key: storage-fuzz-corpus-${{ steps.slug.outputs.slug }}-${{ github.run_id }}
-      - if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: storage-fuzz-crashes-${{ steps.slug.outputs.slug }}
-          path: fuzz-crashes/
-          if-no-files-found: ignore
+  # Reports the check job's result on main only. A fork's pull_request run cannot reach this
+  # job: its github.ref is never refs/heads/main, and its token is read-only.
+  report:
+    name: report the nightly result
+    needs: [nightly]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    permissions:
+      actions: read # lets the report list the jobs of this run
+      issues: write # lets the report open, comment on and close the nightly failure issue
+    uses: $/.github/workflows/report-nightly.yml
+    with:
+      workflow: ${{ github.workflow }}
+      result: ${{ needs.nightly.result }}

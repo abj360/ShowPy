@@ -15,12 +15,14 @@ from e8s.choreo.path_models import FacingOverride
 from e8s.core.errors import SchemaError, TimelineError, VersionError
 from e8s.core.ids import FormId, SetId, parse_tid
 from e8s.core.types import Count
+from e8s.show.manage import drop_joined_pairs
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import free_set_key, set_key
 from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds, tempo_at
 from e8s.time.measures import count_to_measure
-from e8s.time.models import AudioTrack, MeasureSetting, TempoSection, Timeline
+from e8s.time.models import AudioTrack, Cue, Marker, MeasureSetting, TempoSection, Timeline
+from e8s.time.timeline import cue_to_seconds
 
 TOL = 1e-9
 
@@ -87,11 +89,43 @@ def _audio_from(tl: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
     return tuple(tracks)
 
 
+def _ramp_until(tl: Timeline, section: TempoSection, offset: Count) -> TempoSection:
+    ramp_end = section.at_count + (section.ramp_counts or 0.0)
+    if section.ramp_to is None or ramp_end - offset <= TOL:
+        return section
+    return section.replace(ramp_to=tempo_at(tl, offset), ramp_counts=offset - section.at_count)
+
+
+def _audio_until(tl: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
+    tracks = []
+    for track in tl.audio:
+        if track.section is None:
+            tracks.append(track)
+            continue
+        section = _clip(track.section, 0.0, offset, 0.0)
+        if section is not None:
+            tracks.append(track.replace(section=section))
+    return tuple(tracks)
+
+
+def _cues_split(tl: Timeline, offset: Count) -> tuple[tuple[Cue, ...], tuple[Cue, ...]]:
+    """Splits cues by start time: before the boundary go first, the rest second."""
+    boundary = count_to_seconds(tl, offset)
+    before = tuple(c for c in tl.cues if cue_to_seconds(tl, c.label) < boundary - TOL)
+    return before, tuple(c for c in tl.cues if c not in before)
+
+
 def _timeline_until(tl: Timeline, offset: Count) -> Timeline:
     return tl.replace(
-        tempos=tuple(t for t in tl.tempos if t.at_count < offset - TOL or t.at_count == 0),
+        tempos=tuple(
+            _ramp_until(tl, t, offset)
+            for t in tl.tempos
+            if t.at_count < offset - TOL or t.at_count == 0
+        ),
         holds=tuple(h for h in tl.holds if h.at_count < offset - TOL),
         markers=tuple(m for m in tl.markers if m.at_count <= offset + TOL),
+        audio=_audio_until(tl, offset),
+        cues=_cues_split(tl, offset)[0],
         total_counts=offset,
     )
 
@@ -110,6 +144,7 @@ def _timeline_from(tl: Timeline, offset: Count) -> Timeline:
         ),
         measures=_measures_from(tl, offset),
         audio=_audio_from(tl, offset),
+        cues=_cues_split(tl, offset)[1],
         total_counts=total,
     )
 
@@ -143,7 +178,13 @@ def split_section(show: Show, at: str) -> tuple[Show, Show]:
     """Splits a show at set `at`; both shows hold `at`, and the second starts its clock there.
 
     The second show's tempo, holds, markers, measures, audio sync and facing overrides shift
-    so its count 0 is `at`. Raises TimelineError when `at` starts mid-measure.
+    so its count 0 is `at`. A tempo ramp that runs past `at` ends there in the first
+    show, at the tempo the whole show has at `at`. Raises TimelineError when `at` starts
+    mid-measure.
+
+    A cue goes to the show its start time falls in.
+    An audio track goes to every show its section overlaps, with the section clipped to it;
+    a track with no section goes to both.
 
     Args:
         show: Show to split.
@@ -246,11 +287,59 @@ def _merge_tempos(tempos: tuple[TempoSection, ...]) -> tuple[TempoSection, ...]:
     return tuple(kept)
 
 
+def _new_markers(a: Sequence[Marker], b: Sequence[Marker], offset: Count) -> list[Marker]:
+    """Shifts `b`'s markers by `offset`, skipping one `a` holds at the same count with its label."""
+    moved = (m.replace(at_count=m.at_count + offset) for m in b)
+    return [
+        m
+        for m in moved
+        if not any(k.label == m.label and abs(k.at_count - m.at_count) <= TOL for k in a)
+    ]
+
+
+def _joined_audio(a: Timeline, b: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
+    """Rejoins tracks by label: `a`'s track takes its section end from `b`'s copy."""
+    later = {t.label: t for t in b.audio}
+    held = {t.label for t in a.audio}
+    shift_s = count_to_seconds(a, offset)
+    joined = []
+    for track in a.audio:
+        other = later.get(track.label)
+        if track.section is None or other is None or other.section is None:
+            joined.append(track)
+        else:
+            joined.append(track.replace(section=(track.section[0], other.section[1] + offset)))
+    for track in b.audio:
+        if track.label in held:
+            continue
+        section = (
+            None
+            if track.section is None
+            else (track.section[0] + offset, track.section[1] + offset)
+        )
+        joined.append(track.replace(sync_offset_s=track.sync_offset_s - shift_s, section=section))
+    return tuple(joined)
+
+
+def _joined_cues(a: Timeline, b: Timeline) -> tuple[Cue, ...]:
+    """Appends `b`'s cues; on an order clash `b`'s orders move after `a`'s highest order."""
+    labels = sorted({c.label for c in a.cues} & {c.label for c in b.cues})
+    if labels:
+        raise SchemaError(
+            f"cue labels repeat across sections: {', '.join(labels)}",
+            hint="rename the cues in one section",
+            context={"cues": labels},
+        )
+    orders = {c.order for c in a.cues}
+    clash = any(c.order in orders for c in b.cues)
+    gap = max(orders, default=0) + 1 - min((c.order for c in b.cues), default=0) if clash else 0
+    return (*a.cues, *(c.replace(order=c.order + gap) for c in b.cues))
+
+
 def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     def moved(count: Count) -> Count:
         return count + offset
 
-    labels = {m.label for m in a.markers}
     total = None if a.total_counts is None or b.total_counts is None else offset + b.total_counts
     return a.replace(
         tempos=_merge_tempos(
@@ -265,10 +354,37 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
         ),
         markers=(
             *a.markers,
-            *(m.replace(at_count=moved(m.at_count)) for m in b.markers if m.label not in labels),
+            *_new_markers(a.markers, b.markers, offset),
         ),
+        audio=_joined_audio(a, b, offset),
+        cues=_joined_cues(a, b),
         total_counts=total,
     )
+
+
+def _fusable(first: FacingOverride, second: FacingOverride, offset: Count) -> bool:
+    if abs(first.end - offset) > TOL or abs(second.start - offset) > TOL:
+        return False
+    return (first.entities, first.mode, first.value, first.turn_counts) == (
+        second.entities,
+        second.mode,
+        second.value,
+        second.turn_counts,
+    )
+
+
+def _joined_overrides(
+    a: Sequence[FacingOverride], b: Sequence[FacingOverride], offset: Count
+) -> tuple[FacingOverride, ...]:
+    """Appends `b`'s overrides shifted by `offset`, fusing one that continues an `a` override."""
+    joined = list(a)
+    for item in _clip_overrides(b, 0.0, float("inf"), -offset):
+        match = next((i for i, kept in enumerate(joined) if _fusable(kept, item, offset)), None)
+        if match is None:
+            joined.append(item)
+        else:
+            joined[match] = joined[match].replace(end=item.end)
+    return tuple(joined)
 
 
 def _first_pins(pins: Sequence[Pin]) -> tuple[Pin, ...]:
@@ -284,9 +400,15 @@ def join_sections(a: Show, b: Show) -> Show:
     When `b` starts with `a`'s last set (same ID and placements) they become one set.
     Otherwise set IDs must not repeat, and `b`'s first set keeps its counts (0), so retime it
     with set_counts(). `b`'s tempos, holds, markers and facing overrides shift by `a`'s length.
+    A facing override that ends where `a` ends and continues unchanged at `b`'s count 0 becomes
+    one override.
     `b`'s sets keep their keys; one whose key `a` already holds gets a free key, as in add_set().
+    An audio track both halves hold keeps the first half's values, its section ending where the
+    second half's ends. A track only the second half holds returns within 1e-9 seconds of its
+    sync offset and 1e-9 counts of its section, since the shift out and back is float arithmetic.
     One pin is kept per target and ID; when both halves pin the same spot, form, set or
-    transition, `a`'s pin wins.
+    transition, `a`'s pin wins. A stale spec or pin in either half on the pair the join makes
+    adjacent (`a`'s last set to `b`'s first) is dropped.
 
     >>> from e8s.examples import two_set_show
     >>> from e8s.show.manage import add_set
@@ -296,16 +418,15 @@ def join_sections(a: Show, b: Show) -> Show:
     """
     _require_compatible(a, b)
     offset = index(a).total_counts
-    return a.replace(
+    joined = a.replace(
         sets=(*a.sets, *_keyed_after(a, _tail_sets(a, b))),
         forms=_merged_forms(a, b),
         transitions=(*a.transitions, *b.transitions),
         pins=_first_pins((*a.pins, *b.pins)),
-        facing_overrides=(
-            *a.facing_overrides,
-            *_clip_overrides(b.facing_overrides, 0.0, float("inf"), -offset),
-        ),
+        facing_overrides=_joined_overrides(a.facing_overrides, b.facing_overrides, offset),
         dependencies={**a.dependencies, **b.dependencies},
         timeline=_joined_timeline(a.timeline, b.timeline, offset),
         revision="",
     )
+    before = {*a.transition_ids(), *b.transition_ids()}
+    return drop_joined_pairs(joined, set(joined.transition_ids()) - before)

@@ -4,7 +4,10 @@ document_repository.py --- implements the Repository protocol over a storage bac
 Contains:
     SHOW_ID_PATTERN: matches the show IDs a repository can store
     REVISION_HASH_DOMAIN: names the hash domain every stored revision ID is computed under
+    revision_id(): computes a revision's ID from its parent, time and changed digests
+    require_new_show_id(): refuses an ID no new show may take
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
+    encode_cache_of(): returns the encode cache a repository shares across its saves
 """
 
 import functools
@@ -14,10 +17,11 @@ from datetime import datetime
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
+    SchemaError,
     StorageError,
     UnknownRefError,
 )
-from e8s.core.ids import WINDOWS_DEVICE_NAMES, is_device_name
+from e8s.core.ids import WINDOWS_DEVICE_NAMES, check_id, is_device_name
 from e8s.core.util import close_matches, content_hash
 from e8s.show.backend import (
     RepositoryBackend,
@@ -30,6 +34,7 @@ from e8s.show.documents import (
     decode_show,
     split_path,
 )
+from e8s.show.encode_cache import EncodeCache
 from e8s.show.files import show_changes
 from e8s.show.history_models import Revision
 from e8s.show.integrity import (
@@ -45,6 +50,25 @@ SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
 REVISION_HASH_DOMAIN = "showpy.revision"
 
 
+def revision_id(parent: str, at: datetime, changes: Mapping[str, str | None]) -> str:
+    """Computes a revision's ID from its parent, time and the blob digest of each changed path.
+
+    Args:
+        parent: ID of the previous revision; empty for the first.
+        at: When the revision was saved.
+        changes: Each changed path with its new blob digest, or None when the path was deleted.
+
+    Returns:
+        revision_id: The 64-digit hex ID every stored revision is named by.
+
+    >>> from datetime import UTC
+    >>> len(revision_id("", datetime(2026, 11, 24, tzinfo=UTC), {"/a.txt": "0" * 64}))
+    64
+    """
+    body = {"parent": parent, "at": at.isoformat(), "changes": dict(changes)}
+    return content_hash(body, domain=REVISION_HASH_DOMAIN)
+
+
 def _require_show_id(show_id: str) -> None:
     if not SHOW_ID_PATTERN.fullmatch(show_id) or ".." in show_id:
         raise StorageError(
@@ -55,7 +79,7 @@ def _require_show_id(show_id: str) -> None:
         )
 
 
-def _require_new_show_id(show_id: str) -> None:
+def _require_not_device_name(show_id: str) -> None:
     """Refuses a Windows device name for a new show before its folder is looked up.
 
     On Windows that lookup opens the device itself. Shows already stored under such a name still
@@ -71,6 +95,48 @@ def _require_new_show_id(show_id: str) -> None:
         )
 
 
+def _id_rule_refusal(show_id: str) -> StorageError | None:
+    """Returns the refusal for a show ID that fails the ID rule or is not NFC, else None."""
+    try:
+        normalized = check_id(show_id, kind="show")
+    except SchemaError as error:
+        refusal = StorageError(
+            f"show id {show_id!r} cannot start a new show",
+            hint=error.hint,
+            context={"show": show_id},
+            code=ErrorCode.BAD_PATH,
+        )
+        refusal.__cause__ = error
+        return refusal
+    if normalized == show_id:
+        return None
+    return StorageError(
+        f"show id {show_id!r} is not in NFC form and cannot start a new show",
+        hint=f"use the NFC form {normalized!r}",
+        context={"show": show_id},
+        code=ErrorCode.BAD_PATH,
+    )
+
+
+def require_new_show_id(show_id: str) -> None:
+    """Refuses an ID no new show may take: a Windows device name, outside the ID rule, or not NFC.
+
+    Args:
+        show_id: ID of a show that is not stored yet.
+
+    >>> require_new_show_id("show_1")
+    >>> try:
+    ...     require_new_show_id("show-1")
+    ... except StorageError as error:
+    ...     print(error.code)
+    BAD_PATH
+    """
+    _require_not_device_name(show_id)
+    refusal = _id_rule_refusal(show_id)
+    if refusal is not None:
+        raise refusal
+
+
 class DocumentRepository:
     """Implements Repository over a backend that stores revisions, trees and blobs.
 
@@ -79,27 +145,33 @@ class DocumentRepository:
     designer included; a host that writes raw documents owns them.
 
     Attributes:
-        backend: Where revisions, trees and blobs live.
+        backend: Where revisions, trees and blobs live; read-only.
     """
 
     def __init__(self, backend: RepositoryBackend):
-        self.backend = backend
+        self._backend = backend
         self._decode_cache = DecodeCache()
+        self._encode_cache = EncodeCache()
         self._heads: dict[str, Revision] = {}
+
+    @property
+    def backend(self) -> RepositoryBackend:
+        """Returns the backend that stores revisions, trees and blobs; it is fixed at creation."""
+        return self._backend
 
     def shows(self) -> list[str]:
         """Returns the IDs of stored shows, sorted."""
-        return sorted(self.backend.shows())
+        return sorted(self._backend.shows())
 
     def revisions(self, show_id: str) -> list[Revision]:
         """Returns every revision of a show, oldest first; the cost grows with the history."""
         _require_show_id(show_id)
-        return self.backend.log(show_id)
+        return self._backend.log(show_id)
 
     def head(self, show_id: str) -> str:
         """Returns the head revision ID, or ROOT_REVISION before the first save."""
         _require_show_id(show_id)
-        return self.backend.head(show_id)
+        return self._backend.head(show_id)
 
     def get_revision(self, show_id: str, revision_id: str) -> Revision:
         """Returns one revision, raising UnknownRefError with close matches.
@@ -116,7 +188,7 @@ class DocumentRepository:
         rev = self.head(show_id) if revision is None else revision
         if rev == ROOT_REVISION:
             return {}
-        return self.backend.tree(show_id, rev)
+        return self._backend.tree(show_id, rev)
 
     def paths(self, show_id: str, revision: str | None = None) -> list[str]:
         """Returns the stored document paths at a revision (default head), sorted."""
@@ -125,7 +197,7 @@ class DocumentRepository:
     def read(self, show_id: str, path: str, revision: str | None = None) -> bytes | None:
         """Returns a document at a revision (default head), or None when absent."""
         digest = self._tree(show_id, revision).get(path)
-        return None if digest is None else self.backend.blob(show_id, digest)
+        return None if digest is None else self._backend.blob(show_id, digest)
 
     def documents(self, show_id: str, revision: str | None = None) -> Mapping[str, bytes]:
         """Returns the stored documents at a revision (default head), reading blobs on lookup.
@@ -141,13 +213,32 @@ class DocumentRepository:
         >>> repo.documents("s")["/renders/a.txt"]
         b'hi'
         """
-        blob = functools.cache(functools.partial(self.backend.blob, show_id))
-        return LazyBlobs(self._tree(show_id, revision), blob)
+        load = functools.partial(self._backend.blob, show_id)
+        return LazyBlobs(self._tree(show_id, revision), functools.cache(load), uncached=load)
+
+    def _require_new_show_id(self, show_id: str) -> None:
+        """Refuses a write from the root under an ID a new show may not take.
+
+        The device check touches no path. The ID rule refuses only a show that is not stored:
+        a show stored under an older ID, written from the root, gets the ConflictError of any
+        stale write. A head lookup that fails for such an ID, such as a name too long for the
+        file system, counts as not stored.
+        """
+        _require_not_device_name(show_id)
+        refusal = _id_rule_refusal(show_id)
+        if refusal is None:
+            return
+        try:
+            is_stored = self.head(show_id) != ROOT_REVISION
+        except StorageError as error:
+            raise refusal from error
+        if not is_stored:
+            raise refusal
 
     def _require_head(self, show_id: str, expected: str) -> str:
         head = self.head(show_id)
         if head != expected:
-            raise conflict_error(show_id, expected, self.backend.log(show_id, since=expected))
+            raise conflict_error(show_id, expected, self._backend.log(show_id, since=expected))
         return head
 
     def _head_revision(self, show_id: str, head: str) -> Revision:
@@ -169,7 +260,7 @@ class DocumentRepository:
             return (
                 added[blob_digest]
                 if blob_digest in added
-                else self.backend.blob(show_id, blob_digest)
+                else self._backend.blob(show_id, blob_digest)
             )
 
         require_valid_digests(old, new, blob, self._decode_cache)
@@ -201,11 +292,13 @@ class DocumentRepository:
         >>> repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision=rev.id, at=at) == rev
         True
         """
-        for path in changes:
+        # A copy, so a caller editing a bytearray afterwards cannot change what was stored.
+        changes = {path: None if raw is None else bytes(raw) for path, raw in changes.items()}
+        for path, data in changes.items():
             split_path(path)
-            require_known_path(path)
+            require_known_path(path, is_write=data is not None)
         if expected_revision == ROOT_REVISION:
-            _require_new_show_id(show_id)
+            self._require_new_show_id(show_id)
         head = self._require_head(show_id, expected_revision)
         old = self._tree(show_id, expected_revision)
         blobs = {digest(d): d for d in changes.values() if d is not None}
@@ -221,19 +314,14 @@ class DocumentRepository:
                     context={"show": show_id},
                 )
             return self._head_revision(show_id, head)
-        body = {
-            "parent": expected_revision,
-            "at": at.isoformat(),
-            "changes": {p: new.get(p) for p in changed},
-        }
         revision = Revision(
-            id=content_hash(body, domain=REVISION_HASH_DOMAIN),
+            id=revision_id(expected_revision, at, {p: new.get(p) for p in changed}),
             parent=expected_revision,
             at=at,
             changed=changed,
         )
         self._require_valid_tree(show_id, old, new, blobs)
-        self.backend.commit(show_id, revision, new, blobs)
+        self._backend.commit(show_id, revision, new, blobs)
         self._heads[show_id] = revision
         return revision
 
@@ -264,7 +352,19 @@ class DocumentRepository:
         """
         return self.transaction(
             show_id,
-            show_changes(show, self.documents(show_id, expected_revision)),
+            show_changes(
+                show, self.documents(show_id, expected_revision), cache=self._encode_cache
+            ),
             expected_revision=expected_revision,
             at=at,
         )
+
+
+def encode_cache_of(repo: object) -> EncodeCache | None:
+    """Returns the encode cache every save through a DocumentRepository shares, else None.
+
+    >>> from e8s.show.memory_backend import InMemoryRepository
+    >>> encode_cache_of(InMemoryRepository()) is not None, encode_cache_of(object())
+    (True, None)
+    """
+    return repo._encode_cache if isinstance(repo, DocumentRepository) else None

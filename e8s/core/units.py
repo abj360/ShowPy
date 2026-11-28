@@ -8,31 +8,35 @@ Contains:
     convert(): converts a length between two registered units
     register_unit(): returns a registry extended with one unit
     units(): lists the default units
-    normalize_angle(): wraps an angle into [0, 360), re-exported from numbers
-    angle_diff(): returns the signed shortest turn from a to b
-    facing_vector(): converts a facing to a unit direction
-    vector_facing(): converts a direction to a facing
-    round_to(): rounds half away from zero to a step
+    normalize_angle(): wraps an angle into [0, 360), computed in the core
+    angle_diff(): returns the signed shortest turn from a to b, computed in the core
+    facing_vector(): converts a facing to a unit direction, computed in the core
+    vector_facing(): converts a direction to a facing, computed in the core
+    round_to(): rounds half away from zero to a step, computed in the core
+    DEFAULT_STEP: the step round_to rounds onto when none is given
+    ZERO_VECTOR_TOL: the length under which a direction has no facing
 """
 
 import math
 from collections.abc import Mapping
-from decimal import ROUND_HALF_UP, Decimal, DecimalException
 from fractions import Fraction
-from numbers import Real
 from typing import Annotated
 
 from pydantic import BeforeValidator, model_validator
 
-from e8s.core.errors import SchemaError, UnknownRefError, ZeroLengthError
-from e8s.core.numbers import normalize_angle as normalize_angle
+from e8s._core.core import DEFAULT_STEP as DEFAULT_STEP
+from e8s._core.core import ZERO_VECTOR_TOL as ZERO_VECTOR_TOL
+from e8s._core.core import angle_diff as angle_diff
+from e8s._core.core import facing_vector as facing_vector
+from e8s._core.core import normalize_angle as normalize_angle
+from e8s._core.core import round_to as round_to
+from e8s._core.core import vector_facing as vector_facing
+from e8s.core.errors import SchemaError, UnknownRefError
 from e8s.core.readonly import ReadOnly
-from e8s.core.types import Degrees, FrozenModel, Point
+from e8s.core.types import FrozenModel
 
 INCH_M = Fraction(127, 5000)
 BASE_UNIT = "m"
-DEFAULT_STEP = 0.01
-ZERO_VECTOR_TOL = 1e-12
 
 
 def _as_exact_size(raw: object) -> object:
@@ -150,79 +154,3 @@ def units() -> dict[str, float]:
     1.0
     """
     return {name: float(size) for name, size in DEFAULT_UNITS.meters_per_unit.items()}
-
-
-def angle_diff(a: Degrees, b: Degrees) -> Degrees:
-    """Returns the signed shortest turn from `a` to `b`, in (-180, 180].
-
-    >>> angle_diff(350.0, 10.0)
-    20.0
-    """
-    d = normalize_angle(b - a)
-    return d - 360.0 if d > 180.0 else d
-
-
-def facing_vector(theta: Degrees) -> Point:
-    """Converts a facing to a unit direction; 0° faces the audience (0, -1).
-
-    >>> facing_vector(0.0)
-    (0.0, -1.0)
-    """
-    rad = math.radians(theta)
-    return math.sin(rad) + 0.0, -math.cos(rad) + 0.0
-
-
-def vector_facing(v: Point) -> Degrees:
-    """Converts a direction to a facing in [0, 360).
-
-    >>> vector_facing((1.0, 0.0))
-    90.0
-    """
-    if math.hypot(v[0], v[1]) < ZERO_VECTOR_TOL:
-        raise ZeroLengthError(
-            "facing of a zero vector is undefined",
-            hint="pass a non-zero direction or keep the previous facing",
-            context={"vector": v},
-        )
-    return normalize_angle(math.degrees(math.atan2(v[0], -v[1])))
-
-
-def round_to(value: float, step: float = DEFAULT_STEP) -> float:
-    """Rounds to a multiple of `step`, half away from zero, for display.
-
-    Raises SchemaError for a bool, a non-number, a non-finite value, a step that is not finite
-    and positive, and a quotient too long for 28 decimal digits. Every result that rounds to
-    zero is `0.0`, never `-0.0`.
-
-    Args:
-        value: The number to round.
-        step: Size of the grid to round onto; 0.01 when omitted.
-
-    Returns:
-        rounded: The nearest multiple of `step`.
-
-    >>> round_to(2.345)
-    2.35
-    """
-    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
-        raise SchemaError(
-            f"cannot round {value!r}",
-            hint="pass a finite number",
-            context={"value": repr(value)},
-        )
-    if not math.isfinite(step) or step <= 0:
-        raise SchemaError(
-            f"step must be finite and above 0, got {step!r}",
-            hint="pass a step such as 0.01",
-            context={"step": repr(step)},
-        )
-    unit = Decimal(repr(float(step)))
-    try:
-        steps = (Decimal(repr(float(value))) / unit).quantize(Decimal(1), rounding=ROUND_HALF_UP)
-        return float(steps * unit) + 0.0
-    except DecimalException as error:
-        raise SchemaError(
-            f"cannot round {value!r} to a step of {step!r}: too many digits",
-            hint="use a larger step or a smaller value",
-            context={"value": repr(value), "step": repr(step)},
-        ) from error

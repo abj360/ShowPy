@@ -36,6 +36,8 @@ Contains:
         CanvasEvent
     test_stored_record_with_an_unknown_key_is_refused: drops only the legacy keys from a stored
         record, so any other extra key still fails
+    test_regression_v020_revision_with_a_naive_time_reads_as_utc: reads a stored revision whose
+        time has no timezone as UTC, leaving its tree file as stored
 """
 
 import hashlib
@@ -49,7 +51,8 @@ from typing import Any
 
 import pytest
 
-from e8s.core.errors import ConflictError, SchemaError
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import ConflictError, SchemaError, StorageError
 from e8s.core.util import content_hash
 from e8s.show.collab_models import CanvasEvent
 from e8s.show.document_paths import CAST_DOC, is_set_document
@@ -70,6 +73,7 @@ from e8s.show.migrate import FIRST_VERSION
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import Workspace, open_workspace
+from tests.fixtures.layout1 import upgraded_copy
 from tests.fixtures.legacy_v020 import (
     NEGATIVE_ZERO,
     V020_FIXTURE,
@@ -107,8 +111,7 @@ def test_v020_revision_records_carry_legacy_keys() -> None:
 
 def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
     expected = v020_expected()
-    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
-    repo = FileRepository(tmp_path / "repo")
+    repo = FileRepository(upgraded_copy(FIXTURE / "repo", tmp_path))
     show_id = expected["show_id"]
     head_show = repo.get_show(show_id)
     revision = repo.put_show(
@@ -165,8 +168,10 @@ def test_stored_record_with_an_unknown_key_is_refused(tmp_path: Path) -> None:
     record = json.loads(record_path.read_text())
     record["revision"]["author"] = "pat"
     record_path.write_text(json.dumps(record))
-    with pytest.raises(SchemaError):
+    with pytest.raises(StorageError) as caught:
         FileRepository(tmp_path / "repo").revisions(expected["show_id"])
+    assert caught.value.code == ErrorCode.CORRUPT
+    assert isinstance(caught.value.__cause__, SchemaError)
 
 
 def _negative_zero_paths(tree: Mapping[str, bytes]) -> set[str]:
@@ -409,3 +414,21 @@ def test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revis
     assert [r.id for r in log] == [head.id]
     assert repo.head(expected["show_id"]) == head.id
     assert set(head.changed) == _normalized_paths(ws.tree_at(expected["head"]))
+
+
+def test_regression_v020_revision_with_a_naive_time_reads_as_utc(tmp_path: Path) -> None:
+    """Reads a stored v0.2.0 revision with no timezone as UTC, keeping its stored record."""
+    expected = v020_expected()
+    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
+    repo = FileRepository(tmp_path / "repo")
+    first = expected["revisions"][0]
+    record_path = tmp_path / "repo" / expected["show_id"] / "trees" / f"{first}.json"
+    record = json.loads(record_path.read_text())
+    aware = datetime.fromisoformat(record["revision"]["at"])
+    record["revision"]["at"] = aware.replace(tzinfo=None).isoformat()
+    record_path.write_text(json.dumps(record))
+    stored = record_path.read_bytes()
+    revision = repo.revisions(expected["show_id"])[0]
+    assert revision.id == first
+    assert revision.at == aware.replace(tzinfo=UTC)
+    assert record_path.read_bytes() == stored

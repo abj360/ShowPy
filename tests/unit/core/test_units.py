@@ -30,6 +30,10 @@ Contains:
     test_registry_*(), test_register_unit_*(): exact Fraction factors and refused registrations
     test_round_to_*(): too-long quotients, bad steps and non-numbers
     test_regression_round_to_returns_positive_zero_for_every_zero: never returns -0.0
+    test_regression_round_to_reads_repr_digits_on_a_digit_tie: starts from the digits repr
+        writes for a float halfway between two shortest strings
+    test_regression_round_to_error_shows_repr_digits_on_a_digit_tie: shows such a float as repr
+        does in the too-many-digits error
 """
 
 import math
@@ -40,6 +44,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import E8sError, SchemaError, UnknownRefError, ZeroLengthError
 from e8s.core.units import (
     DEFAULT_UNITS,
@@ -262,3 +267,26 @@ def test_round_to_rejects_non_numbers() -> None:
 def test_regression_round_to_returns_positive_zero_for_every_zero() -> None:
     for value in (-0.0, -0.001, 0.001, -1e-300):
         assert math.copysign(1.0, round_to(value)) == 1.0
+
+
+@pytest.mark.parametrize("theta", [math.inf, -math.inf, math.nan])
+def test_regression_facing_vector_rejects_non_finite_with_schema_error(theta: float) -> None:
+    with pytest.raises(SchemaError) as caught:
+        facing_vector(theta)
+    assert caught.value.code is ErrorCode.SCHEMA
+
+
+DIGIT_TIES = [(165.035919189453125, 2e-14), (-649435869553220.25, 0.2)]
+
+
+@pytest.mark.parametrize(("value", "step"), DIGIT_TIES)
+def test_regression_round_to_reads_repr_digits_on_a_digit_tie(value: float, step: float) -> None:
+    assert round_to(value, step) == float(repr(value))
+
+
+def test_regression_round_to_error_shows_repr_digits_on_a_digit_tie() -> None:
+    with pytest.raises(SchemaError) as caught:
+        round_to(165.035919189453125, 1e-300)
+
+    assert caught.value.context["value"] == "165.03591918945312"
+    assert caught.value.message.startswith("cannot round 165.03591918945312 ")

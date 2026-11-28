@@ -46,6 +46,11 @@ ENV UV_LINK_MODE=copy \
     NOX_UV_NO_SYNC=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# jq applies the --jq filters of the fake gh that the nightly report tests run.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends jq \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version README.md LICENSE ./
 # The dev group holds e8s[all], so the locked sync installs every extra's dependencies.
@@ -59,9 +64,9 @@ COPY crates ./crates
 COPY tests ./tests
 COPY scripts ./scripts
 COPY fuzz ./fuzz
-COPY .github/workflows/nightly.yml ./.github/workflows/
-COPY .github/workflows/ci.yml .github/workflows/wheels.yml .github/workflows/nightly-core.yml \
-    ./.github/workflows/
+COPY .github/workflows/ci.yml .github/workflows/wheels.yml .github/workflows/nightly.yml \
+    .github/workflows/nightly-core.yml .github/workflows/nightly-storage.yml \
+    .github/workflows/report-nightly.yml ./.github/workflows/
 RUN chown -R 10001:10001 /app
 USER 10001
 

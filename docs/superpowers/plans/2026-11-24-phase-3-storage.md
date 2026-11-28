@@ -880,6 +880,13 @@ Branch `feat/p3-f-sets`. Gate: L0 merged.
 - [ ] **Step 3:** Ledger flip procedure; gates. **Step 4:** Commit
       `fix(show): read BOM and semicolon position files`.
 
+### Task F5: equal shows export equal bytes
+
+Added 2026-11-24 by maintainer ruling R28. `export_json` writes every ID-keyed mapping sorted by
+ID (cast groups and their limits, selections, label prefixes, forms, dependencies, transition rows
+and routes), so equal shows export equal bytes. The two interchange goldens changed in key order
+only. Commit `fix(show): export equal shows as equal bytes`.
+
 ---
 
 ## Lane M: assets and fonts

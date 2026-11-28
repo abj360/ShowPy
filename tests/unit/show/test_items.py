@@ -44,16 +44,15 @@ from e8s.show import items as items_module
 from e8s.show.change_models import ItemKey, ItemKind
 from e8s.show.document_paths import transition_folder
 from e8s.show.documents import decode_show, encode_show
-from e8s.show.items import (
+from e8s.show.item_table import (
     ITEM_TABLE,
     PLACEMENT_ROLES,
     SET_IDENTITY_FIELDS,
     SET_ROLES,
     SHOW_FIELDS,
     TRANSITION_FIELDS,
-    changes,
-    items,
 )
+from e8s.show.items import changes, items
 from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin

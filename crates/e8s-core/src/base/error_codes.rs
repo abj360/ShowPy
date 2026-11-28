@@ -22,10 +22,13 @@ pub enum ErrorCode {
     BadFont,
     /// A repository id is not 64-digit hex, or a show, set, note or form ID cannot be stored.
     BadId,
-    /// A show id or workspace path cannot be stored, or names a directory where a file belongs.
+    /// A show id, workspace path or upgrade folder cannot be used, or names a folder for a file, or
+    /// a repository root path holds a NUL or a character the file system cannot encode.
     BadPath,
     /// A similarity fit gets point arrays that are not matched (N, 2) arrays of numbers.
     BadShape,
+    /// A transition pin names a transition ID that does not parse as `a→b`.
+    BadTransition,
     /// Every spread of a text stroke's spots would put two of them within 1 µm.
     CoincidentSlots,
     /// A write was based on a revision that another write has since replaced.
@@ -44,6 +47,8 @@ pub enum ErrorCode {
     CueNegative,
     /// The landmarks of a similarity fit sit on top of each other.
     Degenerate,
+    /// A placement lies more than FAR_OFF_SHEET_M meters past the sheet's bounding box.
+    FarOffSheet,
     /// Font bytes do not hash to the URI or pinned hash that names them.
     FontHashMismatch,
     /// A font registers under a name that is already bound to different font bytes.
@@ -54,6 +59,8 @@ pub enum ErrorCode {
     HoldNegative,
     /// Two holds of a timeline share one count.
     HoldOverlap,
+    /// A spot marked inactive stands on the field in a set.
+    InactiveOnField,
     /// The file system fails while a file repository reads or writes.
     Io,
     /// A mapping key differs from the ID of the item it holds.
@@ -70,6 +77,8 @@ pub enum ErrorCode {
     MeasureLength,
     /// A text form has a different number of members than slots.
     MemberCountMismatch,
+    /// A form lists a spot as a member, but that spot's placement does not name the form.
+    MemberMismatch,
     /// A function needs an optional dependency whose e8s extra is not installed.
     MissingExtra,
     /// A font name or URI is not held by the font registry.
@@ -80,7 +89,7 @@ pub enum ErrorCode {
     MissingSpot,
     /// A selector mixes `&` with `+` or `-` at one parenthesis level without parentheses.
     MixedOperators,
-    /// A named selection is defined under a name that already holds a selection.
+    /// A named selection or a proposal is created under a name that is already taken.
     NameTaken,
     /// A file repository path is longer than the file system allows.
     NameTooLong,
@@ -88,6 +97,8 @@ pub enum ErrorCode {
     NotAMember,
     /// A text-only operation gets a form of another kind.
     NotATextForm,
+    /// A repository repair lacks confirm=True or the caller's time `at`, or confirm lacks repair.
+    NotConfirmed,
     /// A similarity fit or a stored show field holds a NaN or infinite number.
     NotFinite,
     /// A placement names a form it is not a member of in that set.
@@ -100,12 +111,20 @@ pub enum ErrorCode {
     NOrSpacing,
     /// A write would store a show.json of an older format version than this release writes.
     OldFormat,
+    /// A write targets a layout-1 repository, which this release only reads until it is upgraded.
+    OldLayout,
+    /// A facing override starts on or after the last count of the show, so covers no show time.
+    PastTheShow,
     /// A path instruction is invalid.
     Path,
     /// An edit changes a pinned placement.
     PinnedChanged,
-    /// A proposal that is already accepted or rejected is changed again.
+    /// A pin record covers a placement, form or path row that is not flagged locked.
+    PinMismatch,
+    /// A proposal that is already accepted, rejected or withdrawn is changed again.
     ProposalClosed,
+    /// An open proposal touches items that changed since its base revision, so it is not applied.
+    ProposalStale,
     /// A tempo ramp is cut short by the next tempo section.
     RampCut,
     /// A tempo ramp sets only one of `ramp_to` and `ramp_counts`.
@@ -132,7 +151,7 @@ pub enum ErrorCode {
     Stage,
     /// A form's set no longer places that form.
     StaleForm,
-    /// A transition holds paths for two sets that are not consecutive.
+    /// A transition holds paths for, or a comment anchors to, two sets that are not consecutive.
     StaleTransition,
     /// A show cannot be persisted or read back.
     Storage,
@@ -158,21 +177,27 @@ pub enum ErrorCode {
     TooFewPoints,
     /// A form or text asks for fewer spots than its curves or strokes need.
     TooFewSpots,
-    /// A file written to a repository is over the per-file byte cap.
+    /// A repository file, or the history of a show, is over its size cap.
     TooLarge,
     /// A show holds more sets than MAX_SETS.
     TooManySets,
     /// A cast holds more spots than MAX_SPOTS, or a text form asks for more than its own cap.
     TooManySpots,
+    /// A repository slot stays empty or cut short after every reread: its writer stopped early.
+    TornSlot,
     /// A placement names a form that does not exist.
     UnknownForm,
     /// A show.json or interchange document names no known format, or half a format header.
     UnknownFormat,
+    /// A pin names a spot, form, set or transition that is not in the show.
+    UnknownPin,
     /// An ID, name or unit does not resolve.
     UnknownRef,
+    /// A form or a comment anchor names a set that is not in the show.
+    UnknownSet,
     /// The show's sheet reference does not resolve in the sheet store.
     UnknownSheet,
-    /// A set, transition, route or named selection names a spot that is not in the cast.
+    /// A set, transition, route, named selection or comment anchor names a spot not in the cast.
     UnknownSpot,
     /// The show's dependencies do not pin its sheet reference.
     UnpinnedSheet,
@@ -199,6 +224,7 @@ impl ErrorCode {
             Self::BadId => "BAD_ID",
             Self::BadPath => "BAD_PATH",
             Self::BadShape => "BAD_SHAPE",
+            Self::BadTransition => "BAD_TRANSITION",
             Self::CoincidentSlots => "COINCIDENT_SLOTS",
             Self::Conflict => "CONFLICT",
             Self::Continuity => "CONTINUITY",
@@ -208,11 +234,13 @@ impl ErrorCode {
             Self::CueDuplicate => "CUE_DUPLICATE",
             Self::CueNegative => "CUE_NEGATIVE",
             Self::Degenerate => "DEGENERATE",
+            Self::FarOffSheet => "FAR_OFF_SHEET",
             Self::FontHashMismatch => "FONT_HASH_MISMATCH",
             Self::FontNameTaken => "FONT_NAME_TAKEN",
             Self::Geometry => "GEOMETRY",
             Self::HoldNegative => "HOLD_NEGATIVE",
             Self::HoldOverlap => "HOLD_OVERLAP",
+            Self::InactiveOnField => "INACTIVE_ON_FIELD",
             Self::Io => "IO",
             Self::KeyMismatch => "KEY_MISMATCH",
             Self::Locked => "LOCKED",
@@ -221,6 +249,7 @@ impl ErrorCode {
             Self::Match => "MATCH",
             Self::MeasureLength => "MEASURE_LENGTH",
             Self::MemberCountMismatch => "MEMBER_COUNT_MISMATCH",
+            Self::MemberMismatch => "MEMBER_MISMATCH",
             Self::MissingExtra => "MISSING_EXTRA",
             Self::MissingFont => "MISSING_FONT",
             Self::MissingGlyph => "MISSING_GLYPH",
@@ -230,15 +259,20 @@ impl ErrorCode {
             Self::NameTooLong => "NAME_TOO_LONG",
             Self::NotAMember => "NOT_A_MEMBER",
             Self::NotATextForm => "NOT_A_TEXT_FORM",
+            Self::NotConfirmed => "NOT_CONFIRMED",
             Self::NotFinite => "NOT_FINITE",
             Self::NotInForm => "NOT_IN_FORM",
             Self::NotSerializable => "NOT_SERIALIZABLE",
             Self::NoHardlinks => "NO_HARDLINKS",
             Self::NOrSpacing => "N_OR_SPACING",
             Self::OldFormat => "OLD_FORMAT",
+            Self::OldLayout => "OLD_LAYOUT",
+            Self::PastTheShow => "PAST_THE_SHOW",
             Self::Path => "PATH",
             Self::PinnedChanged => "PINNED_CHANGED",
+            Self::PinMismatch => "PIN_MISMATCH",
             Self::ProposalClosed => "PROPOSAL_CLOSED",
+            Self::ProposalStale => "PROPOSAL_STALE",
             Self::RampCut => "RAMP_CUT",
             Self::RampIncomplete => "RAMP_INCOMPLETE",
             Self::RampLength => "RAMP_LENGTH",
@@ -268,9 +302,12 @@ impl ErrorCode {
             Self::TooLarge => "TOO_LARGE",
             Self::TooManySets => "TOO_MANY_SETS",
             Self::TooManySpots => "TOO_MANY_SPOTS",
+            Self::TornSlot => "TORN_SLOT",
             Self::UnknownForm => "UNKNOWN_FORM",
             Self::UnknownFormat => "UNKNOWN_FORMAT",
+            Self::UnknownPin => "UNKNOWN_PIN",
             Self::UnknownRef => "UNKNOWN_REF",
+            Self::UnknownSet => "UNKNOWN_SET",
             Self::UnknownSheet => "UNKNOWN_SHEET",
             Self::UnknownSpot => "UNKNOWN_SPOT",
             Self::UnpinnedSheet => "UNPINNED_SHEET",
