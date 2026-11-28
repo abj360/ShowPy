@@ -16,6 +16,7 @@ Contains:
     test_content_hash_refuses_a_domain_with_a_lone_surrogate: keeps the domain in the context
     test_content_hash_refuses_bad_keywords_and_non_text_domains: raises TypeError as v0.4.0 did
     test_asset_uri_hashes_any_buffer_as_hashlib_does: names bytearray and memoryview bytes
+    test_content_hash_keeps_its_v040_signature: takes obj and a keyword-only domain
     test_regression_jcs_breaks_a_digit_tie_to_even_as_python_repr_does: writes the nearer of two
         shortest digit strings, and the even one when both are equally near
     test_regression_canonical_value_refuses_endless_unwrapping: refuses a model whose dump is
@@ -23,6 +24,7 @@ Contains:
 """
 
 import hashlib
+import inspect
 import json
 import sys
 from collections.abc import Iterator, Mapping
@@ -157,6 +159,13 @@ def test_content_hash_refuses_bad_keywords_and_non_text_domains() -> None:
     for domain in (None, b"showpy.content", 1):
         with pytest.raises(TypeError):
             content_hash("x", domain=domain)  # type: ignore[arg-type]  # refused domain type
+
+
+def test_content_hash_keeps_its_v040_signature() -> None:
+    assert str(inspect.signature(content_hash)) == "(obj, *, domain='showpy.content')"
+    assert content_hash(obj=b"x") == content_hash(b"x", domain="showpy.content")
+    with pytest.raises(TypeError):
+        content_hash(b"x", "showpy.content")  # type: ignore[call-arg]  # domain is keyword-only
 
 
 def test_asset_uri_hashes_any_buffer_as_hashlib_does() -> None:

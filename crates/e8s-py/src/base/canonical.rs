@@ -144,11 +144,14 @@ fn jcs<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyBytes>> {
 /// >>> content_hash({"a": 1}) == content_hash({"a": 1}, domain="showpy.revision")
 /// False
 #[pyfunction]
-#[pyo3(signature = (obj, **options))]
-fn content_hash(obj: &Bound<'_, PyAny>, options: Option<&Bound<'_, PyDict>>) -> PyResult<String> {
-    let domain = match options {
-        Some(given) => checked_domain(&domain_option(given)?)?,
-        None => DEFAULT_DOMAIN.to_owned(),
+#[pyo3(
+    signature = (obj, *, domain = DomainArg::Default),
+    text_signature = "(obj, *, domain='showpy.content')"
+)]
+fn content_hash(obj: &Bound<'_, PyAny>, domain: DomainArg<'_>) -> PyResult<String> {
+    let domain = match domain {
+        DomainArg::Given(given) => checked_domain(&given)?,
+        DomainArg::Default => DEFAULT_DOMAIN.to_owned(),
     };
     if let Ok(bytes) = obj.cast::<PyBytes>() {
         let payload = bytes.as_bytes();
@@ -170,19 +173,19 @@ fn content_hash(obj: &Bound<'_, PyAny>, options: Option<&Bound<'_, PyDict>>) -> 
     })
 }
 
-/// Reads the only keyword content_hash takes, `domain`, refusing any other as Python does.
-fn domain_option<'py>(options: &Bound<'py, PyDict>) -> PyResult<Bound<'py, PyAny>> {
-    for key in options.keys() {
-        if key.extract::<&str>().ok() != Some("domain") {
-            let shown = key.repr()?.to_string_lossy().into_owned();
-            return Err(PyTypeError::new_err(format!(
-                "content_hash() got an unexpected keyword argument {shown}"
-            )));
-        }
+/// The `domain` argument of content_hash: absent, or whatever object the caller passed, even
+/// None, which is then refused as v0.4.0 refused it.
+enum DomainArg<'py> {
+    Default,
+    Given(Bound<'py, PyAny>),
+}
+
+impl<'a, 'py> FromPyObject<'a, 'py> for DomainArg<'py> {
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
+        Ok(Self::Given(obj.to_owned()))
     }
-    options
-        .get_item("domain")?
-        .ok_or_else(|| PyTypeError::new_err("content_hash() missing the domain keyword"))
 }
 
 /// Reads a hash domain and refuses one that is not lowercase ASCII letters, digits, _ and .
