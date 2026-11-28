@@ -13,7 +13,7 @@ Contains:
 
 import itertools
 
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from e8s.core.util import approx_equal
@@ -167,6 +167,7 @@ def test_fuzz_parse_path_notations_agree(case: tuple[list[Segment], str]) -> Non
 
 
 @given(path_segments.flatmap(varied_texts))
+@example("M 0 0 M 0 0 A 0.4 -2E-1 1 0 0 2 -12")
 def test_fuzz_parse_path_round_trips(d: str) -> None:
     """Re-parses the absolute path data of every accepted path into the same pieces."""
     first = parse_path(d)

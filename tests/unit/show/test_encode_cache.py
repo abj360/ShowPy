@@ -16,9 +16,19 @@ Contains:
     test_cache_stays_under_its_byte_cap: evicts least recently used groups to stay within the cap
     test_cache_stores_no_group_larger_than_its_cap: still returns the documents, caching none
     test_encode_documents_returns_only_the_named_documents: picks documents out of their groups
+    test_loaded_show_edited_at_one_spot_encodes_only_the_edited_set_documents: a show loaded
+        through a fresh workspace and edited at one spot encodes only that set's documents
+    test_a_second_load_seeds_by_content_without_encoding: a fresh decode of checked documents
+        is seeded with no encode
+    test_regression_seeding_never_stores_bytes_a_decoded_spec_does_not_encode_to: paths whose
+        stored counts differ from the destination set's, before and after their content was
+        checked, still encode to the decoded show's own bytes
+    test_regression_seeding_skips_documents_that_do_not_encode_back: a stored document that is
+        not the canonical encoding of what it decodes to is left to the next save
 """
 
 import gc
+import json
 import weakref
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -27,18 +37,19 @@ import pytest
 
 from e8s.choreo.form_ops import edit
 from e8s.choreo.models import PlacementPatch
-from e8s.show.document_paths import role_docs, set_doc
+from e8s.show.document_paths import SHEET_DOC, paths_doc, role_docs, set_doc
 from e8s.show.document_repository import encode_cache_of
-from e8s.show.documents import encode_documents, encode_show
-from e8s.show.encode_cache import EncodeCache
+from e8s.show.documents import decode_show, dump_json, encode_documents, encode_show
+from e8s.show.encode_cache import EncodeCache, document_groups, encode_groups
+from e8s.show.integrity import blob_digest
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
-from e8s.show.show_io import save_show
+from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 
-SHOW_ID = "encoded-show"
+SHOW_ID = "encoded_show"
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 STEP = timedelta(seconds=1)
 SEED = 5
@@ -185,3 +196,74 @@ def test_encode_documents_returns_only_the_named_documents() -> None:
     show = seeded_show(SEED, SPOTS, SETS)
     wanted = sorted(_edited_set_documents(show))[:2]
     assert encode_documents(show, wanted) == {p: encode_show(show)[p] for p in wanted}
+
+
+def _saved_and_loaded(show: Show) -> tuple[InMemoryRepository, Show]:
+    repo = InMemoryRepository()
+    save_show(open_workspace(repo, SHOW_ID), show, AT)
+    return repo, load_show(open_workspace(repo, SHOW_ID))
+
+
+def test_loaded_show_edited_at_one_spot_encodes_only_the_edited_set_documents() -> None:
+    show = seeded_show(SEED, SPOTS, SETS)
+    repo, loaded = _saved_and_loaded(show)
+    cache = _repository_cache(repo)
+    before = cache.misses
+    revision = save_show(open_workspace(repo, SHOW_ID), _one_spot_edit(loaded, -1.0), AT + STEP)
+    assert cache.misses - before == len(_edited_set_documents(show))
+    assert set(revision.changed) <= _edited_set_documents(show)
+    assert revision.changed
+
+
+def test_a_second_load_seeds_by_content_without_encoding() -> None:
+    repo, first = _saved_and_loaded(seeded_show(SEED, SPOTS, SETS))
+    cache = _repository_cache(repo)
+    checks, misses = cache.checks, cache.misses
+    second = load_show(open_workspace(repo, SHOW_ID))
+    assert second.sets[0] is not first.sets[0]
+    assert cache.checks == checks
+    assert cache.documents(second) == encode_show(second)
+    assert cache.misses == misses
+
+
+def _digests(docs: dict[str, bytes]) -> dict[str, str]:
+    return {path: blob_digest(raw) for path, raw in docs.items()}
+
+
+def _with_counts(docs: dict[str, bytes], path: str, counts: float) -> dict[str, bytes]:
+    body = json.loads(docs[path])
+    return {**docs, path: dump_json({**body, "counts": counts})}
+
+
+def test_regression_seeding_never_stores_bytes_a_decoded_spec_does_not_encode_to() -> None:
+    show = seeded_show(SEED, SPOTS, SETS)
+    docs = encode_show(show)
+    spec = show.transitions[0]
+    folder = (set_key(show.set(spec.id[0])), set_key(show.set(spec.id[1])))
+    stale = _with_counts(docs, paths_doc(folder), spec.counts + 1.0)
+    cache = EncodeCache()
+    for stored in (docs, stale, stale):
+        decoded = decode_show(stored)
+        cache.seed(decoded, stored, _digests(stored))
+        assert cache.documents(decoded) == encode_groups(document_groups(decoded))
+    assert decode_show(stale).transitions[0].counts == spec.counts
+    retimed = docs | {
+        set_doc(folder[1]): _with_counts(docs, set_doc(folder[1]), spec.counts + 1.0)[
+            set_doc(folder[1])
+        ]
+    }
+    decoded = decode_show(retimed)
+    cache.seed(decoded, retimed, _digests(retimed))
+    assert cache.documents(decoded) == encode_groups(document_groups(decoded))
+
+
+def test_regression_seeding_skips_documents_that_do_not_encode_back() -> None:
+    show = seeded_show(SEED, SPOTS, SETS)
+    docs = encode_show(show)
+    reformatted = {**docs, SHEET_DOC: json.dumps(json.loads(docs[SHEET_DOC]), indent=4).encode()}
+    decoded = decode_show(reformatted)
+    cache = EncodeCache()
+    cache.seed(decoded, reformatted, _digests(reformatted))
+    before = cache.misses
+    assert cache.documents(decoded)[SHEET_DOC] == docs[SHEET_DOC]
+    assert cache.misses - before == 1

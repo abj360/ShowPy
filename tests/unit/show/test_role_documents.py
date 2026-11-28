@@ -68,7 +68,7 @@ from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
-from tests.fixtures.layout1 import layout1_documents
+from tests.fixtures.layout1 import layout1_documents, upgraded_copy
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 V040 = FIXTURES / "repos" / "v0.4.0"
@@ -112,8 +112,8 @@ def _export_bytes(show: Show) -> bytes:
 def _seeded_input() -> Show:
     """Loads the seeded show frozen as JSON; E8S_REBUILD_GOLDEN_INPUT=1 refreezes it first.
 
-    The input keeps insertion order, not sorted keys: export_json writes mappings such as the
-    cast's groups and the forms in insertion order, so sorted keys would change the golden bytes.
+    The frozen input keeps its original key order; export_json writes every ID-keyed mapping
+    sorted by ID, so the golden bytes do not depend on that order.
     """
     if os.environ.get(REBUILD_INPUT_FLAG) == "1":
         text = json.dumps(seeded_show(SEED, SPOTS, SETS).to_json(), indent=JSON_INDENT)
@@ -171,10 +171,10 @@ def test_cast_proposals_and_assets_roots_are_known(path: str) -> None:
 
 
 def _v040_repository(tmp_path: Path) -> tuple[FileRepository, dict[str, Any]]:
-    """Copies the read-only v0.4.0 fixture and loads its expected.json."""
-    shutil.copytree(V040 / "repo", tmp_path / "repo")
+    """Copies the read-only v0.4.0 fixture, upgrades the copy and loads its expected.json."""
+    repo = upgraded_copy(V040 / "repo", tmp_path)
     expected: dict[str, Any] = json.loads((V040 / "expected.json").read_text())
-    return FileRepository(tmp_path / "repo"), expected
+    return FileRepository(repo), expected
 
 
 def _edited(path: str, edit: Any) -> dict[str, bytes]:
@@ -313,7 +313,7 @@ def test_regression_older_format_tree_with_role_documents_is_refused() -> None:
 
 
 def test_workspace_reads_and_writes_the_cast_document_and_keeps_role_documents_internal() -> None:
-    ws = open_workspace(InMemoryRepository(), "show-1")
+    ws = open_workspace(InMemoryRepository(), "show_1")
     show = two_set_show()
     save_show(ws, show, AT)
     assert ws.ls("/cast") == ["cast.json"]

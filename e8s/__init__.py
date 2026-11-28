@@ -605,6 +605,9 @@ if TYPE_CHECKING:
         conflict_error,
         digest,
     )
+    from e8s.show.blame import (
+        blame,
+    )
     from e8s.show.change_models import (
         ChangeSet,
         IdChanges,
@@ -651,8 +654,21 @@ if TYPE_CHECKING:
         decode_event,
         events_since,
     )
+    from e8s.show.file_backend import (
+        SLOT_DIGITS,
+        FileBackend,
+    )
     from e8s.show.file_repository import (
         FileRepository,
+    )
+    from e8s.show.font_documents import (
+        load_fonts,
+    )
+    from e8s.show.fsck import (
+        fsck,
+    )
+    from e8s.show.gc import (
+        gc,
     )
     from e8s.show.history import (
         changelog,
@@ -665,6 +681,9 @@ if TYPE_CHECKING:
         PathDiff,
         Revision,
         SetDiff,
+    )
+    from e8s.show.id_changes import (
+        id_changes,
     )
     from e8s.show.interchange import (
         export_json,
@@ -734,6 +753,9 @@ if TYPE_CHECKING:
     from e8s.show.renumber import (
         renumber,
     )
+    from e8s.show.revalidate import (
+        revalidate,
+    )
     from e8s.show.sections import (
         join_sections,
         split_section,
@@ -743,6 +765,9 @@ if TYPE_CHECKING:
         set_at_count,
         transition_at_count,
         transitions,
+    )
+    from e8s.show.show_folders import (
+        show_folder,
     )
     from e8s.show.show_io import (
         load_show,
@@ -757,13 +782,20 @@ if TYPE_CHECKING:
         FsckFinding,
         FsckReport,
         GcReport,
+        ShowUpgrade,
         UpgradeReport,
+    )
+    from e8s.show.upgrade import (
+        upgrade_repository,
     )
     from e8s.show.validate import (
         validate_dependencies,
         validate_paths,
         validate_set,
         validate_show,
+    )
+    from e8s.show.validate_placements import (
+        FAR_OFF_SHEET_M,
     )
     from e8s.show.workspace import (
         Workspace,
@@ -866,6 +898,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "EntityFacing": ("e8s.choreo.path_models", "EntityFacing"),
     "EntityState": ("e8s.choreo.engine_models", "EntityState"),
     "ErrorCode": ("e8s.core.error_codes", "ErrorCode"),
+    "FAR_OFF_SHEET_M": ("e8s.show.validate_placements", "FAR_OFF_SHEET_M"),
     "FORMAT": ("e8s.show.migrate", "FORMAT"),
     "FacingMode": ("e8s.choreo.path_models", "FacingMode"),
     "FacingOverride": ("e8s.choreo.path_models", "FacingOverride"),
@@ -873,6 +906,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FacingValue": ("e8s.choreo.path_models", "FacingValue"),
     "FigureEightParams": ("e8s.choreo.path_models", "FigureEightParams"),
     "FileAssetStore": ("e8s.show.assets", "FileAssetStore"),
+    "FileBackend": ("e8s.show.file_backend", "FileBackend"),
     "FileRepository": ("e8s.show.file_repository", "FileRepository"),
     "FillRecipe": ("e8s.choreo.recipe_models", "FillRecipe"),
     "Fix": ("e8s.choreo.engine_models", "Fix"),
@@ -987,6 +1021,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "RoseFormParams": ("e8s.choreo.form_models", "RoseFormParams"),
     "Route": ("e8s.choreo.path_models", "Route"),
     "SHEET_ID_PATTERN": ("e8s.core.ids", "SHEET_ID_PATTERN"),
+    "SLOT_DIGITS": ("e8s.show.file_backend", "SLOT_DIGITS"),
     "ScatterRecipe": ("e8s.choreo.recipe_models", "ScatterRecipe"),
     "SchemaError": ("e8s.core.errors", "SchemaError"),
     "Segment": ("e8s.geo.curves", "Segment"),
@@ -1004,6 +1039,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "ShowIndex": ("e8s.show.models", "ShowIndex"),
     "ShowIndexEntry": ("e8s.show.models", "ShowIndexEntry"),
     "ShowLookup": ("e8s.show.models", "ShowLookup"),
+    "ShowUpgrade": ("e8s.show.storage_models", "ShowUpgrade"),
     "ShowValidationError": ("e8s.core.errors", "ShowValidationError"),
     "SineWaveFormParams": ("e8s.choreo.form_models", "SineWaveFormParams"),
     "SnapReport": ("e8s.geo.models", "SnapReport"),
@@ -1082,6 +1118,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "attach_audio": ("e8s.time.timeline", "attach_audio"),
     "balance": ("e8s.choreo.set_analysis", "balance"),
     "bezier": ("e8s.geo.shapes", "bezier"),
+    "blame": ("e8s.show.blame", "blame"),
     "blank_sheet": ("e8s.sheet.templates", "blank_sheet"),
     "block": ("e8s.geo.spacing", "block"),
     "block_form": ("e8s.choreo.forms", "block_form"),
@@ -1185,7 +1222,9 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "format_tid": ("e8s.core.ids", "format_tid"),
     "frames": ("e8s.choreo.read", "frames"),
     "from_json": ("e8s.time.timeline", "from_json"),
+    "fsck": ("e8s.show.fsck", "fsck"),
     "gate": ("e8s.choreo.form_ops", "gate"),
+    "gc": ("e8s.show.gc", "gc"),
     "generated_form": ("e8s.choreo.forms", "generated_form"),
     "get_proposal": ("e8s.show.proposals", "get_proposal"),
     "get_sheet": ("e8s.sheet.templates", "get_sheet"),
@@ -1193,6 +1232,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "gym_floor": ("e8s.sheet.surfaces", "gym_floor"),
     "highlight": ("e8s.show.collab", "highlight"),
     "hold": ("e8s.choreo.paths", "hold"),
+    "id_changes": ("e8s.show.id_changes", "id_changes"),
     "import_fonts": ("e8s.show.interchange", "import_fonts"),
     "import_json": ("e8s.show.interchange", "import_json"),
     "import_positions": ("e8s.show.interchange", "import_positions"),
@@ -1216,6 +1256,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line": ("e8s.geo.shapes", "line"),
     "line_form": ("e8s.choreo.forms", "line_form"),
     "load_font": ("e8s.geo.fonts", "load_font"),
+    "load_fonts": ("e8s.show.font_documents", "load_fonts"),
     "load_paths": ("e8s.show.paths_store", "load_paths"),
     "load_show": ("e8s.show.show_io", "load_show"),
     "lock": ("e8s.choreo.paths", "lock"),
@@ -1300,6 +1341,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "reorder": ("e8s.choreo.form_ops", "reorder"),
     "require_finite": ("e8s.core.validation", "require_finite"),
     "require_size": ("e8s.core.caps", "require_size"),
+    "revalidate": ("e8s.show.revalidate", "revalidate"),
     "revert": ("e8s.show.history", "revert"),
     "ripple": ("e8s.choreo.paths", "ripple"),
     "rose_points": ("e8s.choreo.form_fns", "rose_points"),
@@ -1333,6 +1375,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "set_sync": ("e8s.time.timeline", "set_sync"),
     "sheet_templates": ("e8s.sheet.templates", "sheet_templates"),
     "shift": ("e8s.choreo.set_transforms", "shift"),
+    "show_folder": ("e8s.show.show_folders", "show_folder"),
     "similarity_fit": ("e8s.sheet.replace", "similarity_fit"),
     "sine_wave_points": ("e8s.choreo.form_fns", "sine_wave_points"),
     "skew": ("e8s.choreo.set_transforms", "skew"),
@@ -1390,6 +1433,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "unlock": ("e8s.choreo.paths", "unlock"),
     "unpin": ("e8s.show.pinning", "unpin"),
     "upgrade_dependency": ("e8s.show.dependencies", "upgrade_dependency"),
+    "upgrade_repository": ("e8s.show.upgrade", "upgrade_repository"),
     "validate_dependencies": ("e8s.show.validate", "validate_dependencies"),
     "validate_paths": ("e8s.show.validate", "validate_paths"),
     "validate_set": ("e8s.show.validate", "validate_set"),
@@ -1412,6 +1456,7 @@ __all__ = [
     "CURRENT_LAYOUT",
     "CURRENT_VERSION",
     "DEFAULT_LINE_SPACING",
+    "FAR_OFF_SHEET_M",
     "FORMAT",
     "ID_MAX_LENGTH",
     "ID_PATTERN",
@@ -1438,6 +1483,7 @@ __all__ = [
     "MIN_TEMPO",
     "RESERVED_IDS",
     "SHEET_ID_PATTERN",
+    "SLOT_DIGITS",
     "Anchor",
     "ApprovalState",
     "ArcCurve",
@@ -1488,6 +1534,7 @@ __all__ = [
     "FacingValue",
     "FigureEightParams",
     "FileAssetStore",
+    "FileBackend",
     "FileRepository",
     "FillRecipe",
     "Fix",
@@ -1594,6 +1641,7 @@ __all__ = [
     "ShowIndex",
     "ShowIndexEntry",
     "ShowLookup",
+    "ShowUpgrade",
     "ShowValidationError",
     "SineWaveFormParams",
     "SnapReport",
@@ -1672,6 +1720,7 @@ __all__ = [
     "attach_audio",
     "balance",
     "bezier",
+    "blame",
     "blank_sheet",
     "block",
     "block_form",
@@ -1775,7 +1824,9 @@ __all__ = [
     "format_tid",
     "frames",
     "from_json",
+    "fsck",
     "gate",
+    "gc",
     "generated_form",
     "get_proposal",
     "get_sheet",
@@ -1783,6 +1834,7 @@ __all__ = [
     "gym_floor",
     "highlight",
     "hold",
+    "id_changes",
     "import_fonts",
     "import_json",
     "import_positions",
@@ -1806,6 +1858,7 @@ __all__ = [
     "line",
     "line_form",
     "load_font",
+    "load_fonts",
     "load_paths",
     "load_show",
     "lock",
@@ -1890,6 +1943,7 @@ __all__ = [
     "reorder",
     "require_finite",
     "require_size",
+    "revalidate",
     "revert",
     "ripple",
     "rose_points",
@@ -1923,6 +1977,7 @@ __all__ = [
     "set_sync",
     "sheet_templates",
     "shift",
+    "show_folder",
     "similarity_fit",
     "sine_wave_points",
     "skew",
@@ -1980,6 +2035,7 @@ __all__ = [
     "unlock",
     "unpin",
     "upgrade_dependency",
+    "upgrade_repository",
     "validate_dependencies",
     "validate_paths",
     "validate_set",

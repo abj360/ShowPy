@@ -1,0 +1,62 @@
+name: report-nightly
+
+on:
+  workflow_call:
+    inputs:
+      workflow:
+        description: The name of the calling nightly workflow.
+        required: true
+        type: string
+      result:
+        description: The result of the calling workflow's check job.
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  # Opens one issue per nightly workflow whose check job did not succeed, or comments on the
+  # open one, and closes it when a later run succeeds. Every result other than success counts
+  # as a failure, so a cancelled, timed-out or skipped check is never silent. Inputs and run
+  # data reach the script only through env.
+  report:
+    name: open, update or close the nightly failure issue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read # lists the jobs of the calling run
+      issues: write # opens, comments on and closes the nightly failure issue
+    steps:
+      - name: Report the check job's result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LABEL: nightly-failure
+          WORKFLOW: ${{ inputs.workflow }}
+          RESULT: ${{ inputs.result }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          run_url="$SERVER_URL/$GH_REPO/actions/runs/$RUN_ID"
+          export TITLE="nightly failure: $WORKFLOW"
+          issue=$(gh issue list --label "$LABEL" --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == env.TITLE) | .number][0] // empty')
+          if [ "$RESULT" = success ]; then
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --comment "$WORKFLOW is green again on main: $run_url"
+            fi
+            exit 0
+          fi
+          failed=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | select(.status == "completed" and .conclusion != "success")
+              | "- \(.name) (\(.conclusion)): \(.html_url)"')
+          body=$(printf '%s did not pass on main (result: %s).\n\nRun: %s\n\nJobs:\n%s\n' \
+            "$WORKFLOW" "$RESULT" "$run_url" "${failed:-- none listed; open the run}")
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh label create "$LABEL" --force --color B60205 \
+              --description "A nightly workflow did not pass on main"
+            gh issue create --title "$TITLE" --label "$LABEL" --body "$body"
+          fi

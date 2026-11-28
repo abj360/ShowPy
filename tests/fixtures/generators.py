@@ -29,8 +29,8 @@ from e8s.choreo.forms import arc_form, block_form, circle_form, line_form, wedge
 from e8s.choreo.match_ops import with_set
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathStyle, TransitionSpec
-from e8s.choreo.paths import curve_path, custom_path, delay, hold, set_easing
-from e8s.choreo.routes import follow_and_set_targets, make_route, rotate_path, two_part
+from e8s.choreo.paths import curve_path, custom_path, delay, hold, set_easing, set_style
+from e8s.choreo.routes import follow_and_set_targets, make_route, two_part
 from e8s.core.types import Point
 from e8s.core.util import seeded_rng
 from e8s.geo.shapes import line
@@ -195,12 +195,14 @@ def _styled(
         spec = curve_path(spec, entity, bend)
     if by_style[PathStyle.POLYLINE]:
         spec = two_part(show, spec, by_style[PathStyle.POLYLINE], "x_first")
+    # rotate_path with a given pivot is set_style plus a lock check against the whole show,
+    # which costs O(show) per spot; a show still being generated holds no locks or pins.
     for entity in by_style[PathStyle.ROTATE]:
         reach = REACH_M * float(rng.choice((-1, 1)))
         pivot, sweep = bisector_rotation(
             start.get(entity).point, target.get(entity).point, reach, long_way=False
         )
-        spec = rotate_path(show, spec, [entity], pivot, sweep)
+        spec = set_style(spec, [entity], PathStyle.ROTATE, pivot=pivot, sweep_deg=sweep)
     if by_style[PathStyle.CUSTOM]:
         custom = by_style[PathStyle.CUSTOM]
         spec = custom_path(spec, custom, "weave", amplitude=WEAVE_AMPLITUDE_M, cycles=WEAVE_CYCLES)

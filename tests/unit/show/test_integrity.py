@@ -23,7 +23,8 @@ Contains:
     test_uncached_invalid_document_is_refused: refuses an invalid document never seen before
     test_cache_serves_unchanged_documents: decodes only the changed document on a one-set edit
     test_cache_respects_its_bound: evicts the oldest entry past max_entries
-    test_one_spot_edit_decodes_only_changed_documents: counts per-document decodes on a warm cache
+    test_one_spot_edit_decodes_only_changed_documents: counts per-document decodes on a warm cache:
+        a cast edit decodes only the cast document, a set edit only that set
     test_regression_show_json_alone_changing_is_still_validated_whole: refuses a show invalid
         only through the combination while every cached set is reused
     test_regression_trailing_newline_paths_are_refused: refuses `$`-anchored look-alike paths
@@ -51,10 +52,28 @@ Contains:
         tables with READ_ONLY through a raw transaction and Workspace.commit on both backends
     test_regression_lazy_blobs_get_fails_closed_on_a_missing_blob: raises StorageError, not None,
         when the backend has no blob for a path in the tree
+    test_regression_cast_path_error_cuts_the_path: cuts an overlong path under `/cast/` in the
+        refusal message
+    test_regression_stored_json_is_parsed_strictly_everywhere: refuses a repeated key in every
+        structured file, and keeps loose JSON parsing out of the show layer's source
+    test_regression_notes_write_parses_strictly: refuses a notes document with a repeated key
+    test_regression_cf_characters_in_paths_are_refused: refuses invisible format characters
+    test_regression_odd_transition_folder_is_refused: refuses a new transition folder that does
+        not name two set keys, and keeps a stored one
+    test_regression_windows_device_names_in_paths_are_refused: refuses a path segment Windows
+        opens as a device, and keeps look-alikes and stored set folders
+    test_regression_stored_device_named_file_can_be_deleted: deletes a stored device-named file
+        through a commit while refusing to write a new one
+    test_one_spot_commit_decodes_only_changed_documents: loads only the edited set's documents
+        and decodes one cache entry on a warm one-spot commit
+    test_commit_check_still_refuses_every_invalid_tree: refuses each broken tree with a warm
+        decode cache and with none
+    test_commit_check_validates_the_whole_show_model: runs the Show model's validation on every
+        commit that changes a show document, with every part served from cache
 """
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -65,9 +84,17 @@ import pytest
 from e8s.cast.models import Shape
 from e8s.cast.spots import set_shape
 from e8s.choreo.forms import line_form
+from e8s.choreo.models import PlacementPatch
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import LockedError, SchemaError, StorageError
+from e8s.core.ids import SpotId
+from e8s.core.selection import Selection
 from e8s.examples import two_set_show
+from e8s.show._notes_document import NotesDocument
+from e8s.show.anchors import Anchor
+from e8s.show.collab_models import Comment
 from e8s.show.decode_cache import DecodeCache
+from e8s.show.document_paths import CAST_DOC, SHEET_DOC, TIMELINE_DOC, role_docs
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.documents import (
     SHOW_DOC,
@@ -79,24 +106,40 @@ from e8s.show.documents import (
     set_doc,
 )
 from e8s.show.file_repository import FileRepository
+from e8s.show.history_models import Revision
 from e8s.show.integrity import (
     KNOWN_ROOTS,
     LazyBlobs,
     blob_digest,
     require_known_path,
+    require_new_set_keys,
     require_valid_digests,
     require_valid_tree,
 )
 from e8s.show.manage import remove_set
 from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.migrations.v1_to_v2_notes import NOTES_DOC
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
+from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC, require_structured
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 from tests.helpers import HOSTILE_JSON
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "integrity"
+LONG_PATH_CHARS = 10_000
+MAX_MESSAGE_CHARS = 400
+CON_SET_DOC = "/sets/con/set.json"
+SHOW_LAYER = Path(__file__).parents[3] / "e8s" / "show"
+DOCTEST_PROMPT = ">>>"
+LOOSE_JSON_CALLS = (
+    "json.loads(",
+    "validate_json(",
+    "_validated_json(",
+    "model_validate_json(",
+    "validate_adapter_json(",
+)
 
 
 def _repo() -> tuple[InMemoryRepository, str]:
@@ -291,7 +334,7 @@ def _count_decodes(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 def test_one_spot_edit_decodes_only_changed_documents(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Counts decodes on a warm cache: a cast edit decodes none, a set edit decodes one set."""
+    """Counts decodes on a warm cache: a cast edit decodes the cast, a set edit one set."""
     repo = InMemoryRepository()
     ws = open_workspace(repo, SHOW_ID)
     save_show(ws, seeded_show(3, 30, 8), AT)
@@ -300,7 +343,7 @@ def test_one_spot_edit_decodes_only_changed_documents(monkeypatch: pytest.Monkey
     calls.clear()
     shape = Shape(kind="rectangle")
     save_show(ws, set_shape(show, show.cast.spots[0].id, shape), AT)
-    assert calls == []
+    assert calls == [CAST_DOC]
     ws = open_workspace(repo, SHOW_ID)
     show = load_show(ws)
     calls.clear()
@@ -449,16 +492,14 @@ def test_regression_commit_refuses_deep_or_huge_json(path: str, raw: bytes) -> N
     assert repo.head(SHOW_ID) == head
 
 
-@pytest.mark.defect("UP-9.7-94")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-94")
 def test_regression_commit_refuses_a_cast_spot_still_placed() -> None:
     """Refuses a show.json that drops a cast spot some set still places (ruling L-A3)."""
     repo, head = _repo()
-    body = json.loads(encode_show(two_set_show())[SHOW_DOC])
-    dropped = body["cast"]["spots"].pop()["id"]
+    body = json.loads(encode_show(two_set_show())[CAST_DOC])
+    dropped = body["spots"].pop()["id"]
     assert dropped in {p.entity for p in two_set_show().set("1").placements}
     with pytest.raises(SchemaError):
-        _commit(repo, head, {SHOW_DOC: dump_json(body)})
+        _commit(repo, head, {CAST_DOC: dump_json(body)})
     assert repo.head(SHOW_ID) == head
 
 
@@ -513,3 +554,188 @@ def test_regression_lazy_blobs_digests_are_read_only() -> None:
         digests["/renders/a.txt"] = "e"  # type: ignore[index]
     assert not hasattr(digests, "update")
     assert blobs.digests["/renders/a.txt"] == "d"
+
+
+def test_regression_cast_path_error_cuts_the_path() -> None:
+    path = f"/cast/{'x' * LONG_PATH_CHARS}.json"
+    with pytest.raises(StorageError) as caught:
+        require_known_path(path)
+    assert len(caught.value.message) < MAX_MESSAGE_CHARS
+    assert caught.value.message.startswith("/cast/")
+
+
+def _repeated_first_key(document: Mapping[str, object]) -> str:
+    """Writes a JSON object whose first key appears twice, as a loose parser would accept."""
+    key, value = next(iter(document.items()))
+    return "{" + f"{json.dumps(key)}: {json.dumps(value)}, " + json.dumps(document)[1:]
+
+
+def _structured_with_repeated_key(path: str) -> bytes:
+    if path == COMMENTS_DOC:
+        comment = Comment(id="c1", anchor=Anchor.on_set("2"), text="tighten").to_json()
+        return f"[{_repeated_first_key(comment)}]".encode()
+    if path == SELECTION_DOC:
+        return _repeated_first_key(Selection(ids=(SpotId("T1"),)).to_json()).encode()
+    return _repeated_first_key(NotesDocument(show=SHOW_ID).to_json()).encode()
+
+
+@pytest.mark.parametrize("path", [COMMENTS_DOC, SELECTION_DOC, NOTES_DOC])
+def test_regression_stored_json_is_parsed_strictly_everywhere(path: str) -> None:
+    raw = _structured_with_repeated_key(path)
+    with pytest.raises(SchemaError) as caught:
+        require_structured(path, raw)
+    assert caught.value.code == ErrorCode.STRICT_JSON
+    loose = {
+        f"{module.name}: {call}"
+        for module in SHOW_LAYER.rglob("*.py")
+        for call in LOOSE_JSON_CALLS
+        for line in module.read_text(encoding="utf-8").splitlines()
+        if call in line and not line.lstrip().startswith(DOCTEST_PROMPT)
+    }
+    assert loose == set()
+
+
+def test_regression_notes_write_parses_strictly() -> None:
+    ws = open_workspace(InMemoryRepository(), SHOW_ID)
+    save_show(ws, two_set_show(), AT)
+    with pytest.raises(SchemaError) as caught:
+        ws.write(NOTES_DOC, _structured_with_repeated_key(NOTES_DOC), at=AT)
+    assert caught.value.code == ErrorCode.STRICT_JSON
+
+
+@pytest.mark.parametrize("char", ["\u00ad", "\u200b", "\u200e", "\u202e", "\u2066", "\ufeff"])
+def test_regression_cf_characters_in_paths_are_refused(char: str) -> None:
+    with pytest.raises(StorageError) as caught:
+        require_known_path(f"/renders/a{char}b.txt")
+    assert caught.value.code == "BAD_PATH"
+
+
+@pytest.mark.parametrize("folder", ["1", "1-2-3", "1-", "1--2"])
+def test_regression_odd_transition_folder_is_refused(folder: str) -> None:
+    path = f"/transitions/{folder}/notes.txt"
+    repo, head = _repo()
+    with pytest.raises(SchemaError) as caught:
+        _commit(repo, head, {path: b"x"})
+    assert caught.value.context["folder"] == folder
+    assert repo.head(SHOW_ID) == head
+    require_new_set_keys([path], [path])
+    _commit(repo, head, {"/transitions/1-2/notes.txt": b"x"})
+
+
+def _one_spot_docs() -> tuple[Show, dict[str, bytes], dict[str, bytes]]:
+    show = seeded_show(3, 30, 8)
+    entity = show.cast.ids()[0]
+    edited = show.sets[2].with_placements({entity: PlacementPatch(x=-1.0)}, force=True)
+    after = show.replace(sets=(*show.sets[:2], edited, *show.sets[3:]))
+    return show, encode_show(show), encode_show(after)
+
+
+def test_one_spot_commit_decodes_only_changed_documents() -> None:
+    show, base, after = _one_spot_docs()
+    cache = DecodeCache()
+    _validate({}, base, cache)
+    folder = show.sets[2].key or show.sets[2].id
+    set_docs = {set_doc(folder), *role_docs(folder)}
+    assert {p for p in after if base.get(p) != after[p]} <= set_docs
+    by_digest = {blob_digest(raw): raw for raw in after.values()}
+    loaded: list[str] = []
+
+    def blob(digest: str) -> bytes:
+        loaded.append(digest)
+        return by_digest[digest]
+
+    misses = cache.misses
+    require_valid_digests(_digests(base), _digests(after), blob, cache)
+    assert loaded
+    assert set(loaded) <= {blob_digest(after[p]) for p in set_docs}
+    assert cache.misses - misses == 1
+
+
+def _broken_trees() -> dict[str, Callable[[dict[str, bytes]], dict[str, bytes]]]:
+    def with_json(path: str, change: Callable[[dict[str, Any]], object]) -> Callable[..., Any]:
+        def broken(docs: dict[str, bytes]) -> dict[str, bytes]:
+            return {**docs, path: dump_json(change(json.loads(docs[path])))}
+
+        return broken
+
+    first = set_doc("1")
+    return {
+        "garbage show.json": lambda docs: {**docs, SHOW_DOC: b"garbage"},
+        "repeated set": with_json(SHOW_DOC, lambda meta: {**meta, "sets": ["1", "1"]}),
+        "dashed set ids": lambda docs: {**docs, **_dashed_docs()},
+        "older format": with_json(SHOW_DOC, lambda meta: {**meta, "version": 1}),
+        "bad sheet": lambda docs: {**docs, SHEET_DOC: b'{"unexpected": 1}'},
+        "bad timeline": lambda docs: {**docs, TIMELINE_DOC: b"[]"},
+        "bad cast": lambda docs: {**docs, CAST_DOC: b'{"groups": 5}'},
+        "no timeline": lambda docs: {p: raw for p, raw in docs.items() if p != TIMELINE_DOC},
+        "bad set": lambda docs: {**docs, first: b'{"id": "1"}'},
+        "bad paths": lambda docs: {**docs, paths_doc(("1", "2")): b'{"unexpected": []}'},
+        "orphan forms": lambda docs: {**docs, forms_doc("9"): b"[]"},
+        "set id refused": with_json(set_doc("2"), lambda body: {**body, "id": "=1+2"}),
+    }
+
+
+@pytest.mark.parametrize("name", sorted(_broken_trees()))
+@pytest.mark.parametrize("is_warm", [True, False])
+def test_commit_check_still_refuses_every_invalid_tree(name: str, *, is_warm: bool) -> None:
+    base = encode_show(two_set_show())
+    cache = DecodeCache() if is_warm else None
+    if cache is not None:
+        _validate({}, base, cache)
+    with pytest.raises(SchemaError):
+        _validate(base, _broken_trees()[name](base), cache)
+
+
+def test_commit_check_validates_the_whole_show_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, base, after = _one_spot_docs()
+    cache = DecodeCache()
+    _validate({}, base, cache)
+    assembled: list[object] = []
+    original = Show.model_validate
+
+    def recording(data: object, **kwargs: Any) -> Show:
+        assembled.append(data)
+        return original(data, **kwargs)
+
+    monkeypatch.setattr(Show, "model_validate", recording)
+    _validate(base, after, cache)
+    assert len(assembled) == 1
+    _validate(after, {**after, "/renders/a.txt": b"x"}, cache)
+    assert len(assembled) == 1
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/exports/CON.txt",
+        "/exports/nul",
+        "/renders/a/com1.png",
+        "/exports/Lpt9/x.pdf",
+        "/time/aux",
+        "/sets/con",
+        "/sets/con.txt",
+        "/transitions/NUL.json",
+        "/cast/aux.json",
+    ],
+)
+def test_regression_windows_device_names_in_paths_are_refused(path: str) -> None:
+    with pytest.raises(StorageError) as caught:
+        require_known_path(path)
+    assert caught.value.code == ErrorCode.BAD_PATH
+    assert "device" in caught.value.hint
+    for allowed in ("/exports/console.txt", "/exports/com10.txt", "/exports/x.con", CON_SET_DOC):
+        require_known_path(allowed)
+
+
+def test_regression_stored_device_named_file_can_be_deleted() -> None:
+    repo, head = _repo()
+    stored = "/exports/CON.txt"
+    data = b"legacy"
+    tree = {**repo.backend.tree(SHOW_ID, head), stored: blob_digest(data)}
+    revision = Revision(id=blob_digest(b"seed"), parent=head, at=AT, changed=(stored,))
+    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(data): data})
+    with pytest.raises(StorageError) as caught:
+        _commit(repo, revision.id, {"/exports/NUL.txt": b"new"})
+    assert caught.value.code == ErrorCode.BAD_PATH
+    _commit(repo, revision.id, {stored: None})
+    assert stored not in repo.documents(SHOW_ID, repo.head(SHOW_ID))

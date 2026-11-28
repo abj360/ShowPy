@@ -8,6 +8,7 @@ Contains:
     insert_subset(): inserts a sub-set such as 12A, keeping the total time
     remove_set(): deletes a set with its forms and paths, optionally keeping the total time
     replace_sets(): replaces a show's sets, syncing transitions and refusing locked edits
+    drop_joined_pairs(): drops the stale specs and pins on pairs an edit makes consecutive
     set_counts(): retimes a set and the transition into it
 """
 
@@ -17,9 +18,7 @@ from collections.abc import Sequence
 
 from e8s.cast.models import Cast
 from e8s.choreo.models import Placement, Set
-from e8s.choreo.path_models import FacingOverride, Route, TransitionSpec, Waypoint
 from e8s.core.errors import (
-    PathError,
     SchemaError,
     TimeRangeError,
     VersionError,
@@ -27,14 +26,15 @@ from e8s.core.errors import (
 from e8s.core.ids import (
     SetId,
     SpotId,
+    TransitionId,
     format_ref,
-    format_tid,
     parse_ref,
     parse_tid,
 )
 from e8s.sheet.models import Sheet
 from e8s.show.locks import require_unlocked
 from e8s.show.models import Pin, Show
+from e8s.show.retiming import remapped_overrides, retimed_spec
 from e8s.show.set_keys import free_set_key, set_key
 from e8s.time.models import Timeline
 
@@ -93,20 +93,58 @@ def _carried(show: Show, previous: Set | None, entity: SpotId) -> Placement:
     return source.replace(form=None, order=None, pinned=pinned)
 
 
-def _sync_transitions(show: Show) -> Show:
+def _pins_a_pair_in(record: Pin, pairs: set[TransitionId]) -> bool:
+    if record.target != "transition":
+        return False
+    try:
+        return parse_tid(record.id) in pairs
+    except SchemaError:
+        return False
+
+
+def _sync_transitions(show: Show, before: set[TransitionId]) -> Show:
     pairs = set(show.transition_ids())
     counts = {s.id: s.counts for s in show.sets}
     kept = tuple(
         spec.replace(counts=counts[spec.id[1]]) for spec in show.transitions if spec.id in pairs
     )
-    return show.replace(transitions=kept)
+    vanished = before - pairs
+    pins = tuple(p for p in show.pins if not _pins_a_pair_in(p, vanished))
+    return show.replace(transitions=kept, pins=pins)
+
+
+def drop_joined_pairs(show: Show, joined: set[TransitionId]) -> Show:
+    """Drops the transition specs and pins that name a pair an edit has just made consecutive.
+
+    Before the edit such a spec or pin was stale: it described or pinned sets that were not
+    adjacent, so it must never take effect over the new pair.
+
+    Args:
+        show: Show to clean, before or after the edit.
+        joined: Pairs that are transitions after the edit and were not before it.
+
+    Returns:
+        show: The show without specs or pins on those pairs; `show` itself when it has none.
+
+    >>> from e8s.examples import two_set_show
+    >>> drop_joined_pairs(two_set_show(), {("1", "2")}).transitions
+    ()
+    """
+    pins = tuple(p for p in show.pins if not _pins_a_pair_in(p, joined))
+    specs = tuple(spec for spec in show.transitions if spec.id not in joined)
+    if pins == show.pins and specs == show.transitions:
+        return show
+    return show.replace(pins=pins, transitions=specs)
 
 
 def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: object) -> Show:
     """Replaces a show's sets, keeping transitions in step and refusing pinned or locked edits.
 
-    Transitions between sets that are no longer consecutive are dropped, and each kept one takes
-    the counts of the set it leads into.
+    Transitions between sets that are no longer consecutive are dropped, with the pins on pairs
+    this edit separates, and each kept one takes the counts of the set it leads into. A stale
+    spec or pin on a pair this edit makes consecutive is dropped without force, since it
+    described or pinned other sets; any other stale spec or pin stays for validate_show to
+    report.
 
     Args:
         show: Show to edit.
@@ -122,8 +160,11 @@ def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: obje
     >>> replace_sets(show, show.sets[:1], force=False).transition_ids()
     []
     """
-    edited = _sync_transitions(show.replace(sets=tuple(sets), **update))
-    require_unlocked(show, edited, force=force)
+    before = set(show.transition_ids())
+    synced = _sync_transitions(show.replace(sets=tuple(sets), **update), before)
+    joined = set(synced.transition_ids()) - before
+    edited = drop_joined_pairs(synced, joined)
+    require_unlocked(drop_joined_pairs(show, joined), edited, force=force)
     return edited
 
 
@@ -321,13 +362,6 @@ def insert_subset(
     return replace_sets(show, sets, force=force), new_id
 
 
-def _names_set(tid_text: str, set_id: str) -> bool:
-    try:
-        return set_id in parse_tid(tid_text)
-    except SchemaError:
-        return False
-
-
 def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
     dropped_forms = {f for f, form in show.forms.items() if form.set == set_id}
 
@@ -335,7 +369,6 @@ def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
         return not (
             (pin.target == "set" and pin.id == set_id)
             or (pin.target == "form" and pin.id in dropped_forms)
-            or (pin.target == "transition" and _names_set(pin.id, set_id))
         )
 
     return tuple(filter(kept, show.pins))
@@ -372,70 +405,6 @@ def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: boo
     return replace_sets(show, sets, force=force, forms=forms, pins=pins)
 
 
-def _scale_route(route: Route, factor: float) -> Route:
-    end = None if route.end is None else route.end * factor
-    return route.replace(start=route.start * factor, end=end)
-
-
-def _scale_spec(spec: TransitionSpec, factor: float) -> TransitionSpec:
-    rows = {}
-    for entity, row in spec.rows.items():
-        waypoints = tuple(
-            w if w.at is None else Waypoint(x=w.x, y=w.y, at=w.at * factor) for w in row.waypoints
-        )
-        end = None if row.end is None else row.end * factor
-        rows[entity] = row.replace(start=row.start * factor, end=end, waypoints=waypoints)
-    routes = {key: _scale_route(route, factor) for key, route in spec.routes.items()}
-    return spec.replace(rows=rows, routes=routes)
-
-
-def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
-    late: list[str] = [
-        entity
-        for entity, row in spec.rows.items()
-        if row.window(counts)[1] > counts
-        or row.start >= counts
-        or any(w.at is not None and w.at > counts for w in row.waypoints)
-    ]
-    late += [key for key, r in spec.routes.items() if (r.end or counts) > counts]
-    return late
-
-
-def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> TransitionSpec:
-    if rescale and spec.counts > 0:
-        spec = _scale_spec(spec, counts / spec.counts)
-    late = _overruns(spec, counts)
-    if late:
-        raise PathError(
-            f"paths in {format_tid(spec.id)} run past {counts} counts: {', '.join(late)}",
-            hint="pass rescale=True to scale the paths, or shorten them first",
-            context={"tid": spec.id, "late": late},
-        )
-    return spec.replace(counts=counts)
-
-
-def _remapped_count(count: float, start: float, old: float, new: float) -> float:
-    if count <= start:
-        return count
-    if count <= start + old:
-        return start + (count - start) * new / old
-    return count + new - old
-
-
-def _remapped_overrides(
-    overrides: tuple[FacingOverride, ...], start: float, old: float, new: float
-) -> tuple[FacingOverride, ...]:
-    if old <= 0:
-        return overrides
-    return tuple(
-        o.replace(
-            start=_remapped_count(o.start, start, old, new),
-            end=_remapped_count(o.end, start, old, new),
-        )
-        for o in overrides
-    )
-
-
 def set_counts(
     show: Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False
 ) -> Show:
@@ -466,9 +435,9 @@ def set_counts(
     sets[position] = sets[position].replace(counts=counts)
     update: dict[str, object] = {}
     if rescale:
-        update["facing_overrides"] = _remapped_overrides(show.facing_overrides, start, old, counts)
+        update["facing_overrides"] = remapped_overrides(show.facing_overrides, start, old, counts)
     specs = tuple(
-        _retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
+        retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
     )
     return replace_sets(show, sets, force=force, transitions=specs, **update)

@@ -21,6 +21,10 @@ Contains:
         documents, and adds nothing on a later save
     test_regression_decode_cache_sees_a_rewritten_role_document: decodes the new positions when
         only drill.json changes under a shared DecodeCache
+    test_regression_role_document_keys_are_quoted_in_errors: quotes and escapes raw role-document
+        keys in the errors that list them
+    test_regression_cast_documents_error_cuts_each_path: cuts each listed stray path under `/cast/`
+        and bounds the message
 """
 
 import json
@@ -39,12 +43,13 @@ from e8s.show.documents import SHOW_DOC, decode_show, dump_json, dump_show_doc, 
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest, require_known_path
 from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.role_documents import require_known_cast_documents
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.layout1 import layout1_documents
 
 AT = datetime(2026, 11, 24, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 CAST_DOC = "/cast/cast.json"
 ORDER_FIELD = "placement_order"
 ROLE_NAMES = ("drill.json", "facing.json", "labels.json")
@@ -54,6 +59,7 @@ TOTAL_COUNTS = 100.0
 MOVED_X = 7.5
 LISTED_SPOTS = 20
 STRAY_SPOTS = 30
+MAX_MESSAGE_CHARS = 4_000
 
 
 def test_regression_role_tree_without_cast_document_is_refused() -> None:
@@ -212,3 +218,30 @@ def test_regression_decode_cache_sees_a_rewritten_role_document() -> None:
     decoded = decode_show(moved, cache=cache, digests=moved_digests)
     assert decoded.set("2").get("T1").x == MOVED_X
     assert decoded.set("2").get("T2") == two_set_show().set("2").get("T2")
+
+
+def test_regression_role_document_keys_are_quoted_in_errors() -> None:
+    docs = encode_show(two_set_show())
+    hostile = "S1\nforged line\x1b[31m"
+    facing = json.loads(docs["/sets/2/facing.json"])
+    with pytest.raises(SchemaError) as extra:
+        decode_show({**docs, "/sets/2/facing.json": dump_json({**facing, hostile: {}})})
+    assert repr(hostile) in extra.value.message
+    assert "\n" not in extra.value.message
+    assert "\x1b" not in extra.value.message
+    first = next(iter(facing))
+    stray_row = {**facing, first: {**facing[first], hostile: 1}}
+    with pytest.raises(SchemaError) as stray:
+        decode_show({**docs, "/sets/2/facing.json": dump_json(stray_row)})
+    assert repr(hostile) in stray.value.message
+    assert "\n" not in stray.value.message
+    assert "\x1b" not in stray.value.message
+
+
+def test_regression_cast_documents_error_cuts_each_path() -> None:
+    long_paths = [f"/cast/{n:02}{'x' * LONG_ID_CHARS}.json" for n in range(STRAY_SPOTS)]
+    with pytest.raises(SchemaError) as caught:
+        require_known_cast_documents([CAST_DOC, *long_paths])
+    assert len(caught.value.message) < MAX_MESSAGE_CHARS
+    assert f"(+{STRAY_SPOTS - LISTED_SPOTS} more)" in caught.value.message
+    assert caught.value.context["count"] == STRAY_SPOTS

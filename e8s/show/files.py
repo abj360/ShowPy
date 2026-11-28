@@ -28,7 +28,7 @@ from e8s.core.errors import LockedError, StorageError, UnknownRefError
 from e8s.core.ids import TransitionId
 from e8s.core.selection import Selection
 from e8s.core.util import close_matches
-from e8s.show._notes_document import NotesDocument, require_notes_of
+from e8s.show._notes_document import require_notes_of
 from e8s.show.document_paths import CAST_DOC, is_set_document
 from e8s.show.documents import (
     FORMS_NAME,
@@ -61,6 +61,7 @@ from e8s.show.structured import (
     COMMENTS_DOC,
     SELECTION_DOC,
     TEXT_SUFFIXES,
+    decode_notes,
     decode_text,
     require_structured,
 )
@@ -332,5 +333,5 @@ def staged_changes(
         raise _unknown(path, show, tree)
     require_structured(path, raw)
     if path == NOTES_DOC:
-        require_notes_of(NotesDocument._validated_json(raw), _require_show(show, path).id)
+        require_notes_of(decode_notes(raw), _require_show(show, path).id)
     return {to_stored_path(path, show): raw}

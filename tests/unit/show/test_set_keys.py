@@ -78,7 +78,6 @@ Contains:
 import json
 import math
 import re
-import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -126,7 +125,7 @@ from e8s.show.sections import join_sections
 from e8s.show.set_keys import to_display_path, to_stored_path
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import Workspace, open_workspace
-from tests.fixtures.layout1 import layout1_documents, role_split_documents
+from tests.fixtures.layout1 import layout1_documents, role_split_documents, upgraded_copy
 from tests.helpers import json_doc
 
 AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
@@ -166,8 +165,7 @@ def _keys(show: Show) -> list[str | None]:
 
 def _fixture_tree(tmp_path: Path) -> tuple[FileRepository, str, dict[str, bytes]]:
     expected: dict[str, Any] = json.loads((FIXTURE / "expected.json").read_text())
-    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
-    repo = FileRepository(tmp_path / "repo")
+    repo = FileRepository(upgraded_copy(FIXTURE / "repo", tmp_path))
     show_id = expected["show_id"]
     tree = {p: repo.read(show_id, p) or b"" for p in repo.paths(show_id)}
     return repo, show_id, tree

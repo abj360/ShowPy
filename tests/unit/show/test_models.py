@@ -7,6 +7,8 @@ Contains:
     test_*(): one behavior of Show each
     test_regression_show_lookup_refuses_json: raises a taught SchemaError instead of writing
         TransitionId keys that from_json cannot read back
+    test_regression_show_refuses_placements_outside_the_cast: refuses a set placing a spot the
+        cast does not hold
 """
 
 import json
@@ -167,3 +169,15 @@ def test_regression_stored_show_checks_the_set_cap_before_loading_sets() -> None
         decode_show(docs)
     assert caught.value.code == ErrorCode.TOO_MANY_SETS
     assert caught.value.context == {"sets": MAX_SETS + 1, "max_sets": MAX_SETS}
+
+
+def test_regression_show_refuses_placements_outside_the_cast() -> None:
+    """Refuses a set placing a spot the cast does not hold, naming the set and the spot."""
+    show = two_set_show()
+    cast = show.cast.replace(spots=show.cast.spots[1:])
+    dropped = show.cast.spots[0].id
+    with pytest.raises(SchemaError) as caught:
+        show.replace(cast=cast)
+    assert caught.value.code == ErrorCode.UNKNOWN_SPOT
+    assert caught.value.context["set"] == "1"
+    assert caught.value.context["spots"] == [dropped]

@@ -71,11 +71,14 @@ from e8s.show.interchange import import_json
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
+from e8s.show.upgrade import upgrade_repository
 from e8s.show.workspace import open_workspace
+from tests.fixtures.layout1 import append_layout1
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
 TAGS = ["v0.1.1", "v0.2.0", "v0.3.0"]
 AT = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
+UPGRADED = "upgraded"
 WRITTEN = "2026-11-12T10:00:00+00:00"
 
 
@@ -85,18 +88,19 @@ def _fixture(tag: str, tmp_path: Path) -> tuple[FileRepository, str]:
     return FileRepository(tmp_path / "repo"), expected["show_id"]
 
 
-def _commit_v1(repo: FileRepository, show_id: str, changed: dict[str, bytes]) -> str:
-    """Commits v1 documents through the backend, as a v0.3.0 writer stored them."""
+def _commit_v1(repo: FileRepository, show_id: str, changed: dict[str, bytes]) -> FileRepository:
+    """Commits v1 documents into the layout-1 copy, as a v0.3.0 writer stored them, and returns
+    the copy upgraded, since only layout 2 takes further writes."""
     head = repo.head(show_id)
     tree = dict(repo.backend.tree(show_id, head))
     tree.update({path: blob_digest(raw) for path, raw in changed.items()})
     body = {"parent": head, "at": AT.isoformat(), "tree": tree}
     revision_id = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     revision = Revision(id=revision_id, parent=head, at=AT, changed=tuple(sorted(changed)))
-    repo.backend.commit(
-        show_id, revision, tree, {blob_digest(raw): raw for raw in changed.values()}
-    )
-    return revision_id
+    blobs = {blob_digest(raw): raw for raw in changed.values()}
+    append_layout1(repo.root, show_id, revision, tree, blobs)
+    upgrade_repository(repo.root, repo.root.with_name(UPGRADED))
+    return FileRepository(repo.root.with_name(UPGRADED))
 
 
 def _v1_note(note_id: str, anchor: dict[str, Any], text: str = "look") -> dict[str, Any]:
@@ -126,7 +130,7 @@ def _with_notes(tag: str, tmp_path: Path) -> tuple[FileRepository, str, list[dic
         _v1_note("n1", {"kind": "set", "set_id": first}, "open wide"),
         _v1_note("n2", {"kind": "point", "point": [1.0, 2.0]}, "mark"),
     ]
-    _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
+    repo = _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
     return repo, show_id, notes
 
 
@@ -157,7 +161,7 @@ def test_note_anchors_follow_the_migration_renames(tmp_path: Path) -> None:
         _v1_note("n2", {"kind": "transition", "tid": ["1A", "con"]}),
         _v1_note("N-1", {"kind": "spots", "spots": ["T1"]}),
     ]
-    _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
+    repo = _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
     migrated, report = migrate_documents(dict(repo.documents(show_id)))
     document = NotesDocument.from_json(json.loads(migrated[NOTES_DOC]))
     assert [n.id for n in document.notes] == ["n_1", "n2", "N_1.2"]
@@ -173,7 +177,7 @@ def test_regression_v1_note_with_an_empty_id_is_renamed(tmp_path: Path) -> None:
         _v1_note("", {"kind": "set", "set_id": "con"}),
         _v1_note("id", {"kind": "point", "point": [0.0, 0.0]}),
     ]
-    _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
+    repo = _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
     migrated, report = migrate_documents(dict(repo.documents(show_id)))
     document = NotesDocument.from_json(json.loads(migrated[NOTES_DOC]))
     assert [n.id for n in document.notes] == ["id.2", "id"]
@@ -190,7 +194,7 @@ def test_stored_v1_spot_renames_reach_note_anchors(tmp_path: Path) -> None:
         if path.endswith(".json") and b'"B1"' in raw
     }
     notes = [_v1_note("n1", {"kind": "spots", "spots": ["brass-2", "B2"]})]
-    _commit_v1(repo, show_id, {**respelled, LEGACY_NOTES_DOC: dump_json(notes)})
+    repo = _commit_v1(repo, show_id, {**respelled, LEGACY_NOTES_DOC: dump_json(notes)})
     migrated, report = migrate_documents(dict(repo.documents(show_id)))
     assert ("brass-2", "brass_2") in report.renamed["spot"]
     document = NotesDocument.from_json(json.loads(migrated[NOTES_DOC]))
@@ -329,7 +333,7 @@ def test_notes_document_header_is_written_first(tmp_path: Path) -> None:
 
 
 def test_workspace_writes_a_checked_notes_document() -> None:
-    show = two_set_show()
+    show = two_set_show().replace(id="show_1")
     repo = InMemoryRepository()
     repo.put_show(show.id, show, expected_revision="", at=AT)
     ws = open_workspace(repo, show.id)
@@ -345,7 +349,7 @@ def test_workspace_writes_a_checked_notes_document() -> None:
 
 
 def test_regression_workspace_refuses_the_notes_of_another_show() -> None:
-    show = two_set_show()
+    show = two_set_show().replace(id="show_1")
     repo = InMemoryRepository()
     repo.put_show(show.id, show, expected_revision="", at=AT)
     ws = open_workspace(repo, show.id)

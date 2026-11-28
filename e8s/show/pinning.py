@@ -9,7 +9,6 @@ Contains:
 
 from collections.abc import Sequence
 
-from e8s.choreo.match_ops import forms_of_set
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathRow
 from e8s.core.errors import UnknownRefError
@@ -18,6 +17,7 @@ from e8s.core.util import close_matches
 from e8s.show.changes import store_paths
 from e8s.show.collab_models import PathsOp
 from e8s.show.models import Pin, PinTarget, Show
+from e8s.show.pin_flags import covers_form, covers_placement
 
 
 def _require_target(show: Show, target: PinTarget, target_id: str) -> None:
@@ -36,28 +36,11 @@ def _require_target(show: Show, target: PinTarget, target_id: str) -> None:
         )
 
 
-def _covers_placement(held: Sequence[Pin], set_id: str, entity: str) -> bool:
-    return any(
-        (p.target == "entity" and p.id == entity) or (p.target == "set" and p.id == set_id)
-        for p in held
-    )
-
-
-def _covers_form(show: Show, held: Sequence[Pin], form_id: str) -> bool:
-    # a set pin may name a set that no longer exists; forms_of_set would raise on it
-    return any(
-        (p.target == "form" and p.id == form_id)
-        or (p.target == "set" and form_id in forms_of_set(show, p.id))
-        for p in held
-        if p.target == "form" or p.id in show.set_ids()
-    )
-
-
 def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     sets = []
     for current in show.sets:
         updates = {
-            p.entity: PlacementPatch(pinned=_covers_placement(held, current.id, p.entity))
+            p.entity: PlacementPatch(pinned=covers_placement(held, current.id, p.entity))
             for p in current.placements
             if (scope.target == "entity" and p.entity == scope.id)
             or (scope.target == "set" and current.id == scope.id)
@@ -68,7 +51,7 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
 
 def _flag_forms(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     forms = {
-        k: f.replace(locked=_covers_form(show, held, k))
+        k: f.replace(locked=covers_form(show, held, k))
         if (scope.target == "form" and k == scope.id)
         or (scope.target == "set" and f.set == scope.id)
         else f

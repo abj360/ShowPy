@@ -6,32 +6,65 @@ a location and a hint. Safety rules (collisions, speed, bounds) belong to a cons
 
 Contains:
     validate_set(): checks a candidate set against the show
+    compile_issues(): compiles chosen spots' paths through the engine and reports failures
+    path_checks(): checks the spots a transition's paths name or face, and its counts
     validate_paths(): checks a transition's paths, including continuity through the engine
     validate_dependencies(): checks that the sheet reference resolves and is pinned
+    skips_transition(): tells whether validate_show leaves a transition's paths unchecked
+    transition_issues(): checks one consecutive transition's paths as validate_show does
+    ShowChecks: supplies the per-set, per-transition and per-area checks of a whole-show run
+    whole_show_checks(): returns the checks that read the whole show
+    run_checks(): runs validate_show's checks in its issue order from the checks given
     validate_show(): checks everything plus set sequence, transitions, references and the timeline
 """
 
 import math
-from collections.abc import Callable, Iterable, Iterator, Mapping
-from itertools import islice
+from collections.abc import Callable, Iterable, Sequence
+from typing import NamedTuple
 
 from e8s.choreo.engine import PathEngine
 from e8s.choreo.match_ops import forms_of_set
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
-from e8s.core.caps import MAX_COUNTS
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ContinuityError, E8sError, SchemaError
-from e8s.core.ids import check_id, check_sheet_id, format_tid, parse_ref
-from e8s.core.types import FrozenModel
+from e8s.core.errors import ContinuityError, E8sError
+from e8s.core.ids import SetId, TransitionId, format_tid, parse_ref
+from e8s.core.json_types import JsonValue
 from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import SheetStore, get_sheet
-from e8s.show.document_paths import is_storable_folder
+from e8s.show.change_models import ItemKey
+from e8s.show.collab_models import Comment
+from e8s.show.item_table import DRILL, FORMS, PIN, PLACEMENTS, transition_key
 from e8s.show.models import Show
-from e8s.show.validate_refs import ERROR, WARNING, make_issue, reference_issues
+from e8s.show.set_keys import set_key
+from e8s.show.validate_comments import comment_issues
+from e8s.show.validate_issue import ERROR, WARNING, make_issue
+from e8s.show.validate_path_refs import path_spot_issues
+from e8s.show.validate_placements import placement_issues
+from e8s.show.validate_refs import reference_issues
+from e8s.show.validate_values import (
+    first_set_issues,
+    form_key_issues,
+    has_non_finite,
+    id_issues,
+    negative_count_issues,
+    non_finite_issues,
+    selection_issues,
+    sequence_issues,
+    too_long_issues,
+)
 from e8s.time.validate import validate_timeline
 
-MAX_NON_FINITE_ISSUES = 100
+
+def _set_item(candidate: Set, role: str, **extra: JsonValue) -> dict[str, JsonValue]:
+    return {"item": ItemKey(kind="set", path=(set_key(candidate),), role=role).to_json(), **extra}
+
+
+def _placement_item(
+    candidate: Set, entity: str, role: str, **extra: JsonValue
+) -> dict[str, JsonValue]:
+    item = ItemKey(kind="placement", path=(set_key(candidate), entity), role=role)
+    return {"item": item.to_json(), **extra}
 
 
 def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
@@ -45,6 +78,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
             where,
             f"{e} has no placement",
             "every spot is placed in every set",
+            _set_item(candidate, PLACEMENTS, spot=e),
         )
         for e in show.cast.ids()
         if e not in placed
@@ -56,6 +90,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
             where,
             f"{e} is not in the cast",
             "add the spot or remove the row",
+            _set_item(candidate, PLACEMENTS, spot=e),
         )
         for e in candidate.entity_ids()
         if e not in cast_ids
@@ -74,6 +109,7 @@ def _pins(show: Show, candidate: Set) -> list[ValidationIssue]:
             f"set {candidate.id} {p.entity}",
             "a pinned placement changed",
             "unpin it before editing",
+            _placement_item(candidate, p.entity, PIN),
         )
         for p in stored.placements
         if p.pinned and p.entity in candidate.entity_ids() and candidate.get(p.entity) != p
@@ -95,6 +131,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
                     where,
                     f"form {p.form} does not exist",
                     "rebuild the form or clear the placement's form",
+                    _placement_item(candidate, p.entity, DRILL, form=p.form),
                 )
             )
         elif p.entity not in form.members or form.set != candidate.id:
@@ -105,6 +142,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
                     where,
                     f"not a member of {p.form} in this set",
                     "add it to the form's members",
+                    _placement_item(candidate, p.entity, DRILL, form=p.form),
                 )
             )
     return issues
@@ -119,6 +157,7 @@ def _stale_forms(show: Show, candidate: Set) -> list[ValidationIssue]:
             f"set {candidate.id} form {form_id}",
             f"set {candidate.id} no longer lists form {form_id}",
             "re-place the set's forms, or remove the form",
+            _set_item(candidate, FORMS, form=form_id),
         )
         for form_id, form in show.forms.items()
         if form.set == candidate.id and form_id not in listed
@@ -146,51 +185,84 @@ def _with_spec(show: Show, spec: TransitionSpec) -> Show:
     return show.replace(transitions=(*others, spec))
 
 
-def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
-    cast_ids = set(show.cast.ids())
-    issues = [
-        make_issue(
-            ERROR,
-            ErrorCode.UNKNOWN_SPOT,
-            f"{where} {e}",
-            f"{e} is not in the cast",
-            "remove the row",
-        )
-        for e in spec.rows
-        if e not in cast_ids
-    ]
-    for route in spec.routes.values():
-        unknown = [m for m in route.members if m not in cast_ids]
-        if unknown:
-            issues.append(
-                make_issue(
-                    ERROR,
-                    ErrorCode.UNKNOWN_SPOT,
-                    f"{where} route {route.id}",
-                    f"unknown members {unknown}",
-                    "rebuild the route",
-                )
-            )
-    return issues
+def _folder(show: Show, tid: tuple[str, str]) -> str:
+    return transition_key({set_id: set_key(show.set(set_id)) for set_id in tid}, tid)
 
 
-def _compile_issue(error: E8sError, where: str) -> ValidationIssue:
+def _compile_issue(error: E8sError, where: str, item: ItemKey) -> ValidationIssue:
     code = ErrorCode.CONTINUITY if isinstance(error, ContinuityError) else error.code
-    return make_issue(ERROR, code, where, error.message, error.hint)
+    return make_issue(ERROR, code, where, error.message, error.hint, {"item": item.to_json()})
 
 
-def _compile_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
+def compile_issues(
+    show: Show, spec: TransitionSpec, entities: Iterable[str]
+) -> list[ValidationIssue]:
+    """Compiles each given spot's path through the engine and reports the ones that fail.
+
+    A spot not placed in both sets of the transition is skipped.
+
+    Args:
+        show: The show the transition belongs to.
+        spec: The transition's paths, stored or candidate.
+        entities: The spots to compile, in report order.
+
+    Returns:
+        issues: One issue per spot whose path does not compile, in the order given.
+
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> compile_issues(show, show.transition(("1", "2")), show.cast.ids())
+    []
+    """
     trial = _with_spec(show, spec)
+    where = format_tid(spec.id)
     issues = []
     a, b = trial.set(spec.id[0]), trial.set(spec.id[1])
     engine = PathEngine(trial, cache=False)
-    for entity in show.cast.ids():
+    folder = _folder(show, spec.id)
+    for entity in entities:
         if entity not in a.entity_ids() or entity not in b.entity_ids():
             continue
         try:
             engine.compile_entity(entity, spec.id)
         except E8sError as error:
-            issues.append(_compile_issue(error, f"{where} {entity}"))
+            item = ItemKey(kind="path_row", path=(folder, entity))
+            issues.append(_compile_issue(error, f"{where} {entity}", item))
+    return issues
+
+
+def path_checks(show: Show, spec: TransitionSpec) -> list[ValidationIssue]:
+    """Checks a transition's paths without the engine: the spots they name or face, and counts.
+
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> path_checks(show, show.transition(("1", "2")))
+    []
+
+    Args:
+        show: The show the transition belongs to.
+        spec: The transition's paths, stored or candidate.
+
+    Returns:
+        issues: Unknown or faced spots outside the cast, then a counts mismatch, if any.
+    """
+    issues = path_spot_issues(show, [spec])
+    expected = show.set(spec.id[1]).counts
+    if not math.isclose(spec.counts, expected):
+        issues.append(
+            make_issue(
+                ERROR,
+                ErrorCode.COUNTS_MISMATCH,
+                format_tid(spec.id),
+                f"paths span {spec.counts} counts, set {spec.id[1]} has {expected}",
+                "retime with set_counts",
+                {
+                    "item": ItemKey(kind="transition", path=(_folder(show, spec.id),)).to_json(),
+                    "counts": spec.counts,
+                    "expected": expected,
+                },
+            )
+        )
     return issues
 
 
@@ -202,20 +274,8 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
     >>> validate_paths(show, show.transition(("1", "2"))).ok
     True
     """
-    where = format_tid(spec.id)
-    issues = _path_rows(show, spec, where)
-    expected = show.set(spec.id[1]).counts
-    if not math.isclose(spec.counts, expected):
-        issues.append(
-            make_issue(
-                ERROR,
-                ErrorCode.COUNTS_MISMATCH,
-                where,
-                f"paths span {spec.counts} counts, set {spec.id[1]} has {expected}",
-                "retime with set_counts",
-            )
-        )
-    return ValidationReport(issues=tuple(issues + _compile_rows(show, spec, where)))
+    issues = path_checks(show, spec) + compile_issues(show, spec, show.cast.ids())
+    return ValidationReport(issues=tuple(issues))
 
 
 def validate_dependencies(show: Show, store: SheetStore | None = None) -> ValidationReport:
@@ -247,183 +307,161 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
     return ValidationReport(issues=tuple(issues))
 
 
-def _sequence(show: Show) -> list[ValidationIssue]:
-    zero_counts = [
-        make_issue(
-            WARNING,
-            ErrorCode.ZERO_COUNTS,
-            f"set {s.id}",
-            "set arrives in 0 counts",
-            "give the set counts > 0",
+def _counterpart(known: Show, set_id: SetId) -> Set | None:
+    position = known.lookup.positions.get(set_id)
+    return None if position is None else known.sets[position]
+
+
+def skips_transition(show: Show, tid: TransitionId, known: Show | None = None) -> bool:
+    """Tells whether validate_show leaves a transition's paths unchecked.
+
+    It does when either set or the stored paths hold a non-finite number, which NOT_FINITE
+    reports, or when the destination set has negative counts, which TIME_RANGE reports.
+
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> skips_transition(show, show.transition_ids()[0])
+    False
+
+    Args:
+        show: The show the transition belongs to.
+        tid: One of the show's consecutive transitions.
+        known: An earlier show that holds no non-finite number; parts of `show` that are the
+            very objects found at the same place in it are not searched.
+
+    Returns:
+        skipped: Whether the transition's paths go unchecked.
+    """
+    parts = (show.set(tid.from_set), show.set(tid.to_set), show.lookup.stored.get(tid))
+    counterparts: tuple[object, ...] = (None, None, None)
+    if known is not None:
+        counterparts = (
+            _counterpart(known, tid.from_set),
+            _counterpart(known, tid.to_set),
+            known.lookup.stored.get(tid),
         )
-        for s in show.sets[1:]
-        if s.counts == 0
-    ]
-    valid = set(show.transition_ids())
-    stale = [
-        make_issue(
-            ERROR,
-            ErrorCode.STALE_TRANSITION,
-            format_tid(spec.id),
-            "paths for sets that are not consecutive",
-            "delete or re-create these paths",
-        )
-        for spec in show.transitions
-        if spec.id not in valid
-    ]
-    return zero_counts + stale
+    if any(
+        part is not None and has_non_finite(part, counterpart)
+        for part, counterpart in zip(parts, counterparts, strict=True)
+    ):
+        return True
+    return show.set(tid.to_set).counts < 0
 
 
-def _form_keys(show: Show) -> list[ValidationIssue]:
-    return [
-        ValidationIssue(
-            level=ERROR,
-            code=ErrorCode.KEY_MISMATCH,
-            where=f"form {key}",
-            message=f"form stored under {key!r} has id {form.id!r}",
-            hint="store every form under its own id",
-            context={"key": key, "id": form.id},
-        )
-        for key, form in show.forms.items()
-        if key != form.id
-    ]
+def transition_issues(show: Show, tid: TransitionId) -> list[ValidationIssue]:
+    """Checks one consecutive transition's paths as validate_show does.
+
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> transition_issues(show, show.transition_ids()[0])
+    []
+
+    Args:
+        show: The show the transition belongs to.
+        tid: One of the show's consecutive transitions.
+
+    Returns:
+        issues: The paths' issues; none when skips_transition says the paths go unchecked.
+    """
+    if skips_transition(show, tid):
+        return []
+    return list(validate_paths(show, show.transition(tid)).issues)
 
 
-def _selections(show: Show) -> list[ValidationIssue]:
-    cast_ids = set(show.cast.ids())
-    return [
-        ValidationIssue(
-            level=ERROR,
-            code=ErrorCode.UNKNOWN_SPOT,
-            where=f"selection {name}",
-            message=f"{spot} is not in the cast",
-            hint="remove the spot from the selection or add it to the cast",
-            context={"path": f"cast.selections.{name}", "spot": spot},
-        )
-        for name, members in show.cast.selections.items()
-        for spot in sorted(members)
-        if spot not in cast_ids
-    ]
+class ShowChecks(NamedTuple):
+    """Supplies the checks validate_show runs per set, per transition and over whole areas.
+
+    An incremental run passes checks that reuse earlier results; validate_show passes checks
+    that read the whole show. Either way run_checks keeps one issue order.
+
+    Attributes:
+        set_issues: Issues of one set, as validate_set reports them.
+        transition_issues: Issues of one consecutive transition, as transition_issues reports.
+        non_finite: Non-finite number issues, as non_finite_issues reports.
+        references: Reference issues, as reference_issues reports.
+        placements: Placement issues, as placement_issues reports.
+    """
+
+    set_issues: Callable[[Set], Sequence[ValidationIssue]]
+    transition_issues: Callable[[TransitionId], Sequence[ValidationIssue]]
+    non_finite: Callable[[], Sequence[ValidationIssue]]
+    references: Callable[[], Sequence[ValidationIssue]]
+    placements: Callable[[], Sequence[ValidationIssue]]
 
 
-def _bad_id(kind: str, path: str, value: str, error: E8sError) -> ValidationIssue:
-    return ValidationIssue(
-        level=ERROR,
-        code=ErrorCode.BAD_ID,
-        where=f"{kind} {value!r}",
-        message=f"{kind} ID {value!r} cannot be stored",
-        hint=error.hint,
-        context={"path": path, "id": value},
+def whole_show_checks(show: Show) -> ShowChecks:
+    """Returns the checks that read the whole show, as validate_show runs them.
+
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> list(whole_show_checks(show).set_issues(show.sets[0]))
+    []
+    """
+    return ShowChecks(
+        set_issues=lambda candidate: validate_set(show, candidate).issues,
+        transition_issues=lambda tid: transition_issues(show, tid),
+        non_finite=lambda: non_finite_issues(show),
+        references=lambda: reference_issues(show),
+        placements=lambda: placement_issues(show),
     )
 
 
-def _checked(
-    kind: str, path: str, value: str, check: Callable[[str], str]
-) -> list[ValidationIssue]:
-    try:
-        check(value)
-    except SchemaError as error:
-        return [_bad_id(kind, path, value, error)]
-    return []
+def run_checks(
+    show: Show, checks: ShowChecks, *, comments: Sequence[Comment] = ()
+) -> ValidationReport:
+    """Runs validate_show's checks in its issue order, without the sheet store's check.
+
+    Sets come first, then transitions (unless the show is too long), then counts, sequence,
+    form keys, selections, IDs, non-finite numbers, references, placements, comments and the
+    timeline. Checks of counts, sequence, keys, selections, IDs, comments and the timeline
+    always read the whole show.
+
+    >>> from e8s.examples import two_set_show
+    >>> show = two_set_show()
+    >>> run_checks(show, whole_show_checks(show)).ok
+    True
+
+    Args:
+        show: The show to check.
+        checks: Where the per-set, per-transition and per-area issues come from.
+        comments: Review comments whose anchors must resolve in the show.
+
+    Returns:
+        report: Every issue found, in validate_show's order.
+    """
+    issues = [issue for candidate in show.sets for issue in checks.set_issues(candidate)]
+    too_long = too_long_issues(show)
+    if not too_long:
+        issues += [i for tid in show.transition_ids() for i in checks.transition_issues(tid)]
+    issues += too_long + sequence_issues(show) + first_set_issues(show)
+    issues += negative_count_issues(show)
+    issues += form_key_issues(show) + selection_issues(show) + id_issues(show)
+    issues += [*checks.non_finite(), *checks.references(), *checks.placements()]
+    issues += comment_issues(show, comments)
+    issues += validate_timeline(show.timeline).issues
+    return ValidationReport(issues=tuple(issues))
 
 
-def _set_id_issue(index: int, set_id: str) -> list[ValidationIssue]:
-    if is_storable_folder(set_id):
-        return []
-    return _checked("set", f"sets[{index}].id", set_id, lambda text: check_id(text, kind="set"))
-
-
-def _ids(show: Show) -> list[ValidationIssue]:
-    issues = _checked("show", "id", show.id, lambda text: check_sheet_id(text, kind="show"))
-    for index, candidate in enumerate(show.sets):
-        issues += _set_id_issue(index, candidate.id)
-    for key, form in show.forms.items():
-        issues += _checked("form", f"forms.{key}.id", form.id, lambda t: check_id(t, kind="form"))
-        if key != form.id:
-            issues += _checked("form", f"forms.{key}", key, lambda t: check_id(t, kind="form"))
-    return issues
-
-
-def _non_finite_values(value: object, path: str) -> Iterator[tuple[str, float]]:
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            yield path, value
-    elif isinstance(value, FrozenModel):
-        for name in type(value)._field_names():
-            yield from _non_finite_values(getattr(value, name), f"{path}.{name}" if path else name)
-    elif isinstance(value, Mapping):
-        for key, item in value.items():
-            yield from _non_finite_values(item, f"{path}.{key}")
-    elif isinstance(value, tuple | list):
-        for index, item in enumerate(value):
-            yield from _non_finite_values(item, f"{path}[{index}]")
-
-
-def _has_non_finite(value: object) -> bool:
-    return next(_non_finite_values(value, ""), None) is not None
-
-
-def _non_finite(show: Show) -> list[ValidationIssue]:
-    found = islice(_non_finite_values(show, ""), MAX_NON_FINITE_ISSUES)
-    return [
-        ValidationIssue(
-            level=ERROR,
-            code=ErrorCode.NOT_FINITE,
-            where=path,
-            message=f"{path} is {value}",
-            hint="use a finite number",
-            context={"path": path, "value": str(value)},
-        )
-        for path, value in found
-    ]
-
-
-def _too_long(show: Show) -> list[ValidationIssue]:
-    total = math.fsum(s.counts for s in show.sets if math.isfinite(s.counts))
-    if total <= MAX_COUNTS:
-        return []
-    return [
-        ValidationIssue(
-            level=ERROR,
-            code=ErrorCode.SHOW_TOO_LONG,
-            where="sets",
-            message=f"set counts add up to {total:g}, past MAX_COUNTS",
-            hint=f"keep the whole show within MAX_COUNTS ({MAX_COUNTS:,} counts)",
-            context={"total": total, "max": MAX_COUNTS},
-        )
-    ]
-
-
-def _path_reports(show: Show) -> list[ValidationReport]:
-    reports = []
-    for tid in show.transition_ids():
-        stored = show.lookup.stored.get(tid)
-        parts = (show.set(tid.from_set), show.set(tid.to_set), stored)
-        if any(part is not None and _has_non_finite(part) for part in parts):
-            continue
-        reports.append(validate_paths(show, show.transition(tid)))
-    return reports
-
-
-def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
-    return ValidationReport.merge(*reports)
-
-
-def validate_show(show: Show, store: SheetStore | None = None) -> ValidationReport:
+def validate_show(
+    show: Show, store: SheetStore | None = None, *, comments: Sequence[Comment] = ()
+) -> ValidationReport:
     """Checks sets, paths, dependencies (when a store is given), sequence and timeline.
+
+    Comments live outside the show, so their anchors are checked only for the comments given.
 
     >>> from e8s.examples import two_set_show
     >>> validate_show(two_set_show()).ok
     True
+
+    Args:
+        show: The show to check.
+        store: Sheet store that resolves the sheet reference; None skips that check.
+        comments: Review comments whose anchors must resolve in the show.
+
+    Returns:
+        report: Every issue found; validation never raises on bad data.
     """
-    reports = [validate_set(show, s) for s in show.sets]
-    too_long = _too_long(show)
-    if not too_long:
-        reports += _path_reports(show)
-    extra = too_long + _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
-    extra += _non_finite(show) + reference_issues(show)
-    reports.append(ValidationReport(issues=tuple(extra)))
-    reports.append(validate_timeline(show.timeline))
-    if store is not None:
-        reports.append(validate_dependencies(show, store))
-    return _all(reports)
+    report = run_checks(show, whole_show_checks(show), comments=comments)
+    if store is None:
+        return report
+    return ValidationReport.merge(report, validate_dependencies(show, store))

@@ -16,20 +16,26 @@ Contains:
     test_put_maps_os_errors_to_storage_error: an OS failure becomes StorageError with IO
     test_put_refuses_oversized_asset: bytes over the cap raise TOO_LARGE
     test_regression_failed_in_place_write_leaves_no_torn_file: a failed write is removed
+    test_regression_put_refuses_a_layout_1_root: raises OLD_LAYOUT and creates nothing under a
+        layout-1 root, whose stored assets stay readable
 """
 
 import errno
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import SchemaError, StorageError, UnknownRefError
+from e8s.core.errors import SchemaError, StorageError, UnknownRefError, VersionError
 from e8s.core.util import asset_uri
 from e8s.show import assets
 from e8s.show.assets import FileAssetStore
 from e8s.show.integrity import blob_digest
+from tests.fixtures.layout1 import stored_layout1
+
+LAYOUT_1_AT = datetime(2026, 11, 27, tzinfo=UTC)
 
 
 def test_file_asset_store_round_trips_and_dedupes(tmp_path: Path) -> None:
@@ -152,3 +158,17 @@ def test_regression_failed_in_place_write_leaves_no_torn_file(
     assert not (tmp_path / "assets" / blob_digest(b"torn")).exists()
     uri = store.put(b"torn")
     assert store.get(uri) == b"torn"
+
+
+def test_regression_put_refuses_a_layout_1_root(tmp_path: Path) -> None:
+    """A layout-1 root is read-only: storing an asset there would be outside every upgrade."""
+    stored_layout1(tmp_path, "old", {"/renders/a.txt": b"x"}, at=LAYOUT_1_AT)
+    before = sorted(path.name for path in tmp_path.iterdir())
+    with pytest.raises(VersionError) as caught:
+        FileAssetStore(tmp_path).put(b"audio")
+    assert caught.value.code == ErrorCode.OLD_LAYOUT
+    assert "upgrade_repository(" in caught.value.hint
+    assert sorted(path.name for path in tmp_path.iterdir()) == before
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / blob_digest(b"audio")).write_bytes(b"audio")
+    assert FileAssetStore(tmp_path).get(asset_uri(b"audio")) == b"audio"

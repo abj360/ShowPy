@@ -54,6 +54,12 @@ Contains:
         placement of a spot marked inactive
     test_regression_validate_show_reports_a_nonzero_first_set_count: reports a first set that has
         counts
+    test_regression_first_set_count_issue_carries_the_set_timing_item: gives the first-set count
+        issue the timing item of the first set and skips non-finite counts
+    test_regression_validate_show_reports_negative_set_counts_without_raising: reports a later
+        set with negative counts as TIME_RANGE instead of raising while checking its paths
+    test_regression_negative_infinite_counts_are_reported_once: leaves negative infinite counts to
+        NOT_FINITE alone
     test_regression_validate_show_reports_nan_counts_on_the_first_set: reports NaN counts on the
         first set by name
     test_regression_validate_show_reports_nan_waypoints: reports a path waypoint with a NaN
@@ -62,19 +68,36 @@ Contains:
         anchored to a set that does not exist
     test_regression_validate_show_reports_a_show_longer_than_max_counts: reports a show whose set
         counts add up past MAX_COUNTS
+    test_regression_validate_show_reports_counts_whose_sum_overflows: reports set counts whose sum
+        overflows a float as SHOW_TOO_LONG instead of raising OverflowError
     test_regression_validate_show_warns_about_stale_forms: warns about a form its set no longer
         lists
     test_validate_show_accepts_a_set_whose_forms_are_all_listed: raises no stale-form warning when
         every form is listed
+    test_regression_transition_pin_allows_a_spot_added_after_it: reports nothing when a spot joins
+        a transition-pinned pair
+    test_regression_transition_pin_reports_an_existing_unlocked_row: reports a transition pin whose
+        stored row is not locked
+    test_bad_transition_pin_issue_names_the_raw_pin_id: names an unparsable transition pin by its
+        raw ID
+    test_pin_mismatch_names_every_unflagged_item_of_each_pin: names, per pin, its unflagged
+        placements in show order, then its unlocked forms; skips a set named like the pinned spot
+        and a stale form of a pinned set
+    test_regression_entity_pin_check_visits_only_unflagged_placements: checks each entity pin
+        against its unflagged placements alone
+    test_regression_validate_show_reports_a_facing_override_selector_that_does_not_resolve: reports
+        a facing override whose selector names a spot outside the cast
 """
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 import pytest
 
+from e8s.cast.spots import add_spot
 from e8s.choreo.form_models import Form
+from e8s.choreo.forms import line_form
 from e8s.choreo.models import Placement, PlacementPatch, Set
 from e8s.choreo.path_models import (
     FacingMode,
@@ -88,13 +111,17 @@ from e8s.choreo.path_models import (
 from e8s.core.caps import MAX_COUNTS
 from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
-from e8s.core.validation import ValidationReport
+from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import InMemorySheetStore
+from e8s.show import validate_pins
 from e8s.show._notes_document import Note, NotesDocument
 from e8s.show.anchors import Anchor
 from e8s.show.change_models import ItemKey
 from e8s.show.collab_models import Comment
+from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
+from e8s.show.pin_flags import covers_placement
+from e8s.show.pinning import pin
 from e8s.show.validate import (
     validate_dependencies,
     validate_paths,
@@ -200,6 +227,7 @@ def test_show_flags_stale_transitions_and_zero_counts() -> None:
 NOTE_AT = datetime(2026, 11, 11, tzinfo=UTC)
 FAR_OFF_SHEET_M = 1_000_000.0
 PAST_SHOW_COUNT = 777.0
+HUGE_COUNTS = 1e308
 FORM_ID = "f1"
 SET_TWO = "2"
 GHOST = "GHOST"
@@ -300,23 +328,17 @@ def test_regression_validate_show_reports_members_whose_placements_do_not_point_
     assert _mentions(_formed(points_back=False), FORM_ID)
 
 
-@pytest.mark.defect("UP-9.7-66")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-66")
 def test_regression_validate_show_reports_pins_naming_missing_items() -> None:
     """Reports a form pin on a form that does not exist (audit 9.7 validation gaps)."""
     assert _mentions(_with_pin(two_set_show(), Pin(target="form", id="ghost-form")), "ghost-form")
 
 
-@pytest.mark.defect("UP-9.7-67")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-67")
 def test_regression_validate_show_reports_pins_on_unparsable_transitions() -> None:
     """Reports a transition pin whose ID does not parse (audit 9.7 validation gaps)."""
     show = _with_pin(two_set_show(), Pin(target="transition", id="garbage"))
     assert _mentions(show, "garbage")
 
 
-@pytest.mark.defect("UP-9.7-68")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-68")
 def test_regression_validate_show_reports_pins_that_disagree_with_placement_flags() -> None:
     """Reports a pin record whose placements are not flagged pinned (audit 9.7 validation gaps)."""
     assert _mentions(_with_pin(two_set_show(), Pin(target="entity", id="T1")), "T1")
@@ -346,15 +368,11 @@ def _override(entity: str = "T1", start: float = 1.0, end: float = 2.0) -> Facin
     )
 
 
-@pytest.mark.defect("UP-9.7-71")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-71")
 def test_regression_validate_show_reports_facing_overrides_naming_unknown_spots() -> None:
     """Reports a facing override on a spot that does not exist (audit 9.7 validation gaps)."""
     assert _mentions(_edited(facing_overrides=(_override("ZZ"),)), "ZZ")
 
 
-@pytest.mark.defect("UP-9.7-72")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-72")
 def test_regression_validate_show_reports_facing_overrides_past_the_show() -> None:
     """Reports a facing override that starts after the show ends (audit 9.7 validation gaps)."""
     late = _override(start=PAST_SHOW_COUNT, end=PAST_SHOW_COUNT + 1)
@@ -404,8 +422,6 @@ def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     assert _mentions(_edited(transitions=(spec,)), "inf")
 
 
-@pytest.mark.defect("UP-9.7-79")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-79")
 def test_regression_validate_show_warns_about_placements_far_off_the_sheet() -> None:
     """Warns about a placement a million meters off the sheet (audit 9.7 validation gaps)."""
     moved = (
@@ -464,8 +480,6 @@ def test_regression_validate_show_reports_set_ids_that_cannot_be_stored() -> Non
     assert _mentions(_edited(sets=(show.sets[0], renamed)), "a/b")
 
 
-@pytest.mark.defect("UP-9.7-83")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-83")
 def test_regression_validate_show_reports_placements_of_inactive_spots() -> None:
     """Reports an on-field placement of a spot marked inactive (audit 9.7 validation gaps)."""
     cast = two_set_show().cast
@@ -473,13 +487,41 @@ def test_regression_validate_show_reports_placements_of_inactive_spots() -> None
     assert _mentions(_edited(cast=cast.replace(spots=spots)), "T1")
 
 
-@pytest.mark.defect("UP-9.7-84")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-84")
 def test_regression_validate_show_reports_a_nonzero_first_set_count() -> None:
     """Reports a first set that has counts (audit 9.7 validation gaps)."""
     show = two_set_show()
     first = show.sets[0].replace(counts=3.5)
     assert _mentions(_edited(sets=(first, show.sets[1])), "3.5")
+
+
+def test_regression_first_set_count_issue_carries_the_set_timing_item() -> None:
+    """Gives the first-set count issue the timing item of the first set; NaN is NOT_FINITE's."""
+    show = two_set_show()
+    counted = _edited(sets=(show.sets[0].replace(counts=3.5), show.sets[1]))
+    (issue,) = [i for i in validate_show(counted).issues if i.code == "TIME_RANGE"]
+    assert issue.level == "error"
+    assert ItemKey.model_validate(issue.context["item"]) == ItemKey(
+        kind="set", path=("1",), role="timing"
+    )
+    nan_first = _edited(sets=(show.sets[0]._copied(update={"counts": math.nan}), show.sets[1]))
+    assert "TIME_RANGE" not in _codes(validate_show(nan_first))
+
+
+def test_regression_validate_show_reports_negative_set_counts_without_raising() -> None:
+    """Reports a later set with negative counts as TIME_RANGE instead of raising."""
+    report = validate_show(_edited(sets=_set_two_with(counts=-4.0)))
+    (issue,) = [i for i in report.issues if i.code == "TIME_RANGE"]
+    assert "-4" in issue.message
+    assert ItemKey.model_validate(issue.context["item"]) == ItemKey(
+        kind="set", path=("2",), role="timing"
+    )
+
+
+def test_regression_negative_infinite_counts_are_reported_once() -> None:
+    """Leaves negative infinite counts to NOT_FINITE alone, never TIME_RANGE as well."""
+    codes = [i.code for i in validate_show(_edited(sets=_set_two_with(counts=-math.inf))).issues]
+    assert "NOT_FINITE" in codes
+    assert "TIME_RANGE" not in codes
 
 
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
@@ -503,8 +545,6 @@ def test_regression_validate_show_reports_nan_waypoints() -> None:
     assert _mentions(_edited(transitions=(spec,)), "nan")
 
 
-@pytest.mark.defect("UP-9.7-90")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-90")
 def test_regression_validate_show_reports_comments_anchored_to_missing_items() -> None:
     """Reports a comment anchored to a set that does not exist (audit 9.7 validation gaps)."""
     validate: Callable[..., ValidationReport] = validate_show  # comments= is the audit's new API
@@ -523,6 +563,16 @@ def test_regression_validate_show_reports_a_show_longer_than_max_counts() -> Non
     assert "MAX_COUNTS" in issue.message
     assert f"{MAX_COUNTS:,}" in issue.hint
     assert dict(issue.context) == {"total": MAX_COUNTS + 1.0, "max": MAX_COUNTS}
+
+
+def test_regression_validate_show_reports_counts_whose_sum_overflows() -> None:
+    """Reports set counts whose sum overflows a float as SHOW_TOO_LONG, never OverflowError."""
+    show = two_set_show()
+    huge = show.sets[1]._copied(update={"counts": HUGE_COUNTS})
+    third = huge._copied(update={"id": "3", "key": "3"})
+    report = validate_show(show._copied(update={"sets": (show.sets[0], huge, third)}))
+    (issue,) = [i for i in report.issues if i.code == "SHOW_TOO_LONG"]
+    assert dict(issue.context) == {"total": "inf", "max": MAX_COUNTS}
 
 
 def test_regression_validate_show_warns_about_stale_forms() -> None:
@@ -585,3 +635,141 @@ def test_regression_member_check_runs_for_forms_keyed_apart_from_their_id() -> N
     """Reports a mismatched member of a form stored under a key other than its ID."""
     codes = [i.code for i in validate_show(_formed(key="zz")).issues]
     assert "MEMBER_MISMATCH" in codes
+
+
+def _issues(show: Show, code: str) -> list[ValidationIssue]:
+    return [i for i in validate_show(show).issues if i.code == code]
+
+
+def test_regression_pin_issues_carry_the_pin_item_key() -> None:
+    """Names the pin item in each pin issue, a transition by its stored folder."""
+    pins = (Pin(target="form", id="ghost"), Pin(target="transition", id="1->2"))
+    show = with_rows({"T1": PathRow(entity=SpotId("T1"), start=2.0)}).replace(pins=pins)
+    assert _item_of(show, "UNKNOWN_PIN") == ItemKey(kind="pin", path=("form", "ghost"))
+    assert _item_of(show, "PIN_MISMATCH") == ItemKey(kind="pin", path=("transition", "1-2"))
+
+
+def test_regression_validate_show_reports_a_pin_on_a_missing_transition() -> None:
+    """Reports a transition pin that parses but names no consecutive pair."""
+    show = two_set_show().replace(pins=(Pin(target="transition", id="2->1"),))
+    assert [i.code for i in validate_show(show).issues] == ["UNKNOWN_PIN"]
+
+
+def test_regression_validate_show_accepts_a_pin_made_by_pin() -> None:
+    """Reports nothing for pins that pin() flagged, on every target."""
+    show = pin(_formed(), "form", FORM_ID)
+    show = pin(pin(pin(show, "entity", "T1"), "set", "2"), "transition", "1->2")
+    assert validate_show(show).ok
+
+
+def test_regression_validate_show_reports_a_dangling_set_pin_colliding_with_a_key() -> None:
+    """Reports a set pin on a missing set whose ID is another set's key, without raising."""
+    base = two_set_show()
+    renumbered = base.sets[1]._copied(update={"key": "9"})
+    show = base.replace(
+        sets=(base.sets[0], renumbered),
+        pins=(Pin(target="set", id="9"), Pin(target="set", id="2")),
+    )
+    (issue,) = _issues(show, "UNKNOWN_PIN")
+    assert issue.context["id"] == "9"
+
+
+def test_regression_facing_override_issues_carry_the_overrides_item_key() -> None:
+    """Names the facing_override item in override issues."""
+    show = _edited(facing_overrides=(_override("ZZ", start=PAST_SHOW_COUNT, end=800.0),))
+    for code in ("UNKNOWN_SPOT", "PAST_THE_SHOW"):
+        assert _item_of(show, code) == ItemKey(kind="facing_override", path=())
+
+
+def test_regression_transition_pin_allows_a_spot_added_after_it() -> None:
+    """Reports nothing when a spot joins a transition-pinned pair, since it has no row yet."""
+    show = add_spot(pin(two_set_show(), "transition", "1->2"), (1.0, 2.0), "trumpets", "2")
+    assert validate_show(show).ok
+
+
+def test_regression_transition_pin_reports_an_existing_unlocked_row() -> None:
+    """Reports a transition pin whose stored row is not locked."""
+    show = with_rows({"T2": PathRow(entity=SpotId("T2"), start=2.0)})
+    (issue,) = _issues(show.replace(pins=(Pin(target="transition", id="1->2"),)), "PIN_MISMATCH")
+    assert "T2" in issue.message
+
+
+def test_bad_transition_pin_issue_names_the_raw_pin_id() -> None:
+    """Names an unparsable transition pin by its raw ID, since no set keys can be read from it."""
+    show = two_set_show().replace(pins=(Pin(target="transition", id="garbage"),))
+    assert _item_of(show, "BAD_TRANSITION") == ItemKey(kind="pin", path=("transition", "garbage"))
+
+
+def _mismatch_messages(show: Show) -> dict[tuple[str, str], str]:
+    issues = _issues(show, "PIN_MISMATCH")
+    return {(str(i.context["target"]), str(i.context["id"])): i.message for i in issues}
+
+
+def test_pin_mismatch_names_every_unflagged_item_of_each_pin() -> None:
+    """Names, per pin, its unflagged placements in show order, then its unlocked forms.
+
+    An entity pin skips the other spots of a set whose ID equals the spot's, and a set pin skips a
+    stale form, one stamped with the set that the set no longer lists.
+    """
+    row = line_form("row", ["T1", "T2"], (0, 12), (2, 12), set_id=SET_TWO)
+    pins = (
+        Pin(target="entity", id="T1"),
+        Pin(target="set", id=SET_TWO),
+        Pin(target="form", id="row"),
+    )
+    show = two_set_show().replace(forms={"row": row}, pins=pins)
+    assert _mismatch_messages(show) == {
+        ("entity", "T1"): "the entity pin on T1 leaves 2 locked item(s) unflagged: 1 T1, 2 T1",
+        ("set", SET_TWO): "the set pin on 2 leaves 5 locked item(s) unflagged:"
+        " 2 T1, 2 T2, 2 T3, 2 T4, row",
+        ("form", "row"): "the form pin on row leaves 1 locked item(s) unflagged: row",
+    }
+    base = two_set_show()
+    named_like_a_spot = base.sets[1]._copied(update={"id": "T1", "key": "T1"})
+    collided = base.replace(sets=(base.sets[0], named_like_a_spot), pins=pins[:1])
+    assert _mismatch_messages(collided) == {
+        ("entity", "T1"): "the entity pin on T1 leaves 2 locked item(s) unflagged: 1 T1, T1 T1",
+    }
+    stale = row.replace(id=FormId("stale"))
+    listing = base.sets[1].replace(forms=("row",))
+    with_stale = base.replace(
+        sets=(base.sets[0], listing), forms={"row": row, "stale": stale}, pins=pins[1:2]
+    )
+    assert _mismatch_messages(with_stale) == {
+        ("set", SET_TWO): "the set pin on 2 leaves 5 locked item(s) unflagged:"
+        " 2 T1, 2 T2, 2 T3, 2 T4, row",
+    }
+
+
+def test_regression_entity_pin_check_visits_only_unflagged_placements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks each entity pin against its unflagged placements alone, not every set's spots."""
+    show = two_set_show()
+    for number in range(3, 21):
+        show = add_set(show, str(number), 8.0)
+    for spot in show.cast.ids():
+        show = pin(show, "entity", spot)
+    first = show.sets[0].replace(
+        placements=tuple(p.replace(pinned=False) for p in show.sets[0].placements)
+    )
+    show = show.replace(sets=(first, *show.sets[1:]))
+    calls: list[str] = []
+
+    def counted(held: Sequence[Pin], set_id: str, entity: str) -> bool:
+        calls.append(entity)
+        return covers_placement(held, set_id, entity)
+
+    monkeypatch.setattr(validate_pins, "covers_placement", counted)
+    assert len(_mismatch_messages(show)) == len(show.pins)
+    assert sorted(calls) == sorted(show.cast.ids())
+
+
+def test_regression_validate_show_reports_a_facing_override_selector_that_does_not_resolve() -> (
+    None
+):
+    """Reports a facing override whose selector names a spot outside the cast."""
+    override = _override().replace(entities="T1 + ZZ")
+    (issue,) = _issues(_edited(facing_overrides=(override,)), "UNKNOWN_SPOT")
+    assert issue.context["override"] == 0
+    assert "ZZ" in issue.message

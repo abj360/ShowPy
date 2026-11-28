@@ -26,7 +26,7 @@ Contains:
     test_nightly_core_runs_fuzz_and_mutants: daily and on dispatch only, 10 minutes per target,
         then the scores, with crash inputs and the summary uploaded
     test_nightly_core_keeps_the_workflow_conventions: SHA pins, no persisted credentials,
-        read-only permissions, the pinned toolchain and Rust cache before uv
+        read-only permissions but for the report job, the pinned toolchain and Rust cache before uv
     test_nightly_core_saves_caches_only_from_main: the Rust, uv and cargo tool caches
     test_regression_nightly_core_saves_tools_after_a_failure_and_never_cancels: a crash or a
         tool that cannot run still saves the cargo tools, and a dispatch never cancels the
@@ -100,6 +100,8 @@ NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-core.yml"
 NIGHTLY_TRIGGERS = 'on:\n  schedule:\n    - cron: "17 4 * * *"\n  workflow_dispatch:\n'
 NIGHTLY_PERMISSIONS = "permissions:\n  contents: read\n"
 NIGHTLY_JOB = "core"
+REPORT_JOB = "report"
+REPORT_CALL = "uses: $/.github/workflows/report-nightly.yml"
 NIGHTLY_CONCURRENCY = (
     "concurrency:\n  group: nightly-core-${{ github.ref }}\n  cancel-in-progress: false\n"
 )
@@ -311,7 +313,7 @@ def _nightly() -> str:
 def test_nightly_core_runs_fuzz_and_mutants() -> None:
     workflow = _nightly()
     assert workflow_section(workflow, "on") == NIGHTLY_TRIGGERS
-    assert ci_job_names(workflow) == [NIGHTLY_JOB]
+    assert ci_job_names(workflow) == [NIGHTLY_JOB, REPORT_JOB]
     steps = job_steps(ci_job(workflow, NIGHTLY_JOB))
     fuzz = next(index for index, step in enumerate(steps) if FUZZ_STEP in step)
     scores = next(index for index, step in enumerate(steps) if MUTANTS_STEP in step)
@@ -327,8 +329,9 @@ def test_nightly_core_runs_fuzz_and_mutants() -> None:
 def test_nightly_core_keeps_the_workflow_conventions() -> None:
     workflow = _nightly()
     assert workflow_section(workflow, "permissions") == NIGHTLY_PERMISSIONS
-    assert workflow.count("permissions:") == 1
-    assert unpinned_actions(workflow) == []
+    assert workflow.count("permissions:") == 2
+    assert "permissions:" not in ci_job(workflow, NIGHTLY_JOB)
+    assert unpinned_actions(workflow) == [REPORT_CALL]
     checkouts = workflow.count("uses: actions/checkout@")
     assert checkouts == 1
     assert workflow.count("persist-credentials: false") == checkouts

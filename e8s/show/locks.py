@@ -1,5 +1,5 @@
 """
-locks.py --- finds edits that touch pinned placements, locked forms, locked path rows or pins
+locks.py --- finds edits that touch pinned placements or sets, locked forms, path rows or pins
 
 Contains:
     locked_row_changes(): lists the locked rows of one transition that an edit changes or reroutes
@@ -35,8 +35,12 @@ def _set_changes(before: Show, after: Show) -> list[str]:
     for old in before.sets:
         new = after_sets.get(old.id)
         found.extend(_placement_changes(old, new))
-        if _set_pinned(before, old.id) and (new is None or new.counts != old.counts):
+        if not _set_pinned(before, old.id):
+            continue
+        if new is None or new.counts != old.counts:
             found.append(f"counts of set {old.id}")
+        if new is not None and new.forms != old.forms:
+            found.append(f"forms of set {old.id}")
     return found
 
 
