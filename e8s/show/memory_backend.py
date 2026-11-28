@@ -11,11 +11,15 @@ from typing import override
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
-from e8s.show.backend import RepositoryBackend, conflict_error, unknown_revision_error
+from e8s.show.backend import (
+    REVISION_ID_PATTERN,
+    RepositoryBackend,
+    conflict_error,
+    unknown_revision_error,
+)
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.layout1 import REVISION_ID_PATTERN
 from e8s.show.storage import ROOT_REVISION
 
 
@@ -25,6 +29,17 @@ def _bad_id(show_id: str, role: str, value: str) -> StorageError:
         hint="revision IDs and blob digests are 64 lowercase hex digits made by "
         "DocumentRepository.transaction",
         context={"show": show_id, role: value},
+        code=ErrorCode.BAD_ID,
+    )
+
+
+def _stored_id(show_id: str, revision_id: str) -> StorageError:
+    """Builds the error of a commit whose revision ID names a revision the show already holds."""
+    return StorageError(
+        f"revision id {revision_id!r} is already stored in {show_id}",
+        hint="a revision ID hashes its parent, time and changes; build the revision with "
+        "DocumentRepository.transaction on the current head",
+        context={"show": show_id, "revision id": revision_id},
         code=ErrorCode.BAD_ID,
     )
 
@@ -108,6 +123,8 @@ class _MemoryBackend(RepositoryBackend):
             self._require_valid(show_id, revision, tree, copies)
             if self._heads.get(show_id, ROOT_REVISION) != revision.parent:
                 raise conflict_error(show_id, revision.parent, self._landed(show_id, revision))
+            if revision.id in self._revisions.get(show_id, {}):
+                raise _stored_id(show_id, revision.id)
             self._blobs.update(copies)
             self._show_blobs.setdefault(show_id, set()).update(copies)
             self._trees[(show_id, revision.id)] = dict(tree)
@@ -126,7 +143,7 @@ class _MemoryBackend(RepositoryBackend):
             raise _bad_id(show_id, "revision id", revision.id)
         if revision.parent and not REVISION_ID_PATTERN.fullmatch(revision.parent):
             raise _bad_id(show_id, "parent id", revision.parent)
-        if revision.id == revision.parent or revision.id in self._revisions.get(show_id, {}):
+        if revision.id == revision.parent:
             raise _bad_id(show_id, "revision id", revision.id)
         for digest, data in blobs.items():
             if not REVISION_ID_PATTERN.fullmatch(digest):

@@ -68,7 +68,7 @@ from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
-from tests.fixtures.layout1 import layout1_documents
+from tests.fixtures.layout1 import layout1_documents, upgraded_copy
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 V040 = FIXTURES / "repos" / "v0.4.0"
@@ -171,10 +171,10 @@ def test_cast_proposals_and_assets_roots_are_known(path: str) -> None:
 
 
 def _v040_repository(tmp_path: Path) -> tuple[FileRepository, dict[str, Any]]:
-    """Copies the read-only v0.4.0 fixture and loads its expected.json."""
-    shutil.copytree(V040 / "repo", tmp_path / "repo")
+    """Copies the read-only v0.4.0 fixture, upgrades the copy and loads its expected.json."""
+    repo = upgraded_copy(V040 / "repo", tmp_path)
     expected: dict[str, Any] = json.loads((V040 / "expected.json").read_text())
-    return FileRepository(tmp_path / "repo"), expected
+    return FileRepository(repo), expected
 
 
 def _edited(path: str, edit: Any) -> dict[str, bytes]:

@@ -570,3 +570,98 @@ two thirds of that case is decoding the changed set: a set decodes from set.json
 documents together, so the unchanged facing and labels documents are parsed again. About a fifth
 is comparing the set's 300 placements. Caching each role document's parsed rows by digest would
 remove the first part.
+
+### Addendum 2026-11-27: what lane A built differs from decisions 3, 5, 7 and 15
+
+Decisions 3, 5, 7 and 15 are kept. Building them changed these details; the code is the source
+of truth, and this addendum records where it departs from the text above.
+
+- **Decision 5, repair.** `fsck(root, repair=True, confirm=True, at=...)` needs the caller's
+  time `at`, keyword-only and with a time zone; a repair without it, or `confirm` without
+  `repair`, raises `StorageError` (code `NOT_CONFIRMED`). A torn file is removed only once it was
+  last modified more than `STALE_TEMP_AGE` (24 hours) before `at`, so a writer that is only
+  paused keeps its file. Besides a torn last slot, a repair removes a torn `show.json` of a show
+  with no slot and a torn `layout.json` of a root with no show folder: the only states those
+  files reach are a first write that stopped part way.
+- **Decision 7, torn slots and links.** A slot that stays empty or cut short after three rereads
+  (pauses of 1, 10 and 100 ms) raises `StorageError` with code `TORN_SLOT`, not `CORRUPT`, and
+  the hint names the repair call. A slot holds the revision's `changed` paths, so it can pass
+  4 KB; a torn slot is one that is not one finished line of canonical JSON, found by parsing,
+  never by size. A commit never raises `NO_HARDLINKS`: a link refused with `EPERM`, `EXDEV` or
+  `ENOTSUP`, by the first probe or by a later link, switches that writer to exclusive creates.
+- **Decision 5, gc.** `gc` moves an unreachable record or blob aside in its own folder as
+  `.gc-<name>` and removes it only if it is still the file it moved and no slot landed
+  meanwhile; otherwise the file goes back. A gc that stops part way leaves `.gc-` files, which
+  `fsck` reports and the next confirmed `gc` puts back, freshened. A stored file counts as the
+  same file across time only when its device, inode, size, modification time and change time
+  are all unchanged (`durable_reads.file_identity`); an inode of 0 never proves it. Whether two
+  files hold the same content is decided by their bytes alone, never by metadata.
+- **Decision 3, `legacy_before`.** An upgrade writes `legacy_before` as one past the last copied
+  slot whose revision ID does not recompute under the current scheme, so every later copied
+  record is checked like a native one; a history with no such slot gets no `legacy_before` at
+  all. The v0.4.0 fixture gets 3 (only its second revision is old-scheme), v0.3.0 gets 3, v0.1.1
+  and v0.2.0 get 4.
+- **Decision 3, the legacy prefix in the manifest.** `show.json` of an upgraded show holds three
+  keys together, or none: `legacy_before`, `legacy_count` (`legacy_before - 1`) and
+  `legacy_digest`, the SHA-256 of the canonical JSON list of the legacy slots' revision IDs in
+  order. A native show's manifest holds only `id`. A manifest with some of the keys, or keys
+  that disagree with each other, is `CORRUPT` on every read. `head` and `commit` check only
+  that, and that `legacy_before` is at most the slot after the last, so a cold `head` stays at
+  `2 log2(n) + 2` lookups. `log` (whenever it reads a legacy slot) and `tree` of a legacy
+  revision check the digest once per backend; `fsck` checks it over the slots its walk reads and
+  reports `BAD_RECORD` on `show.json`. A `legacy_before` moved within the legacy range or onto
+  the slot after the last, or a legacy record swapped for another revision, is refused. Layout 2
+  is unreleased, so the keys need no migration.
+- **Decision 15, the upgrade.** `upgrade_repository` refuses a target that names the source in
+  another case, Unicode normalization, through a symlink or `..`, by comparing files, not
+  spellings. It refuses a symlink or special file anywhere it lists the source. It lists the
+  source again and reads every head again just before it places `layout.json`, and raises
+  `StorageError` (code `CONFLICT`) when a writer changed anything. It carries `<root>/assets/`.
+  It links only blobs and assets the current user owns, since a later commit that reuses a blob
+  sets its modification time; it copies the others. It lists the revision fields it drops (the
+  v0.1 and v0.2 authorship keys) in `ShowUpgrade.dropped`. On a layout-1 root, `FileRepository`
+  writes, `FileAssetStore.put`, `fsck` and `gc` all raise `VersionError` (code `OLD_LAYOUT`)
+  whose hint is the runnable upgrade call.
+- **Correction 2026-11-27, decision 15.** Comparing files covers only the folders of the target
+  that exist. A target that spells `..` or `.` below a folder that does not exist yet, or runs
+  through a symlink to nothing, is refused by its spelling (`StorageError`, code `BAD_PATH`)
+  before anything is written, even where it would land outside the source: creating the missing
+  folders would let the file system follow `..` into the source.
+- **Correction 2026-11-27, decision 15.** Only `..` is refused below a missing folder. A `.`
+  never reaches the check: `x/./y` names `x/y`, and the upgrade creates and writes `x/y`.
+
+### Addendum 2026-11-27: what the archive built differs from decisions 6 and 16 and D9
+
+Decisions 6 and 16 and D9 are kept. Building the archive changed these details; the code is the
+source of truth.
+
+- **D9, the ZIP reader and writer.** The archive is a ZIP, but `e8s.show.archive_zip` writes and
+  reads it by hand instead of through `zipfile`. `zipfile` reads the whole central directory into
+  objects before any cap applies, walks it by size rather than by the entry count, and accepts
+  overlapping entries, bytes before the first entry, comments and ZIP64. The reader accepts the
+  one canonical form the writer emits: stored entries in ascending name order, the ZIP epoch as
+  every time, no flag, no extra field, no comment, entries that tile with no gap or overlap. It
+  checks the end record and the entry count before it walks the central directory, each entry's
+  size cap before it reads the entry, and every CRC. The bytes equal what `zipfile` writes given
+  the same fixed fields, and `zipfile` opens every archive.
+- **Decision 16, limits.** An archive holds at most 65,534 entries and 2,147,483,647 bytes, so
+  no field needs ZIP64. A revision adds a slot and a record, so at most 32,766 revisions fit and
+  about 20,000 to 30,000 in practice, as blobs add entries: below `MAX_REVISIONS` (100,000).
+  Export refuses a longer history before it reads it. An archive holds only a history whose
+  every revision ID recomputes, under a show ID a new show may take; a show with a hyphenated ID
+  or older-scheme IDs is refused at export with a message saying to save its head as a new show.
+  None of the four released fixtures (v0.1.1, v0.2.0, v0.3.0, v0.4.0) exports after its upgrade.
+- **Decision 16, import.** `import_archive` checks every entry before it writes anything, then
+  commits each revision through the backend. It is resumable and idempotent, not atomic: a
+  backend has no commit of several revisions. An import that stops leaves the revisions that
+  landed, a complete shorter history; importing the same archive again finishes it, and an
+  import into a show that holds the whole history writes nothing. Any other show under the ID is
+  refused with `ConflictError`. The checks prove an archive consistent, not authentic: a
+  self-consistent forged history imports, and no digest covers the show ID in the manifest.
+- **Decision 6, the stale-temp cut-off.** A commit removes temp files modified more than
+  `STALE_TEMP_AGE` before the earlier of its own time and the file system's now, clamped to the
+  earliest time a datetime holds. The library reads no clock: the file system's now is the
+  modification time of an empty temp file the commit writes, only when some temp file is old
+  enough by the caller's time. A time far ahead of the file system's clock, as an imported
+  archive may carry, no longer removes other writers' fresh temp files, and a time within a day
+  of year one no longer overflows.

@@ -52,9 +52,9 @@ from e8s.show.fsck import fsck
 from e8s.show.fsck_findings import SET_ASIDE_PREFIX, Leftover
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
-from e8s.show.layout1 import _FileBackend
 from e8s.show.show_folders import show_folder
 from tests.fixtures.fsck_repos import list_like_windows, with_stat, with_zero_inode
+from tests.fixtures.layout1 import stored_layout1
 
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 SHOW_ID = "show_1"
@@ -504,10 +504,10 @@ def test_gc_never_follows_a_link(tmp_path: Path) -> None:
 
 
 def test_gc_refuses_layout_1_and_a_time_without_a_zone(tmp_path: Path) -> None:
-    DocumentRepository(_FileBackend(tmp_path)).transaction(
-        "old", {"/renders/a.txt": b"x"}, expected_revision="", at=AT
-    )
-    with pytest.raises(VersionError):
+    stored_layout1(tmp_path, "old", {"/renders/a.txt": b"x"}, at=AT)
+    with pytest.raises(VersionError) as caught:
         gc(tmp_path, at=AT, confirm=True)
+    assert caught.value.code == "OLD_LAYOUT"
+    assert "upgrade_repository(Path(" in caught.value.hint
     with pytest.raises(SchemaError):
         gc(tmp_path, at=AT.replace(tzinfo=None))

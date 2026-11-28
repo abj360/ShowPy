@@ -1,0 +1,441 @@
+"""
+revalidate.py --- revalidates an edited show, rechecking only what the edit can have changed
+
+`revalidate(previous, before, after)` returns exactly `validate_show(after)` (no sheet store, no
+comments), issue for issue and in the same order, when `previous` is `validate_show(before)` run
+the same way. The edit is read from `changes(before, after)`; each previous issue is matched to
+the stored item it names in `context["item"]`. Issues of items the edit cannot reach are kept.
+A check is rerun when any item it reads changed, not only the item it reports: a set's checks
+when its placements or the forms it lists or stamps change, a form's member check when its
+set's placements change, a pin when the placements, forms or rows it covers change, facing
+overrides when set counts or the cast change, or a form changes while an override selects spots
+by text (a `form:` word resolves against the show's forms). Paths are recompiled through the
+engine's per-spot compile for the spots whose placements or rows changed; a transition whose
+counts, routes or destination counts changed is checked whole.
+
+Where the work cannot be bounded by item, or a kept issue cannot be trusted, validate_show runs
+in full: reordering, adding, removing or renumbering sets or spots; a sheet or timeline edit; a
+show that drops back within MAX_COUNTS, whose previous report checked no paths; a previous
+report holding non-finite numbers, an issue whose item revalidate does not know, or a
+transition whose kept issues do not start with that transition's current path checks; and a
+pair of shows changes() refuses.
+
+Contains:
+    revalidate(): returns validate_show's report for an edited show, keeping the previous
+        report's issues for the items the edit did not reach
+"""
+
+from collections import defaultdict
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+
+from e8s.choreo.models import Set
+from e8s.core.errors import E8sError
+from e8s.core.ids import FormId, TransitionId
+from e8s.core.validation import ValidationIssue, ValidationReport
+from e8s.show.change_models import ItemKey
+from e8s.show.item_table import FORMS, PLACEMENTS, TIMING, set_keys_by_id, transition_key
+from e8s.show.items import changes
+from e8s.show.models import Pin, Show
+from e8s.show.revalidate_kept import (
+    FAR_OFF,
+    FORM_FIELD,
+    FORM_ISSUES,
+    INACTIVE,
+    OVERRIDES,
+    PINS,
+    SETS,
+    TRANSITIONS,
+    Kept,
+    UnboundedError,
+    item_key,
+    kept_issues,
+)
+from e8s.show.set_keys import set_key
+from e8s.show.validate import (
+    ShowChecks,
+    compile_issues,
+    path_checks,
+    run_checks,
+    skips_transition,
+    validate_paths,
+    validate_set,
+    validate_show,
+)
+from e8s.show.validate_pins import pin_issues, pin_item_path
+from e8s.show.validate_placements import far_off_issues, inactive_issues
+from e8s.show.validate_refs import form_issues, override_issues, set_form_issues
+from e8s.show.validate_values import non_finite_issues, too_long_issues
+
+WHOLE_SHOW_KINDS = frozenset({"set_order", "spot_order", "sheet", "timeline"})
+OVERRIDE_KINDS = frozenset({"facing_override", "spot", "group", "selection", "show"})
+
+
+def _grouped(pairs: Iterable[tuple[str, str]]) -> dict[str, frozenset[str]]:
+    grouped: dict[str, set[str]] = defaultdict(set)
+    for outer, inner in pairs:
+        grouped[outer].add(inner)
+    return {outer: frozenset(inner) for outer, inner in grouped.items()}
+
+
+@dataclass(frozen=True)
+class _Touched:
+    """Holds the items an edit changed, grouped the way the checks read them.
+
+    Attributes:
+        placements: Set key to the spots whose placements changed in it.
+        set_roles: Set role to the keys of the sets whose role changed.
+        forms: IDs of forms added, removed or changed.
+        transitions: Transition keys whose counts, notes or routes changed.
+        rows: Transition key to the spots whose path rows changed.
+        pins: Item paths of pins added, removed or changed.
+        spots: Whether any spot's stored fields changed.
+        overrides: Whether anything facing overrides read changed.
+    """
+
+    placements: Mapping[str, frozenset[str]]
+    set_roles: Mapping[str, frozenset[str]]
+    forms: frozenset[str]
+    transitions: frozenset[str]
+    rows: Mapping[str, frozenset[str]]
+    pins: frozenset[tuple[str, ...]]
+    spots: bool
+    overrides: bool
+
+    def sets_with(self, *roles: str) -> frozenset[str]:
+        """Returns the keys of sets whose placements, or any of the given roles, changed."""
+        found = set(self.placements)
+        for role in roles:
+            found |= self.set_roles.get(role, frozenset())
+        return frozenset(found)
+
+
+def _touched(keys: Sequence[ItemKey]) -> _Touched:
+    if any(k.kind in WHOLE_SHOW_KINDS or (k.kind == "set" and k.role is None) for k in keys):
+        raise UnboundedError
+    return _Touched(
+        placements=_grouped((k.path[0], k.path[1]) for k in keys if k.kind == "placement"),
+        set_roles=_grouped((k.role, k.path[0]) for k in keys if k.kind == "set" and k.role),
+        forms=frozenset(k.path[0] for k in keys if k.kind == "form"),
+        transitions=frozenset(k.path[0] for k in keys if k.kind in ("transition", "route")),
+        rows=_grouped((k.path[0], k.path[1]) for k in keys if k.kind == "path_row"),
+        pins=frozenset(k.path for k in keys if k.kind == "pin"),
+        spots=any(k.kind == "spot" for k in keys),
+        overrides=any(k.kind in OVERRIDE_KINDS for k in keys),
+    )
+
+
+@dataclass(frozen=True)
+class _Run:
+    """Holds one revalidation: both shows, the kept issues and the units to recheck.
+
+    Attributes:
+        before: The show the previous report describes.
+        after: The edited show.
+        kept: Previous issues by bucket, then by the unit they belong to.
+        touched: What the edit changed.
+        keys: Set ID to storage key; renumbers fall back, so both shows share it.
+        sets: Keys of sets whose set checks rerun.
+        forms: Keys of forms whose reference checks rerun.
+        pinned_sets: Keys of sets whose set pins rerun.
+        moved: Spots with a changed placement in any set.
+    """
+
+    before: Show
+    after: Show
+    kept: Mapping[str, Kept]
+    touched: _Touched
+    keys: Mapping[str, str]
+    sets: frozenset[str]
+    forms: frozenset[str]
+    pinned_sets: frozenset[str]
+    moved: frozenset[str]
+
+    def previous(self, bucket: str, unit: Hashable) -> Sequence[ValidationIssue]:
+        """Returns the previous issues of one unit."""
+        return self.kept.get(bucket, {}).get(unit, ())
+
+
+def _form_owners(
+    before: Show, after: Show, forms: frozenset[str], keys: Mapping[str, str]
+) -> set[str]:
+    found = (show.forms.get(FormId(f)) for show in (before, after) for f in forms)
+    owners = {form.set for form in found if form is not None}
+    return {keys[owner] for owner in owners if owner in keys}
+
+
+def _referring_sets(kept: Mapping[str, Kept], forms: frozenset[str]) -> set[str]:
+    return {
+        str(unit)
+        for unit, issues in kept.get(SETS, {}).items()
+        for issue in issues
+        if issue.context.get(FORM_FIELD) in forms
+    }
+
+
+def _run(previous: ValidationReport, before: Show, after: Show) -> _Run:
+    """Reads the edit and the previous report into the units each check reruns.
+
+    Sets rerun when their placements or form list changed, when they own a changed form, or
+    when a kept set issue names a changed form; forms rerun when changed or when their set's
+    placements or form list changed.
+
+    Args:
+        previous: validate_show's report of `before`.
+        before: The show before the edit.
+        after: The edited show.
+
+    Returns:
+        run: Both shows, the kept issues by bucket and unit, and the units to recheck.
+    """
+    try:
+        change_set = changes(before, after)
+    except E8sError as error:
+        raise UnboundedError from error
+    touched = _touched([change.key for change in change_set.changes])
+    kept = kept_issues(previous)
+    keys = set_keys_by_id(after)
+    owners = _form_owners(before, after, touched.forms, keys)
+    edited = touched.sets_with(PLACEMENTS, FORMS)
+    edited_ids = {set_id for set_id, key in keys.items() if key in edited}
+    return _Run(
+        before=before,
+        after=after,
+        kept=kept,
+        touched=touched,
+        keys=keys,
+        sets=frozenset(edited | owners | _referring_sets(kept, touched.forms)),
+        forms=touched.forms | {k for k, form in after.forms.items() if form.set in edited_ids},
+        pinned_sets=frozenset(edited | owners),
+        moved=frozenset(spot for spots in touched.placements.values() for spot in spots),
+    )
+
+
+def _set_issues(run: _Run, candidate: Set) -> Sequence[ValidationIssue]:
+    key = set_key(candidate)
+    if key in run.sets:
+        return validate_set(run.after, candidate).issues
+    return run.previous(SETS, key)
+
+
+def _by_spot(issues: Iterable[ValidationIssue]) -> dict[str, list[ValidationIssue]]:
+    grouped: dict[str, list[ValidationIssue]] = defaultdict(list)
+    for issue in issues:
+        key = item_key(issue)
+        if key is None or key.kind != "path_row":
+            raise UnboundedError
+        grouped[key.path[1]].append(issue)
+    return grouped
+
+
+def _recompiled(run: _Run, tid: TransitionId, spots: frozenset[str]) -> list[ValidationIssue]:
+    """Rechecks one transition by recompiling only the given spots' paths.
+
+    The transition's own checks rerun whole; each other spot keeps its previous path issues.
+    Raises UnboundedError when the kept issues do not start with the transition's previous
+    own checks, since the per-spot issues after them could then be stale.
+
+    Args:
+        run: The revalidation in progress.
+        tid: The transition to recheck.
+        spots: Spots whose placements or rows changed.
+
+    Returns:
+        issues: The transition's issues, in the order validate_paths gives them.
+    """
+    kept = list(run.previous(TRANSITIONS, transition_key(run.keys, tid)))
+    head = path_checks(run.before, run.before.transition(tid))
+    if kept[: len(head)] != head:
+        raise UnboundedError
+    old = _by_spot(kept[len(head) :])
+    spec = run.after.transition(tid)
+    cast = run.after.cast.ids()
+    new = _by_spot(compile_issues(run.after, spec, [spot for spot in cast if spot in spots]))
+    compiled = [i for spot in cast for i in (new if spot in spots else old).get(spot, ())]
+    return path_checks(run.after, spec) + compiled
+
+
+def _transition_issues(run: _Run, tid: TransitionId) -> Sequence[ValidationIssue]:
+    """Returns one transition's path issues, rechecking only what the edit reached.
+
+    An untouched transition keeps its previous issues; one whose counts, routes or destination
+    counts changed is checked whole; otherwise only the spots that moved or got new rows are
+    recompiled.
+
+    Args:
+        run: The revalidation in progress.
+        tid: The transition to report.
+
+    Returns:
+        issues: The transition's issues, as validate_show reports them.
+    """
+    folder = transition_key(run.keys, tid)
+    from_key, to_key = run.keys[tid.from_set], run.keys[tid.to_set]
+    touched = run.touched
+    whole = folder in touched.transitions or to_key in touched.set_roles.get(TIMING, ())
+    spots = (
+        touched.placements.get(from_key, frozenset())
+        | touched.placements.get(to_key, frozenset())
+        | touched.rows.get(folder, frozenset())
+    )
+    if not whole and not spots:
+        return run.previous(TRANSITIONS, folder)
+    if skips_transition(run.after, tid, run.before):
+        return []
+    if whole:
+        return validate_paths(run.after, run.after.transition(tid)).issues
+    return _recompiled(run, tid, spots)
+
+
+def _form_issues(run: _Run) -> list[ValidationIssue]:
+    return [
+        issue
+        for key, form in run.after.forms.items()
+        for issue in (
+            form_issues(run.after, key, form)
+            if key in run.forms
+            else run.previous(FORM_ISSUES, key)
+        )
+    ]
+
+
+def _pin_touched(run: _Run, record: Pin, path: tuple[str, ...]) -> bool:
+    """Returns whether the edit changed a pin or anything it covers.
+
+    Args:
+        run: The revalidation in progress.
+        record: The pin as the edited show holds it.
+        path: The pin's item path.
+
+    Returns:
+        touched: True when the pin changed, or what it covers did: its spot's placements,
+            its set's placements, form list or owned forms, its form, or its transition.
+    """
+    if path in run.touched.pins:
+        return True
+    covered: Mapping[str, Callable[[], bool]] = {
+        "entity": lambda: record.id in run.moved,
+        "set": lambda: path[1] in run.pinned_sets,
+        "form": lambda: record.id in run.touched.forms,
+        "transition": lambda: path[1] in run.touched.transitions or path[1] in run.touched.rows,
+    }
+    return covered[record.target]()
+
+
+def _pin_issues(run: _Run) -> list[ValidationIssue]:
+    pins = run.after.pins
+    paths = [pin_item_path(run.keys, record) for record in pins]
+    earlier = [pin_item_path(run.keys, record) for record in run.before.pins]
+    if len(set(paths)) < len(paths) or len(set(earlier)) < len(earlier):
+        return pin_issues(run.after, pins)
+    redo = {
+        path for record, path in zip(pins, paths, strict=True) if _pin_touched(run, record, path)
+    }
+    fresh: dict[Hashable, list[ValidationIssue]] = defaultdict(list)
+    checked = [record for record, path in zip(pins, paths, strict=True) if path in redo]
+    for issue in pin_issues(run.after, checked, scoped=True):
+        key = item_key(issue)
+        if key is None:
+            raise UnboundedError
+        fresh[key.path].append(issue)
+    return [
+        i for path in paths for i in (fresh[path] if path in redo else run.previous(PINS, path))
+    ]
+
+
+def _overrides_touched(run: _Run) -> bool:
+    """Returns whether the edit changed anything the facing override check reads.
+
+    Selector text resolves against the forms as well as the cast, so a form edit reruns the
+    check whenever an override selects its spots by text.
+    """
+    touched = run.touched
+    if touched.overrides or touched.set_roles.get(TIMING):
+        return True
+    overrides = run.after.facing_overrides
+    return bool(touched.forms) and any(isinstance(o.entities, str) for o in overrides)
+
+
+def _references(run: _Run) -> list[ValidationIssue]:
+    issues = _form_issues(run) + set_form_issues(run.after)
+    if run.after.pins:
+        issues += _pin_issues(run)
+    if _overrides_touched(run):
+        return issues + override_issues(run.after)
+    return issues + list(run.previous(OVERRIDES, ()))
+
+
+def _per_set(
+    run: _Run, bucket: str, check: Callable[[Show, Iterable[Set]], list[ValidationIssue]]
+) -> list[ValidationIssue]:
+    edited = run.touched.sets_with(PLACEMENTS)
+    return [
+        issue
+        for owner in run.after.sets
+        for issue in (
+            check(run.after, [owner])
+            if set_key(owner) in edited
+            else run.previous(bucket, set_key(owner))
+        )
+    ]
+
+
+def _placements(run: _Run) -> list[ValidationIssue]:
+    inactive = (
+        inactive_issues(run.after, run.after.sets)
+        if run.touched.spots
+        else _per_set(run, INACTIVE, inactive_issues)
+    )
+    return inactive + _per_set(run, FAR_OFF, far_off_issues)
+
+
+def _checks(previous: ValidationReport, before: Show, after: Show) -> ShowChecks:
+    if too_long_issues(before) and not too_long_issues(after):
+        raise UnboundedError
+    run = _run(previous, before, after)
+    folders = [transition_key(run.keys, tid) for tid in after.transition_ids()]
+    if len(set(folders)) < len(folders):
+        raise UnboundedError
+    return ShowChecks(
+        set_issues=lambda candidate: _set_issues(run, candidate),
+        transition_issues=lambda tid: _transition_issues(run, tid),
+        non_finite=lambda: non_finite_issues(after, known=before),
+        references=lambda: _references(run),
+        placements=lambda: _placements(run),
+    )
+
+
+def revalidate(previous: ValidationReport, before: Show, after: Show) -> ValidationReport:
+    """Returns validate_show's report for an edited show, rechecking only what the edit reached.
+
+    The result equals `validate_show(after)`, order included. Issues of items the edit did not
+    reach are taken from `previous`; edits that cannot be bounded by item rerun the whole check.
+
+    That holds only when `previous` is `validate_show(before)` run with no sheet store and no
+    comments; the result has no sheet dependency or comment anchor issues either. A `previous`
+    from another show or another run is not detected. The one check: a transition rechecked
+    spot by spot falls back to a full validation when its kept issues do not start with its
+    path checks in `before`. Every other stale issue is returned as it is. Issues that name no
+    item, such as dependency and comment anchor issues, are never carried over from `previous`.
+
+    >>> from e8s.choreo.models import PlacementPatch
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.validate import validate_show
+    >>> before = two_set_show()
+    >>> moved = before.sets[1].with_placements({"T1": PlacementPatch(x=3.0)})
+    >>> after = before.replace(sets=(before.sets[0], moved))
+    >>> revalidate(validate_show(before), before, after) == validate_show(after)
+    True
+
+    Args:
+        previous: `validate_show(before)`, run with no sheet store and no comments.
+        before: The show before the edit.
+        after: The show after the edit.
+
+    Returns:
+        report: The same report `validate_show(after)` returns.
+    """
+    try:
+        return run_checks(after, _checks(previous, before, after))
+    except UnboundedError:
+        return validate_show(after)

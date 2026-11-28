@@ -596,6 +596,10 @@ if TYPE_CHECKING:
     from e8s.show.anchors import (
         Anchor,
     )
+    from e8s.show.archive import (
+        export_archive,
+        import_archive,
+    )
     from e8s.show.assets import (
         FileAssetStore,
         InMemoryAssetStore,
@@ -756,6 +760,9 @@ if TYPE_CHECKING:
     from e8s.show.renumber import (
         renumber,
     )
+    from e8s.show.revalidate import (
+        revalidate,
+    )
     from e8s.show.sections import (
         join_sections,
         split_section,
@@ -782,7 +789,11 @@ if TYPE_CHECKING:
         FsckFinding,
         FsckReport,
         GcReport,
+        ShowUpgrade,
         UpgradeReport,
+    )
+    from e8s.show.upgrade import (
+        upgrade_repository,
     )
     from e8s.show.validate import (
         validate_dependencies,
@@ -1035,6 +1046,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "ShowIndex": ("e8s.show.models", "ShowIndex"),
     "ShowIndexEntry": ("e8s.show.models", "ShowIndexEntry"),
     "ShowLookup": ("e8s.show.models", "ShowLookup"),
+    "ShowUpgrade": ("e8s.show.storage_models", "ShowUpgrade"),
     "ShowValidationError": ("e8s.core.errors", "ShowValidationError"),
     "SineWaveFormParams": ("e8s.choreo.form_models", "SineWaveFormParams"),
     "SnapReport": ("e8s.geo.models", "SnapReport"),
@@ -1189,6 +1201,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "energy_curve": ("e8s.choreo.motion_stats", "energy_curve"),
     "events_since": ("e8s.show.events", "events_since"),
     "expand": ("e8s.choreo.set_transforms", "expand"),
+    "export_archive": ("e8s.show.archive", "export_archive"),
     "export_json": ("e8s.show.interchange", "export_json"),
     "face_along": ("e8s.choreo.facing", "face_along"),
     "face_audience": ("e8s.choreo.facing", "face_audience"),
@@ -1229,6 +1242,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "highlight": ("e8s.show.collab", "highlight"),
     "hold": ("e8s.choreo.paths", "hold"),
     "id_changes": ("e8s.show.id_changes", "id_changes"),
+    "import_archive": ("e8s.show.archive", "import_archive"),
     "import_fonts": ("e8s.show.interchange", "import_fonts"),
     "import_json": ("e8s.show.interchange", "import_json"),
     "import_positions": ("e8s.show.interchange", "import_positions"),
@@ -1337,6 +1351,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "reorder": ("e8s.choreo.form_ops", "reorder"),
     "require_finite": ("e8s.core.validation", "require_finite"),
     "require_size": ("e8s.core.caps", "require_size"),
+    "revalidate": ("e8s.show.revalidate", "revalidate"),
     "revert": ("e8s.show.history", "revert"),
     "ripple": ("e8s.choreo.paths", "ripple"),
     "rose_points": ("e8s.choreo.form_fns", "rose_points"),
@@ -1428,6 +1443,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "unlock": ("e8s.choreo.paths", "unlock"),
     "unpin": ("e8s.show.pinning", "unpin"),
     "upgrade_dependency": ("e8s.show.dependencies", "upgrade_dependency"),
+    "upgrade_repository": ("e8s.show.upgrade", "upgrade_repository"),
     "validate_dependencies": ("e8s.show.validate", "validate_dependencies"),
     "validate_paths": ("e8s.show.validate", "validate_paths"),
     "validate_set": ("e8s.show.validate", "validate_set"),
@@ -1635,6 +1651,7 @@ __all__ = [
     "ShowIndex",
     "ShowIndexEntry",
     "ShowLookup",
+    "ShowUpgrade",
     "ShowValidationError",
     "SineWaveFormParams",
     "SnapReport",
@@ -1789,6 +1806,7 @@ __all__ = [
     "energy_curve",
     "events_since",
     "expand",
+    "export_archive",
     "export_json",
     "face_along",
     "face_audience",
@@ -1829,6 +1847,7 @@ __all__ = [
     "highlight",
     "hold",
     "id_changes",
+    "import_archive",
     "import_fonts",
     "import_json",
     "import_positions",
@@ -1937,6 +1956,7 @@ __all__ = [
     "reorder",
     "require_finite",
     "require_size",
+    "revalidate",
     "revert",
     "ripple",
     "rose_points",
@@ -2028,6 +2048,7 @@ __all__ = [
     "unlock",
     "unpin",
     "upgrade_dependency",
+    "upgrade_repository",
     "validate_dependencies",
     "validate_paths",
     "validate_set",

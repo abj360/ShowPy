@@ -113,7 +113,7 @@ from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
 from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import InMemorySheetStore
-from e8s.show import validate_refs
+from e8s.show import validate_pins
 from e8s.show._notes_document import Note, NotesDocument
 from e8s.show.anchors import Anchor
 from e8s.show.change_models import ItemKey
@@ -760,7 +760,7 @@ def test_regression_entity_pin_check_visits_only_unflagged_placements(
         calls.append(entity)
         return covers_placement(held, set_id, entity)
 
-    monkeypatch.setattr(validate_refs, "covers_placement", counted)
+    monkeypatch.setattr(validate_pins, "covers_placement", counted)
     assert len(_mismatch_messages(show)) == len(show.pins)
     assert sorted(calls) == sorted(show.cast.ids())
 

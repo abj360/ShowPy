@@ -32,7 +32,10 @@ class ErrorCode(StrEnum):
     BAD_ID = "BAD_ID"
     """A repository id is not 64-digit hex, or a show, set, note or form ID cannot be stored."""
     BAD_PATH = "BAD_PATH"
-    """A show id or workspace path cannot be stored, or names a directory where a file belongs."""
+    (
+        "A show id, workspace path or upgrade folder cannot be used, or names a folder for a file,"
+        " or a repository root path holds a NUL or a character the file system cannot encode."
+    )
     BAD_SHAPE = "BAD_SHAPE"
     """A similarity fit gets point arrays that are not matched (N, 2) arrays of numbers."""
     BAD_TRANSITION = "BAD_TRANSITION"
@@ -119,6 +122,8 @@ class ErrorCode(StrEnum):
     """A text form request gives both or neither of `n` and `spacing`."""
     OLD_FORMAT = "OLD_FORMAT"
     """A write would store a show.json of an older format version than this release writes."""
+    OLD_LAYOUT = "OLD_LAYOUT"
+    """A write targets a layout-1 repository, which this release only reads until it is upgraded."""
     PAST_THE_SHOW = "PAST_THE_SHOW"
     """A facing override starts on or after the last count of the show, so covers no show time."""
     PATH = "PATH"

@@ -13,12 +13,12 @@ from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 
-from e8s.core.canonical import jcs
 from e8s.core.errors import ConflictError, UnknownRefError
 from e8s.core.json_types import JsonValue
 from e8s.show import durable_io
 from e8s.show.backend import (
     MAX_REVISIONS,
+    REVISION_ID_PATTERN,
     conflict_error,
     history_too_long_error,
     unknown_revision_error,
@@ -28,45 +28,41 @@ from e8s.show.backend_checks import (
     ReadBudget,
     Record,
     corrupt,
+    last_present,
     missing_file,
     parsed_json,
-    parsed_manifest,
     parsed_record,
     parsed_slot,
     refuse_redirect,
-    require_blob_digest,
     require_caller_ids,
     require_plain_folders,
+    require_readable_sizes,
     require_sent_blob_digests,
     require_slot_record,
-    unstored_blobs,
 )
+from e8s.show.blob_checks import require_unsent_blobs, stored_blob
 from e8s.show.commit_writes import (
-    STALE_TEMP_AGE,
     FilePlacer,
     flush_directories,
     place_or_check,
+    record_bytes,
     remove_lost_record,
+    slot_bytes,
     store_blobs,
     store_record,
     write_layout_file,
 )
 from e8s.show.document_dump import dump_json
-from e8s.show.durable_io import mapped_io, remove_stale_temps
+from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import lstat_mode, read_capped
 from e8s.show.fsck_findings import SET_ASIDE_PREFIX
 from e8s.show.history_models import Revision
-from e8s.show.layout import (
-    HOUSEKEEPING_NAMES,
-    TEMP_DIR,
-)
-from e8s.show.layout1 import (
-    BLOB_MAX_BYTES,
-    REVISION_ID_PATTERN,
-    TREE_MAX_BYTES,
-    _require_readable_sizes,
-)
+from e8s.show.layout import HOUSEKEEPING_NAMES, TEMP_DIR, require_usable_path
+from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
+from e8s.show.legacy_checks import require_legacy_bound_at, require_legacy_prefix
+from e8s.show.manifests import Manifest, parsed_manifest
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
+from e8s.show.stale_temps import remove_stale_temps_before
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_json, is_unfinished_line, read_settled
 
@@ -112,9 +108,11 @@ class FileBackend:
     """
 
     def __init__(self, root: Path) -> None:
+        require_usable_path(root)
         self.root = root
         self._seen: dict[str, tuple[int, str]] = {}
-        self._manifests: dict[str, int] = {}
+        self._manifests: dict[str, Manifest] = {}
+        self._legacy_checked: set[str] = set()
         self._has_layout = False
         self._flushed: set[str] = set()
         self._placer = FilePlacer(root / TEMP_DIR)
@@ -144,8 +142,8 @@ class FileBackend:
             budget.spend(len(raw))
         return raw
 
-    def _manifest(self, show_id: str, folder: Path) -> tuple[str, int]:
-        """Reads a manifest: the show ID its folder must encode and its `legacy_before` slot."""
+    def _manifest(self, show_id: str, folder: Path) -> Manifest:
+        """Reads a manifest: the show ID its folder must encode and its legacy prefix."""
         path = folder / MANIFEST_FILE
         read = partial(self._read_raw, show_id, path, "manifest", MANIFEST_MAX_BYTES, None)
         stored = parsed_json(show_id, path, "manifest", read_settled(read, is_unfinished_json))
@@ -159,10 +157,30 @@ class FileBackend:
         folder = self._folder(show_id)
         if lstat_mode(show_id, folder / MANIFEST_FILE) is None:
             return
-        listed, legacy_before = self._manifest(show_id, folder)
-        if listed != show_id:
+        manifest = self._manifest(show_id, folder)
+        if manifest.show_id != show_id:
             raise corrupt(show_id, folder / MANIFEST_FILE, "manifest names another show")
-        self._manifests[show_id] = legacy_before
+        self._manifests[show_id] = manifest
+
+    def _legacy_before(self, show_id: str) -> int:
+        return self._manifests.get(show_id, Manifest(show_id)).legacy_before
+
+    def _require_legacy_bound(self, show_id: str, last: int | None = None) -> None:
+        """Refuses a manifest whose `legacy_before` passes the slot after the last slot."""
+        path, head_seq = self._folder(show_id) / MANIFEST_FILE, lambda: self._head(show_id)[0]
+        require_legacy_bound_at(show_id, path, self._legacy_before(show_id), last, head_seq)
+
+    def _require_legacy_prefix(self, show_id: str, read: list[Revision] | None = None) -> None:
+        """Checks once per backend that the legacy slots hold the IDs the manifest's digest names.
+
+        `read` holds the revisions of the slots from the first on, when a log already read them.
+        """
+        manifest = self._manifests.get(show_id)
+        if manifest is None or not manifest.legacy_digest or show_id in self._legacy_checked:
+            return
+        path, read_slot = self._folder(show_id) / MANIFEST_FILE, partial(self._read_slot, show_id)
+        require_legacy_prefix(show_id, path, manifest, read_slot, read)
+        self._legacy_checked.add(show_id)
 
     def _require_plain_folders(self, show_id: str) -> None:
         """Refuses a symlink or junction in place of any folder a read or write passes through."""
@@ -198,7 +216,7 @@ class FileBackend:
             refuse_redirect(folder, mode)
         if lstat_mode("", folder / MANIFEST_FILE) is None:
             return None
-        show_id, _ = self._manifest("", folder)
+        show_id = self._manifest("", folder).show_id
         return show_id if self._has_slot(show_id, 1) else None
 
     def _has_slot(self, show_id: str, seq: int) -> bool:
@@ -223,7 +241,9 @@ class FileBackend:
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
-            return self._head(show_id)[1]
+            seq, revision_id = self._head(show_id)
+            self._require_legacy_bound(show_id, seq)
+            return revision_id
 
     def _head(self, show_id: str) -> tuple[int, str]:
         """Finds the last slot: one lookup when warm, a gallop and a bisection otherwise.
@@ -238,25 +258,11 @@ class FileBackend:
                 self._require_no_gap(show_id, seq + 1)
                 self._remember(show_id, seq, revision_id)
             return seq, revision_id
-        last = self._last_slot(show_id, seq)
+        last = last_present(partial(self._has_slot, show_id), seq)
         self._require_no_gap(show_id, last + 1)
         found = self._read_slot(show_id, last)
         self._remember(show_id, last, found.id)
         return last, found.id
-
-    def _last_slot(self, show_id: str, seq: int) -> int:
-        """Gallops from slot `seq + 1`, known present, and bisects back to the last present."""
-        present, step = seq + 1, 2
-        while self._has_slot(show_id, seq + step):
-            present, step = seq + step, step * 2
-        absent = seq + step
-        while absent - present > 1:
-            middle = (present + absent) // 2
-            if self._has_slot(show_id, middle):
-                present = middle
-            else:
-                absent = middle
-        return present
 
     def _require_no_gap(self, show_id: str, seq: int) -> None:
         """Raises CORRUPT when slot `seq` is missing and slot `seq + 1` is present.
@@ -279,12 +285,16 @@ class FileBackend:
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
             last, head = self._head(show_id)
+            self._require_legacy_bound(show_id, last)
             if last > MAX_REVISIONS:
                 raise history_too_long_error(show_id, MAX_REVISIONS)
             if since == head:
                 return []
             first = 0 if since == ROOT_REVISION else self._landed_seq(show_id, since, last)
-            return self._slots_after(show_id, first, last, since)
+            landed = self._slots_after(show_id, first, last, since)
+            if first < self._legacy_before(show_id) - FIRST_SEQ:
+                self._require_legacy_prefix(show_id, landed if first == 0 else None)
+            return landed
 
     def _landed_seq(self, show_id: str, revision_id: str, last: int) -> int:
         """Returns the slot number of a landed revision, read from its record and its slot."""
@@ -339,18 +349,21 @@ class FileBackend:
         """Reads a revision record, checking it names itself and that its ID is verified."""
         path = self._record_path(show_id, revision_id)
         stored = self._read(show_id, path, "revision record", TREE_MAX_BYTES, budget)
-        legacy_before = self._manifests.get(show_id, FIRST_SEQ)
+        legacy_before = self._legacy_before(show_id)
         return parsed_record(show_id, path, stored, revision_id, legacy_before)
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         """Returns path to blob digest at a landed revision, read from its record."""
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
+            self._require_legacy_bound(show_id)
             if self._has_record(show_id, revision_id):
                 stored = self._record(show_id, revision_id)
                 if self._has_slot(show_id, stored.seq) and (
                     self._read_slot(show_id, stored.seq).id == revision_id
                 ):
+                    if stored.seq < self._legacy_before(show_id):
+                        self._require_legacy_prefix(show_id)
                     return stored.tree
             raise unknown_revision_error(show_id, revision_id, [])
 
@@ -358,20 +371,7 @@ class FileBackend:
         """Returns the bytes of a blob after checking they hash to its digest."""
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
-            objects = self._folder(show_id) / OBJECT_DIR
-            if not REVISION_ID_PATTERN.fullmatch(digest):
-                raise corrupt(show_id, objects, f"{digest!r} is not a 64-digit hex id")
-            if lstat_mode(show_id, objects / digest) is None:
-                raise missing_file(show_id, objects / digest, "a tree names this blob")
-            return self._verified_blob(show_id, objects / digest)
-
-    def _verified_blob(self, show_id: str, path: Path) -> bytes:
-        """Reads a stored object, raising CORRUPT unless its bytes hash to its file name."""
-        data = read_capped(
-            path, "blob", BLOB_MAX_BYTES, lambda source, why: corrupt(show_id, source, why)
-        )
-        require_blob_digest(show_id, path, data)
-        return data
+            return stored_blob(show_id, self._folder(show_id) / OBJECT_DIR, digest)
 
     def commit(
         self,
@@ -390,12 +390,13 @@ class FileBackend:
             self._require_plain_folders(show_id)
             self._check_manifest(show_id)
             require_caller_ids(show_id, revision, tree, blobs)
-            _require_readable_sizes(show_id, tree, blobs)
+            require_readable_sizes(show_id, tree, blobs)
             require_sent_blob_digests(show_id, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
+            self._require_legacy_bound(show_id)
             self._require_unsent_blobs(show_id, revision.parent, tree, blobs)
             self._prepare(show_id)
-            remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
+            remove_stale_temps_before(show_id, self.root / TEMP_DIR, revision.at)
             self._store_blobs(show_id, blobs)
             self._store_record(show_id, revision, seq, tree)
             folder = self._folder(show_id)
@@ -411,24 +412,9 @@ class FileBackend:
     def _require_unsent_blobs(
         self, show_id: str, parent: str, tree: Mapping[str, str], blobs: Mapping[str, bytes]
     ) -> None:
-        """Requires every tree blob not sent to be stored for this show, before anything is written.
-
-        A blob the parent's tree names is reached by a landed slot, so gc keeps it. Any other one
-        is freshened, then read and checked against its digest: gc removes only a file that is old
-        and unchanged since it listed it, so a freshened blob stays until this commit's slot lands,
-        and one gc already moved aside fails the freshen and refuses the commit.
-        """
-        unsent = {digest for digest in tree.values() if digest not in blobs}
-        if not unsent:
-            return
-        if parent != ROOT_REVISION:
-            unsent -= set(self._record(show_id, parent).tree.values())
-        objects = self._folder(show_id) / OBJECT_DIR
-        missing = sorted(digest for digest in unsent if not durable_io.freshen(objects / digest))
-        if missing:
-            raise unstored_blobs(show_id, missing)
-        for digest in sorted(unsent):
-            self._verified_blob(show_id, objects / digest)
+        """Requires every unsent tree blob to be stored for this show before anything is written."""
+        objects, read_record = self._folder(show_id) / OBJECT_DIR, partial(self._record, show_id)
+        require_unsent_blobs(show_id, objects, parent, tree, blobs, read_record)
 
     def _parent_seq(self, show_id: str, parent: str) -> int:
         """Returns the slot number of the commit's parent; an unlanded parent is a conflict."""
@@ -458,7 +444,7 @@ class FileBackend:
             check = partial(self._manifest, show_id, folder)
             manifest, data = folder / MANIFEST_FILE, dump_json({"id": show_id})
             if place_or_check(self._placer, show_id, manifest, data, check):
-                self._manifests[show_id] = FIRST_SEQ
+                self._manifests[show_id] = Manifest(show_id)
             else:
                 self._check_manifest(show_id)
         durable_io.flush_directory(self.root, follows_links=True)
@@ -480,13 +466,13 @@ class FileBackend:
         self, show_id: str, revision: Revision, seq: int, tree: Mapping[str, str]
     ) -> None:
         """Places the revision record, or checks the one an identical commit placed first."""
-        record = dump_json({"revision": revision.to_json(), "seq": seq, "tree": dict(tree)})
+        record = record_bytes(revision, seq, tree)
         store_record(self._placer, show_id, self._record_path(show_id, revision.id), record)
 
     def _claim_slot(self, show_id: str, revision: Revision, seq: int) -> None:
         """Claims slot `seq`; a later slot without this one is a gap and is never refilled."""
         self._require_no_gap(show_id, seq)
-        slot = jcs(revision.to_json()) + b"\n"
+        slot = slot_bytes(revision)
         path = self._slot_path(show_id, seq)
         check = partial(self._read_slot, show_id, seq)
         if not place_or_check(self._placer, show_id, path, slot, check):
