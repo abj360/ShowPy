@@ -6,12 +6,20 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      # pydantic pins one exact pydantic-core, so they must move in one PR.
+      pydantic:
+        patterns: [pydantic, pydantic-core]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      # Every codeql-action step in a workflow must run the same version.
+      codeql-action:
+        patterns: [github/codeql-action*]
   - package-ecosystem: docker
     directory: /docker
     schedule:
