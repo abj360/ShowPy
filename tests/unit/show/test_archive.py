@@ -9,7 +9,8 @@ Contains:
     test_import_into_a_file_repository_passes_fsck: leaves a root fsck finds clean
     test_import_into_a_memory_repository_takes_further_commits: lands the history and a later
         save on top of it
-    test_import_refuses_an_existing_show: refuses a show ID the repository holds, writing nothing
+    test_import_refuses_an_existing_show: refuses a show ID whose head is no revision of the
+        archive, writing nothing, and names the resume case in the hint
     test_regression_import_refuses_a_show_another_writer_creates_meanwhile: answers a show that
         lands between the check and the first commit with ConflictError
     test_regression_an_import_stopped_part_way_reports_what_landed: names the revisions that
@@ -28,7 +29,6 @@ import hashlib
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -38,13 +38,11 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, SchemaError, StorageError
 from e8s.examples import two_set_show
 from e8s.show.archive import export_archive, import_archive
-from e8s.show.backend import RepositoryBackend
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_repository import FileRepository
 from e8s.show.fsck import fsck
-from e8s.show.history_models import Revision
 from e8s.show.memory_backend import InMemoryRepository
-from tests.fixtures.archives import AT, SHOW_ID, listing, with_history
+from tests.fixtures.archives import AT, SHOW_ID, Interrupted, listing, with_history
 
 SEED_SCRIPT = """
 import hashlib
@@ -55,41 +53,6 @@ repo = InMemoryRepository()
 with_history(repo, 5)
 print(hashlib.sha256(export_archive(repo, "show_1")).hexdigest())
 """
-
-
-class _Interrupted:
-    """Wraps a backend; a hook runs before the n-th commit, which may raise instead of landing."""
-
-    def __init__(
-        self, backend: RepositoryBackend, at_commit: int, hook: Callable[[], None]
-    ) -> None:
-        self._backend = backend
-        self._at_commit = at_commit
-        self._hook = hook
-        self._commits = 0
-
-    def shows(self) -> list[str]:
-        return self._backend.shows()
-
-    def head(self, show_id: str) -> str:
-        return self._backend.head(show_id)
-
-    def log(self, show_id: str, *, since: str = "") -> list[Revision]:
-        return self._backend.log(show_id, since=since)
-
-    def tree(self, show_id: str, revision_id: str) -> Mapping[str, str]:
-        return self._backend.tree(show_id, revision_id)
-
-    def blob(self, show_id: str, digest: str) -> bytes:
-        return self._backend.blob(show_id, digest)
-
-    def commit(
-        self, show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
-    ) -> None:
-        self._commits += 1
-        if self._commits == self._at_commit:
-            self._hook()
-        self._backend.commit(show_id, revision, tree, blobs)
 
 
 def _assert_same_history(source: DocumentRepository, target: DocumentRepository) -> None:
@@ -142,16 +105,15 @@ def test_import_refuses_an_existing_show(tmp_path: Path) -> None:
     with_history(source, 3)
     archive = export_archive(source, SHOW_ID)
     files = FileRepository(tmp_path)
-    with_history(files, 1)
+    other = two_set_show().replace(title="another history")
+    files.put_show(SHOW_ID, other, expected_revision="", at=AT)
     before = listing(tmp_path)
     with pytest.raises(ConflictError) as caught:
         import_archive(files, archive)
     assert caught.value.code == ErrorCode.CONFLICT
     assert "already" in caught.value.message
+    assert "again" in caught.value.hint
     assert listing(tmp_path) == before
-    with pytest.raises(ConflictError):
-        import_archive(source, archive)
-    assert len(source.revisions(SHOW_ID)) == 3
 
 
 def test_regression_import_refuses_a_show_another_writer_creates_meanwhile() -> None:
@@ -162,7 +124,7 @@ def test_regression_import_refuses_a_show_another_writer_creates_meanwhile() -> 
     def create_it_first() -> None:
         inner.put_show(SHOW_ID, two_set_show().replace(title="first"), expected_revision="", at=AT)
 
-    target = DocumentRepository(_Interrupted(inner.backend, 1, create_it_first))
+    target = DocumentRepository(Interrupted(inner.backend, 1, create_it_first))
     with pytest.raises(ConflictError, match="already"):
         import_archive(target, export_archive(source, SHOW_ID))
     assert len(inner.revisions(SHOW_ID)) == 1
@@ -176,7 +138,7 @@ def test_regression_an_import_stopped_part_way_reports_what_landed(tmp_path: Pat
         raise StorageError("disk full", hint="free space", code=ErrorCode.IO)
 
     files = FileRepository(tmp_path)
-    target = DocumentRepository(_Interrupted(files.backend, 3, fail))
+    target = DocumentRepository(Interrupted(files.backend, 3, fail))
     with pytest.raises(StorageError) as caught:
         import_archive(target, export_archive(source, SHOW_ID))
     assert caught.value.code == ErrorCode.IO
@@ -184,6 +146,7 @@ def test_regression_an_import_stopped_part_way_reports_what_landed(tmp_path: Pat
     assert caught.value.context["total"] == len(landed)
     assert caught.value.context["revision"] == landed[1].id
     assert "first 2 revisions" in caught.value.hint
+    assert "import the same archive again" in caught.value.hint
     assert FileRepository(tmp_path).revisions(SHOW_ID) == landed[:2]
     assert fsck(tmp_path).ok
 
@@ -198,7 +161,7 @@ def test_regression_any_library_error_after_the_first_slot_reports_what_landed()
     target = InMemoryRepository()
     with pytest.raises(StorageError) as caught:
         import_archive(
-            DocumentRepository(_Interrupted(target.backend, 3, refuse)),
+            DocumentRepository(Interrupted(target.backend, 3, refuse)),
             export_archive(source, SHOW_ID),
         )
     assert caught.value.code == ErrorCode.SCHEMA
@@ -219,12 +182,12 @@ def test_a_failed_first_commit_raises_its_own_error() -> None:
 
     first = InMemoryRepository()
     with pytest.raises(StorageError, match="disk full") as caught:
-        import_archive(DocumentRepository(_Interrupted(first.backend, 1, fail)), archive)
+        import_archive(DocumentRepository(Interrupted(first.backend, 1, fail)), archive)
     assert "landed" not in caught.value.context
     assert first.shows() == []
     later = InMemoryRepository()
     with pytest.raises(ConflictError) as raced:
-        import_archive(DocumentRepository(_Interrupted(later.backend, 3, conflict)), archive)
+        import_archive(DocumentRepository(Interrupted(later.backend, 3, conflict)), archive)
     assert raced.value.context["landed"] == 2
     assert later.revisions(SHOW_ID) == landed[:2]
 

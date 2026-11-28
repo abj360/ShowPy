@@ -10,13 +10,16 @@ Contains:
     entry_map(): returns an archive's entries as a name-to-bytes mapping
     rebuilt(): writes a mapping of entries back into an archive, in ascending name order
     listing(): maps every path under a root to its bytes, or empty bytes for a folder
+    Interrupted: wraps a backend so a hook runs before its n-th commit, as a crash or a race
 """
 
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from e8s.examples import two_set_show
 from e8s.show.archive_zip import ArchiveWriter, read_entries
+from e8s.show.backend import RepositoryBackend
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.history_models import Revision
 
@@ -73,3 +76,38 @@ def listing(root: Path) -> dict[str, bytes]:
         path.relative_to(root).as_posix(): path.read_bytes() if path.is_file() else b""
         for path in sorted(root.rglob("*"))
     }
+
+
+class Interrupted:
+    """Wraps a backend; a hook runs before the n-th commit, which may raise instead of landing."""
+
+    def __init__(
+        self, backend: RepositoryBackend, at_commit: int, hook: Callable[[], None]
+    ) -> None:
+        self._backend = backend
+        self._at_commit = at_commit
+        self._hook = hook
+        self._commits = 0
+
+    def shows(self) -> list[str]:
+        return self._backend.shows()
+
+    def head(self, show_id: str) -> str:
+        return self._backend.head(show_id)
+
+    def log(self, show_id: str, *, since: str = "") -> list[Revision]:
+        return self._backend.log(show_id, since=since)
+
+    def tree(self, show_id: str, revision_id: str) -> Mapping[str, str]:
+        return self._backend.tree(show_id, revision_id)
+
+    def blob(self, show_id: str, digest: str) -> bytes:
+        return self._backend.blob(show_id, digest)
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        self._commits += 1
+        if self._commits == self._at_commit:
+            self._hook()
+        self._backend.commit(show_id, revision, tree, blobs)
