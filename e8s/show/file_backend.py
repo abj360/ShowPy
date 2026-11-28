@@ -222,11 +222,18 @@ class FileBackend:
     def _has_slot(self, show_id: str, seq: int) -> bool:
         return lstat_mode(show_id, self._slot_path(show_id, seq)) is not None
 
-    def _read_slot(self, show_id: str, seq: int, budget: ReadBudget | None = None) -> Revision:
-        """Reads a slot, rereading it while it is not yet one finished line."""
+    def _read_slot(
+        self, show_id: str, seq: int, budget: ReadBudget | None = None, *, is_last: bool = True
+    ) -> Revision:
+        """Reads a slot, rereading it while it is not yet one finished line.
+
+        Only the last slot can be one a writer is still filling: a later slot lands only after
+        its writer read this one whole. A slot before the last is read once.
+        """
         path = self._slot_path(show_id, seq)
         read = partial(self._read_raw, show_id, path, "slot", SLOT_MAX_BYTES, budget)
-        return parsed_slot(show_id, path, read_settled(read, is_unfinished_line))
+        raw = read_settled(read, is_unfinished_line, may_be_unfinished=is_last)
+        return parsed_slot(show_id, path, raw)
 
     def _remember(self, show_id: str, seq: int, revision_id: str) -> None:
         if seq >= self._seen.get(show_id, (0, ROOT_REVISION))[0]:
@@ -300,7 +307,7 @@ class FileBackend:
         """Returns the slot number of a landed revision, read from its record and its slot."""
         if self._has_record(show_id, revision_id):
             seq = self._record(show_id, revision_id).seq
-            if seq <= last and self._read_slot(show_id, seq).id == revision_id:
+            if seq <= last and self._read_slot(show_id, seq, is_last=seq == last).id == revision_id:
                 return seq
         raise unknown_revision_error(show_id, revision_id, [])
 
@@ -326,7 +333,7 @@ class FileBackend:
         budget = ReadBudget(show_id, LOG_READ_MAX_BYTES)
         landed: list[Revision] = []
         for seq in range(first + 1, last + 1):
-            revision = self._read_slot(show_id, seq, budget)
+            revision = self._read_slot(show_id, seq, budget, is_last=seq == last)
             path = self._slot_path(show_id, seq)
             if revision.parent != parent:
                 raise corrupt(show_id, path, "slot's parent is not the revision of the slot before")

@@ -665,3 +665,30 @@ source of truth.
   enough by the caller's time. A time far ahead of the file system's clock, as an imported
   archive may carry, no longer removes other writers' fresh temp files, and a time within a day
   of year one no longer overflows.
+
+### Addendum 2026-11-28: torn-file rereads wait up to 3.6 s
+
+Decision 7 is kept. The rereads the 2026-11-27 addendum lists (three, pausing 1, 10 and 100 ms)
+were likely too short: on a loaded `windows-2022` runner a concurrent commit of a blob failed
+with `CORRUPT` ("blob bytes do not match their digest") instead of a `ConflictError` naming the
+winner (`test_one_winner_without_hard_links`, trial 98 of 200). The code allows one cause: the
+writer without hard links that created the blob was held back for more than 0.111 s before
+writing it, which reproduces the failure on macOS with a 0.3 s stall. The same gap failed a
+commit meeting another writer's empty layout file, manifest or record with `CORRUPT`, and its
+empty slot with `TORN_SLOT`.
+
+- A file a writer may still be filling is now reread six times while it looks torn, pausing
+  1 ms, 10 ms, 100 ms, 0.5 s, 1 s and 2 s, 3.611 s in all: the layout file, manifests, blobs and
+  records a commit checks, and the last slot wherever it is read (commits, `head`, `tree`, `log`
+  and `fsck`).
+- `log` and `fsck` read a slot before the last once: a later slot lands only after its writer
+  read that one whole, so no writer can still be filling it. They report a damaged earlier slot
+  without a pause, so `fsck` over many damaged slots pays the pauses at most once per show for
+  slots. `tree` and the legacy-prefix check still reread any slot they read; each stops at the
+  first damaged one.
+- A file still torn after the last pause is reported as before, so a stopped writer's file fails
+  closed with the same code and hint until `fsck` or `gc` removes it. Such a read now takes
+  3.6 s instead of 0.1 s before it fails.
+- A writer held back for longer than 3.6 s still fails a concurrent commit closed. Without hard
+  links no reader can tell a paused writer from a stopped one; a lock or a liveness signal would
+  close the gap, and neither is part of this layout.

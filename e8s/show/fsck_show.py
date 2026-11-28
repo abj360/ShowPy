@@ -293,12 +293,15 @@ class _ShowCheck:
                 self._check_blobs(record.tree)
 
     def _slot(self, seq: int, *, is_last: bool, follows_intact: bool) -> Revision | None:
-        """Reads and checks one slot, reporting a torn or damaged one and returning None."""
+        """Reads and checks one slot, reporting a torn or damaged one and returning None.
+
+        Only the last slot can be one a writer is still filling, so only it is reread while torn.
+        """
         path = self._slot_path(seq)
         fail = partial(corrupt, self.show_id)
         read = partial(read_capped, path, "slot", SLOT_MAX_BYTES, fail, allows_growth=True)
         try:
-            raw = read_settled(read, is_unfinished_line)
+            raw = read_settled(read, is_unfinished_line, may_be_unfinished=is_last)
             self.budget.spend(len(raw))
             return parsed_slot(self.show_id, path, raw)
         except StorageError as error:

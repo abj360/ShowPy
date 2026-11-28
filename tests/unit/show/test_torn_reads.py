@@ -6,8 +6,8 @@ test_torn_reads.py --- tests how the file backend reads a slot another writer ma
 Contains:
     test_regression_torn_slot_is_reported_with_the_repair_command: raises TORN_SLOT for an empty
         slot, with a hint that names the fsck repair call
-    test_torn_slot_is_reread_three_times_then_reported: rereads an empty, cut-short or unfinished
-        slot three times, pausing before each, then raises TORN_SLOT
+    test_torn_slot_is_reread_after_each_pause_then_reported: rereads an empty, cut-short or
+        unfinished slot six times, pausing before each, then raises TORN_SLOT
     test_slot_finished_between_rereads_reads_as_landed: reads a slot whose writer finishes it
         during the first pause
     test_finished_line_that_fails_a_check_is_corrupt_at_once: reports a complete but wrong slot
@@ -19,6 +19,10 @@ Contains:
         and a record another writer finishes during the first pause, and reads them whole
     test_file_that_grows_while_read_is_reread: rereads a slot that grows during the read instead
         of refusing it
+    test_regression_fsck_rereads_only_the_last_slot: reports torn slots before the last without a
+        pause, and pauses through every reread only for a torn last slot
+    test_regression_log_rereads_no_slot_before_the_last: reports a torn slot before the last
+        without a pause, as no writer can still be filling it
 """
 
 import os
@@ -35,6 +39,7 @@ from e8s.show.backend import digest
 from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
+from e8s.show.fsck import fsck
 from e8s.show.history_models import Revision
 from e8s.show.layout import read_layout
 from e8s.show.show_folders import show_folder
@@ -42,8 +47,8 @@ from e8s.show.show_folders import show_folder
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 SHOW_ID = "torn"
 RENDER = "/renders/a.txt"
-REREADS = 3
-PAUSES_S = [0.001, 0.01, 0.1]
+REREADS = 6
+PAUSES_S = [0.001, 0.01, 0.1, 0.5, 1.0, 2.0]
 REPAIR_CALL = "fsck(root, repair=True, confirm=True, at=datetime.now(UTC))"
 # A capped read checks the descriptor's type with one fstat, then takes its size with the next.
 SIZE_FSTAT = 2
@@ -121,7 +126,7 @@ TORN_FORMS: dict[str, Callable[[bytes], bytes]] = {
 
 
 @pytest.mark.parametrize("form", sorted(TORN_FORMS))
-def test_torn_slot_is_reread_three_times_then_reported(
+def test_torn_slot_is_reread_after_each_pause_then_reported(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, form: str
 ) -> None:
     _landed(FileBackend(tmp_path), 2)
@@ -294,3 +299,34 @@ def test_file_that_grows_while_read_is_reread(
     pauses = _record_pauses(monkeypatch, lambda: None)
     assert FileBackend(tmp_path).log(SHOW_ID) == landed
     assert len(pauses) == 1
+
+
+DAMAGED_SLOTS = 6
+
+
+def test_regression_fsck_rereads_only_the_last_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _landed(FileBackend(tmp_path), DAMAGED_SLOTS)
+    for seq in range(2, DAMAGED_SLOTS):
+        _slot(tmp_path, seq).write_bytes(b"")
+    pauses = _record_pauses(monkeypatch, lambda: None)
+    report = fsck(tmp_path)
+    torn = [finding for finding in report.findings if finding.code == "TORN_SLOT"]
+    assert len(torn) == DAMAGED_SLOTS - 2
+    assert pauses == []
+    _slot(tmp_path, DAMAGED_SLOTS).write_bytes(b"")
+    fsck(tmp_path)
+    assert pauses == PAUSES_S
+
+
+def test_regression_log_rereads_no_slot_before_the_last(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _landed(FileBackend(tmp_path), 3)
+    _slot(tmp_path, 2).write_bytes(b"")
+    pauses = _record_pauses(monkeypatch, lambda: None)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "TORN_SLOT"
+    assert pauses == []
