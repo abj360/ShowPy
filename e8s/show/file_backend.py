@@ -41,7 +41,6 @@ from e8s.show.backend_checks import (
     require_slot_record,
 )
 from e8s.show.commit_writes import (
-    STALE_TEMP_AGE,
     FilePlacer,
     flush_directories,
     place_or_check,
@@ -53,7 +52,7 @@ from e8s.show.commit_writes import (
     write_layout_file,
 )
 from e8s.show.document_dump import dump_json
-from e8s.show.durable_io import mapped_io, remove_stale_temps
+from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import lstat_mode, read_capped
 from e8s.show.fsck_findings import SET_ASIDE_PREFIX
 from e8s.show.history_models import Revision
@@ -66,6 +65,7 @@ from e8s.show.manifests import (
     require_legacy_digest,
 )
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
+from e8s.show.stale_temps import remove_stale_temps_before
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_json, is_unfinished_line, read_settled
 
@@ -416,7 +416,7 @@ class FileBackend:
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._require_legacy_bound(show_id)
             self._prepare(show_id)
-            remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
+            remove_stale_temps_before(show_id, self.root / TEMP_DIR, revision.at)
             self._store_blobs(show_id, blobs)
             self._store_record(show_id, revision, seq, tree)
             folder = self._folder(show_id)

@@ -13,6 +13,8 @@ Contains:
     test_commit_with_unknown_parent_reports_every_landed_revision: keeps the memory conflict
     test_regression_memory_commit_refuses_a_revision_that_is_its_own_parent: refuses a self-parent
     test_regression_memory_commit_refuses_a_revision_id_already_stored: refuses a repeated ID
+    test_regression_memory_commit_that_lost_its_slot_is_a_conflict: raises ConflictError, not
+        BAD_ID, for a revision another writer already landed on a parent that is no longer head
     test_regression_memory_log_fails_closed_on_a_parent_cycle: raises CORRUPT on a cycle
     test_memory_tree_and_blob_fail_closed_on_unknown_ids: raises on unknown IDs
     test_regression_memory_commit_verifies_its_inputs: checks IDs, blobs and tree digests
@@ -195,6 +197,18 @@ def test_regression_memory_commit_refuses_a_revision_id_already_stored() -> None
     with pytest.raises(StorageError) as caught:
         _commit(backend, clash)
     assert caught.value.code == ErrorCode.BAD_ID
+    assert [r.id for r in backend.log(SHOW_ID)] == ids
+
+
+def test_regression_memory_commit_that_lost_its_slot_is_a_conflict() -> None:
+    backend = _MemoryBackend()
+    ids = _fill(backend, 3)
+    landed = backend.log(SHOW_ID)[1]
+    with pytest.raises(ConflictError):
+        _commit(backend, landed)
+    with pytest.raises(StorageError) as caught:
+        _commit(backend, Revision(id=ids[0], parent=ids[-1], at=AT))
+    assert "already stored" in caught.value.message
     assert [r.id for r in backend.log(SHOW_ID)] == ids
 
 

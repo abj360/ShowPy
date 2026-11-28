@@ -18,6 +18,8 @@ Contains:
     Record: holds a revision record's slot number, revision and tree
     parsed_record(): checks a parsed revision record against its name and returns it
     require_slot_record(): raises CORRUPT unless a slot's record holds its number and revision
+    applied_tree(): returns the previous tree with a revision's changes applied, as the next
+        tree must read
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     last_present(): gallops from a slot known present and bisects back to the last present one
     refuse_redirect(): refuses a folder that is a symlink or a junction
@@ -188,7 +190,7 @@ def parsed_slot(show_id: str, path: Path, raw: bytes) -> Revision:
     return stored_revision(show_id, path, stored)
 
 
-def require_blob_digest(show_id: str, path: Path, data: bytes) -> None:
+def require_blob_digest(show_id: str, path: Path, data: bytes | memoryview) -> None:
     """Raises CORRUPT unless a stored blob's bytes hash to its file name."""
     if blob_digest(data) != path.name:
         raise corrupt(show_id, path, "blob bytes do not match their digest")
@@ -281,6 +283,32 @@ def require_slot_record(
         raise corrupt(show_id, path, f"record of this slot holds seq {record.seq}, not {seq}")
     if record.revision != revision:
         raise corrupt(show_id, path, "slot differs from the revision in its record")
+
+
+def applied_tree(
+    previous: Mapping[str, str], revision: Revision, tree: Mapping[str, str]
+) -> dict[str, str]:
+    """Returns the previous tree with each changed path set as the new tree has it.
+
+    A revision's tree must equal this: every path it did not change keeps its previous digest.
+
+    Args:
+        previous: Path to blob digest at the revision before; empty before the first.
+        revision: The revision, whose `changed` paths may differ.
+        tree: Path to blob digest the revision's record holds.
+
+    Returns:
+        applied: The tree the revision's record must hold.
+
+    >>> from datetime import UTC, datetime
+    >>> at = datetime(2026, 11, 27, tzinfo=UTC)
+    >>> revision = Revision(id="a" * 64, parent="", at=at, changed=("/b",))
+    >>> applied_tree({"/a": "1", "/b": "2"}, revision, {"/a": "9", "/b": "3"})
+    {'/a': '1', '/b': '3'}
+    """
+    applied = {path: digest for path, digest in previous.items() if path not in revision.changed}
+    applied.update({path: tree[path] for path in revision.changed if path in tree})
+    return applied
 
 
 class ReadBudget:
