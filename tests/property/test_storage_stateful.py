@@ -59,7 +59,9 @@ TICK = timedelta(seconds=1)
 GC_BEFORE_ANY_FILE = datetime(2000, 1, 1, tzinfo=UTC)
 GC_AFTER_EVERY_FILE = datetime(2200, 1, 1, tzinfo=UTC)
 MAX_PICK = 1_000
-MACHINE_EXAMPLES = 25
+# The ci profile derandomizes, so the examples are fixed; at 40 the file machine's run includes
+# gc removing a losing writer's blobs, which at 25 it does not.
+MACHINE_EXAMPLES = 40
 MACHINE_STEPS = 20
 # Hypothesis times one example, so the deadline covers a whole run of steps, each with flushed
 # file writes. State machines run without one by default; this keeps that default.
