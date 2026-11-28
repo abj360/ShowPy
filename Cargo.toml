@@ -13,6 +13,7 @@ publish = false
 
 [workspace.dependencies]
 libm = "=0.2.16"
+sha2 = { version = "=0.11.2", default-features = false }
 
 # Core functions return errors instead of panicking, and no crate of ours holds unsafe code.
 [workspace.lints.rust]
