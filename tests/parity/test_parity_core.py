@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 """
-test_parity_core.py --- gates the compiled core's number text, unit helpers and ID parsers
-against the v0.4.0 oracle
+test_parity_core.py --- gates the compiled core's number text, unit helpers, ID parsers,
+canonical JSON, content hashes and strict JSON reader against the v0.4.0 oracle
 
 Contains:
     test_plain_decimal_text_matches_v040_on_a_million_floats: writes the same text for every
@@ -10,6 +10,12 @@ Contains:
     test_unit_conversions_match_v040: gives the same angles, facings, rounded values and errors
     test_reference_and_transition_parsing_match_v040_on_the_fuzz_corpus: parses the same
         references, transitions and IDs, with the same errors
+    test_content_hash_matches_v040_on_every_stored_fixture: hashes, names and parses every file
+        under tests/fixtures/repos/ as v0.4.0 did, and hashes a 300 x 60 show the same way
+    test_canonical_bytes_match_v040_on_generated_json: writes the same canonical bytes, values,
+        hashes and errors for seeded JSON values, numbers in ECMAScript text included
+    test_strict_json_refuses_what_v040_refuses: parses and refuses the same texts, with the same
+        error codes, messages and contexts, and parses a 300 x 60 show the same way
 """
 
 from collections.abc import Callable
@@ -46,3 +52,24 @@ def test_reference_and_transition_parsing_match_v040_on_the_fuzz_corpus(
     run = parity_area("core")
     _passed(run, "reference_and_transition_corpus")
     _passed(run, "reference_and_transition_corpus_timed")
+
+
+def test_content_hash_matches_v040_on_every_stored_fixture(
+    parity_area: Callable[[str], AreaRun],
+) -> None:
+    run = parity_area("core")
+    _passed(run, "content_hash_on_stored_fixtures")
+    _passed(run, "content_hash_on_a_300_by_60_show")
+
+
+def test_canonical_bytes_match_v040_on_generated_json(
+    parity_area: Callable[[str], AreaRun],
+) -> None:
+    run = parity_area("core")
+    _passed(run, "canonical_bytes_on_generated_json")
+
+
+def test_strict_json_refuses_what_v040_refuses(parity_area: Callable[[str], AreaRun]) -> None:
+    run = parity_area("core")
+    _passed(run, "strict_json_on_hostile_text")
+    _passed(run, "strict_json_on_a_300_by_60_show")
