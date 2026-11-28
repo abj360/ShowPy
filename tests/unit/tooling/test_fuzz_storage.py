@@ -17,6 +17,8 @@ Contains:
     test_regression_command_line_loads_the_nightly_profile_before_discovery: the script run as
         __main__ discovers targets under the nightly profile
     test_fuzz_runs_a_target_under_libfuzzer: argv, corpus, artifact prefix and instrumentation
+    test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_it: libFuzzer's
+        per-input timeout is below the runner's grace, so a hang is saved as a crash input
     test_fuzz_passing_target_exits_zero: a clean run returns 0 and leaves no crash
     test_regression_storage_fuzz_crash_exits_non_zero_and_keeps_the_input: a raising target
     test_replay_reproduces_a_raising_input: one saved input run once
@@ -392,6 +394,16 @@ def test_fuzz_default_slot_is_the_named_constant(runner: ModuleType, package: Pa
     assert fuzz(runner, package, "--target", ALPHA_IDS[1], atheris=fake) == 0
     assert runner.FUZZ_SECONDS_PER_TEST == 300
     assert "-max_total_time=300" in fake.argv
+
+
+def test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_it(
+    runner: ModuleType, package: Path
+) -> None:
+    """Without a per-input limit below the grace, a hang was killed with nothing to replay."""
+    fake = FakeAtheris()
+    assert fuzz(runner, package, "--target", ALPHA_IDS[1], atheris=fake) == 0
+    assert f"-timeout={runner.INPUT_TIMEOUT_SECONDS}" in fake.argv
+    assert 0 < runner.INPUT_TIMEOUT_SECONDS < runner.TARGET_GRACE_SECONDS
 
 
 def test_fuzz_passing_target_exits_zero(runner: ModuleType, package: Path) -> None:

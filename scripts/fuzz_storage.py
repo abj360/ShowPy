@@ -14,6 +14,7 @@ Contains:
     FUZZ_SECONDS_PER_TEST: how long libFuzzer fuzzes one target in a nightly run
     TARGET_GRACE_SECONDS: how long past its slot one target's process may run before it is
         stopped and counted as failed
+    INPUT_TIMEOUT_SECONDS: how long one input may run before libFuzzer saves it as a crash
     NoTargetsError: raised when no file or no target is found
     discover_targets(): maps each target ID to the function that runs one input
     fuzz_target(): fuzzes one target under Atheris and libFuzzer
@@ -43,6 +44,9 @@ STORAGE_GLOB = "tests/property/test_storage_*.py"
 FUZZ_SECONDS_PER_TEST = 300
 # libFuzzer checks its time limit only between inputs, and each process imports e8s first.
 TARGET_GRACE_SECONDS = 120
+# libFuzzer saves an input that runs past this as a crash (exit 70); below the grace, it fires
+# before the runner stops the process, so a hang leaves an input to replay.
+INPUT_TIMEOUT_SECONDS = TARGET_GRACE_SECONDS // 2
 PROFILE_ENV = "HYPOTHESIS_PROFILE"
 NIGHTLY_PROFILE = "nightly"
 ID_SEPARATOR = "::"
@@ -183,6 +187,7 @@ def fuzz_target(atheris: AtherisModule, root: Path, target_id: str, seconds: int
         sys.argv[0],
         str(corpus),
         f"-max_total_time={seconds}",
+        f"-timeout={INPUT_TIMEOUT_SECONDS}",
         f"-artifact_prefix={crashes}/",
     ]
     atheris.Setup(argv, targets[target_id])
