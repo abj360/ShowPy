@@ -17,7 +17,7 @@ Contains:
 """
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError, StorageError, UnknownRefError
+from e8s.core.errors import ConflictError, E8sError, StorageError, UnknownRefError
 from e8s.core.util import close_matches
 from e8s.show.archive_checks import (
     EXPORT_DAMAGE_HINT,
@@ -131,7 +131,7 @@ def _exists(show_id: str) -> ConflictError:
     )
 
 
-def _stopped(archive: VerifiedArchive, seq: int, error: StorageError) -> StorageError:
+def _stopped(archive: VerifiedArchive, seq: int, error: E8sError) -> StorageError:
     """Builds the error of an import whose commit of slot `seq` failed after earlier ones landed."""
     landed, total = seq - 1, len(archive.revisions)
     last = archive.revisions[landed - 1].id
@@ -159,7 +159,7 @@ def _commit_history(repo: DocumentRepository, archive: VerifiedArchive) -> None:
             if seq == FIRST_SEQ:
                 raise _exists(archive.show_id) from error
             raise _stopped(archive, seq, error) from error
-        except StorageError as error:
+        except E8sError as error:
             if seq == FIRST_SEQ:
                 raise
             raise _stopped(archive, seq, error) from error

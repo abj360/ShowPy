@@ -14,6 +14,8 @@ Contains:
         lands between the check and the first commit with ConflictError
     test_regression_an_import_stopped_part_way_reports_what_landed: names the revisions that
         landed when a later commit fails, leaving that complete shorter history
+    test_regression_any_library_error_after_the_first_slot_reports_what_landed: names what
+        landed when a later commit raises an error that is not a storage error
     test_a_failed_first_commit_raises_its_own_error: raises the backend's error when nothing
         landed, and a later conflict as ConflictError naming what landed
     test_regression_an_archive_dated_year_one_imports_into_a_file_repository: imports a history
@@ -33,7 +35,7 @@ from pathlib import Path
 import pytest
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import ConflictError, StorageError
+from e8s.core.errors import ConflictError, SchemaError, StorageError
 from e8s.examples import two_set_show
 from e8s.show.archive import export_archive, import_archive
 from e8s.show.backend import RepositoryBackend
@@ -184,6 +186,24 @@ def test_regression_an_import_stopped_part_way_reports_what_landed(tmp_path: Pat
     assert "first 2 revisions" in caught.value.hint
     assert FileRepository(tmp_path).revisions(SHOW_ID) == landed[:2]
     assert fsck(tmp_path).ok
+
+
+def test_regression_any_library_error_after_the_first_slot_reports_what_landed() -> None:
+    source = InMemoryRepository()
+    landed = with_history(source, 4)
+
+    def refuse() -> None:
+        raise SchemaError("not a revision", hint="fix it", code=ErrorCode.SCHEMA)
+
+    target = InMemoryRepository()
+    with pytest.raises(StorageError) as caught:
+        import_archive(
+            DocumentRepository(_Interrupted(target.backend, 3, refuse)),
+            export_archive(source, SHOW_ID),
+        )
+    assert caught.value.code == ErrorCode.SCHEMA
+    assert caught.value.context["landed"] == 2
+    assert target.revisions(SHOW_ID) == landed[:2]
 
 
 def test_a_failed_first_commit_raises_its_own_error() -> None:
