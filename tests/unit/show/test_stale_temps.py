@@ -10,6 +10,10 @@ Contains:
         time as the caller's local time
     test_regression_a_forged_future_time_does_not_sweep_fresh_temp_files: keeps another writer's
         fresh temp file under a commit dated in year 9999, and still removes a stale one
+    test_regression_a_sweep_with_no_stale_temp_file_writes_no_probe: writes no probe temp file
+        when no temp file is old enough by the commit's time, and one when one is
+    test_regression_a_probe_that_vanishes_removes_nothing: keeps a stale temp file when the
+        probe that dates the file system's now is gone before it is read
     test_regression_a_year_one_commit_lands_in_a_file_repository: lands a commit dated within a
         day of the earliest time instead of overflowing
 """
@@ -19,16 +23,28 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from e8s.examples import two_set_show
+from e8s.show import durable_io, durable_reads
 from e8s.show.commit_writes import STALE_TEMP_AGE
 from e8s.show.file_repository import FileRepository
-from e8s.show.stale_temps import EARLIEST, stale_temp_cutoff
+from e8s.show.stale_temps import EARLIEST, remove_stale_temps_before, stale_temp_cutoff
 
 SHOW_ID = "show_1"
 NOW = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 FAR_FUTURE = datetime(9999, 12, 31, tzinfo=UTC)
 YEAR_ONE = datetime(1, 1, 1, 12, tzinfo=UTC)
 TWO_DAYS_S = 2 * 24 * 3600
+HOUR_S = 3600
+
+
+def _aged(folder: Path, name: str, age_s: float) -> Path:
+    path = folder / name
+    path.write_bytes(b"partial")
+    then = time.time() - age_s
+    os.utime(path, (then, then))
+    return path
 
 
 def test_stale_temp_cutoff_is_the_earlier_time_less_the_age() -> None:
@@ -63,3 +79,42 @@ def test_regression_a_year_one_commit_lands_in_a_file_repository(tmp_path: Path)
     repo = FileRepository(tmp_path)
     landed = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=YEAR_ONE)
     assert FileRepository(tmp_path).revisions(SHOW_ID) == [landed]
+
+
+def test_regression_a_sweep_with_no_stale_temp_file_writes_no_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fresh = _aged(tmp_path, ".tmp-fresh", HOUR_S)
+    written: list[Path] = []
+    real = durable_io.write_temp
+
+    def counted(folder: Path, data: bytes) -> Path:
+        temp = real(folder, data)
+        written.append(temp)
+        return temp
+
+    monkeypatch.setattr(durable_io, "write_temp", counted)
+    now = datetime.fromtimestamp(time.time(), UTC)
+    remove_stale_temps_before(SHOW_ID, tmp_path, now)
+    assert written == []
+    assert sorted(tmp_path.iterdir()) == [fresh]
+    stale = _aged(tmp_path, ".tmp-stale", TWO_DAYS_S)
+    remove_stale_temps_before(SHOW_ID, tmp_path, now)
+    assert len(written) == 1
+    assert not stale.exists()
+    assert sorted(tmp_path.iterdir()) == [fresh]
+
+
+def test_regression_a_probe_that_vanishes_removes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale = _aged(tmp_path, ".tmp-stale", TWO_DAYS_S)
+    real = durable_reads.lstat_info
+
+    def probe_gone(show_id: str, path: Path) -> os.stat_result | None:
+        return real(show_id, path) if path == stale else None
+
+    monkeypatch.setattr(durable_reads, "lstat_info", probe_gone)
+    remove_stale_temps_before(SHOW_ID, tmp_path, datetime.fromtimestamp(time.time(), UTC))
+    assert stale.exists()
+    assert sorted(tmp_path.iterdir()) == [stale]
