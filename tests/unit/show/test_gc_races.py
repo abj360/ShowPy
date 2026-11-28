@@ -18,7 +18,9 @@ Contains:
     test_regression_gc_stops_on_a_show_whose_head_moves_during_removal: puts the file back and
         skips the show once a slot lands while gc removes
     test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside: puts back a blob gc held
-        aside when a commit that did not pass it, so never freshened it, landed naming it
+        aside when a writer without the unsent-blob check landed a slot naming it
+    test_commit_naming_a_blob_gc_holds_aside_is_refused: refuses a commit that names, without
+        its bytes, a blob gc holds aside, and gc then removes the unreached blob
     test_gc_keeps_a_temp_file_touched_after_the_check: keeps a temp file a writer touched
 """
 
@@ -30,6 +32,7 @@ from pathlib import Path
 
 import pytest
 
+from e8s.core.errors import StorageError
 from e8s.show import durable_io, fsck_scan
 from e8s.show import gc as gc_module
 from e8s.show.backend import digest
@@ -49,6 +52,10 @@ from tests.fixtures.gc_races import (
     moved_name_freed,
     unreachable_blob,
 )
+
+
+def _skip_unsent_blob_check(*_args: object) -> None:
+    """Stands in for the unsent-blob check, as in a release before commits made it."""
 
 
 @pytest.mark.parametrize("left", ["blob", "record"])
@@ -186,7 +193,7 @@ def test_regression_gc_stops_on_a_show_whose_head_moves_during_removal(
 def test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The backend protocol lets a commit name a stored blob it does not pass; nothing freshens it.
+    """A writer without the unsent-blob check can land a slot naming a blob gc holds aside.
 
     Only the check that no slot landed while the blob was aside keeps it.
     """
@@ -196,7 +203,9 @@ def test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside(
     unpassed = {name: data for name, data in blobs.items() if name != digest(REDO)}
 
     def land() -> None:
-        FileBackend(tmp_path).commit(SHOW_ID, revision, tree, unpassed)
+        unchecked = FileBackend(tmp_path)
+        monkeypatch.setattr(unchecked, "_require_unsent_blobs", _skip_unsent_blob_check)
+        unchecked.commit(SHOW_ID, revision, tree, unpassed)
 
     moved_name_freed(monkeypatch, blob, land)
     report = gc(tmp_path, at=now, confirm=True)
@@ -206,6 +215,30 @@ def test_regression_gc_puts_back_a_file_a_slot_names_once_set_aside(
     assert blob.read_bytes() == REDO
     assert fsck(tmp_path).findings == ()
     assert FileBackend(tmp_path).log(SHOW_ID) == [first, revision]
+
+
+def test_commit_naming_a_blob_gc_holds_aside_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(UTC)
+    first, blob = unreachable_blob(tmp_path, now)
+    revision, tree, blobs = change(first.id, REDO)
+    unpassed = {name: data for name, data in blobs.items() if name != digest(REDO)}
+    refusals: list[StorageError] = []
+
+    def land() -> None:
+        try:
+            FileBackend(tmp_path).commit(SHOW_ID, revision, tree, unpassed)
+        except StorageError as error:
+            refusals.append(error)
+
+    moved_name_freed(monkeypatch, blob, land)
+    report = gc(tmp_path, at=now, confirm=True)
+    monkeypatch.undo()
+    assert [error.code for error in refusals] == ["CORRUPT"]
+    assert report.removed == (blob.relative_to(tmp_path).as_posix(),)
+    assert fsck(tmp_path).findings == ()
+    assert FileBackend(tmp_path).log(SHOW_ID) == [first]
 
 
 def test_gc_keeps_a_temp_file_touched_after_the_check(

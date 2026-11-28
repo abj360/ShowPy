@@ -23,6 +23,7 @@ Contains:
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
     require_sent_blob_digests(): refuses a commit that sends a blob under a digest its bytes lack
+    unstored_blobs(): builds the StorageError for a tree naming blobs neither sent nor stored
 """
 
 from collections.abc import Mapping
@@ -38,6 +39,7 @@ from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_reads
+from e8s.show.backend import SHORT_ID
 from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import REVISION_ID_PATTERN
@@ -342,6 +344,18 @@ def require_sent_blob_digests(show_id: str, blobs: Mapping[str, bytes]) -> None:
                 context={"show": show_id, "digest": digest},
                 code=ErrorCode.CORRUPT,
             )
+
+
+def unstored_blobs(show_id: str, digests: list[str]) -> StorageError:
+    """Builds the StorageError for a commit whose tree names blobs neither sent nor stored."""
+    return StorageError(
+        f"tree of {show_id} names blobs neither sent nor stored: "
+        f"{', '.join(d[:SHORT_ID] for d in digests[:3])}",
+        hint="send the bytes of each blob the show does not store yet; if fsck(root) lists a "
+        "set-aside .gc- copy of one, gc(root, at=datetime.now(UTC), confirm=True) puts it back",
+        context={"show": show_id, "digests": digests},
+        code=ErrorCode.CORRUPT,
+    )
 
 
 def refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:

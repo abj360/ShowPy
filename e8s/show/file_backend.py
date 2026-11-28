@@ -39,6 +39,7 @@ from e8s.show.backend_checks import (
     require_plain_folders,
     require_sent_blob_digests,
     require_slot_record,
+    unstored_blobs,
 )
 from e8s.show.commit_writes import (
     STALE_TEMP_AGE,
@@ -382,7 +383,8 @@ class FileBackend:
         """Writes the blobs and the record, then lands the revision by claiming its slot.
 
         Raises ConflictError, listing what landed, when the parent is no longer the head. A blob
-        whose bytes do not hash to its digest is refused with CORRUPT before anything is written.
+        whose bytes do not hash to its digest, and a tree naming a blob neither sent nor stored
+        for this show, are refused with CORRUPT before anything is written.
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._require_plain_folders(show_id)
@@ -391,6 +393,7 @@ class FileBackend:
             _require_readable_sizes(show_id, tree, blobs)
             require_sent_blob_digests(show_id, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
+            self._require_unsent_blobs(show_id, revision.parent, tree, blobs)
             self._prepare(show_id)
             remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
             self._store_blobs(show_id, blobs)
@@ -404,6 +407,28 @@ class FileBackend:
                 remove_lost_record(self._record_path(show_id, revision.id), winner, revision.id)
                 raise
             self._remember(show_id, seq, revision.id)
+
+    def _require_unsent_blobs(
+        self, show_id: str, parent: str, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        """Requires every tree blob not sent to be stored for this show, before anything is written.
+
+        A blob the parent's tree names is reached by a landed slot, so gc keeps it. Any other one
+        is freshened, then read and checked against its digest: gc removes only a file that is old
+        and unchanged since it listed it, so a freshened blob stays until this commit's slot lands,
+        and one gc already moved aside fails the freshen and refuses the commit.
+        """
+        unsent = {digest for digest in tree.values() if digest not in blobs}
+        if not unsent:
+            return
+        if parent != ROOT_REVISION:
+            unsent -= set(self._record(show_id, parent).tree.values())
+        objects = self._folder(show_id) / OBJECT_DIR
+        missing = sorted(digest for digest in unsent if not durable_io.freshen(objects / digest))
+        if missing:
+            raise unstored_blobs(show_id, missing)
+        for digest in sorted(unsent):
+            self._verified_blob(show_id, objects / digest)
 
     def _parent_seq(self, show_id: str, parent: str) -> int:
         """Returns the slot number of the commit's parent; an unlanded parent is a conflict."""
