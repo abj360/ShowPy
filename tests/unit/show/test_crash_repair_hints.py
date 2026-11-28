@@ -87,6 +87,8 @@ FIRST_FILES = [LAYOUT_FILE, MANIFEST_FILE]
 NEW_BLOB = b"render 1"
 TORN_PREFIX_BYTES = 5
 BACKUP = "restore the show folder from a backup"
+STOPPED_CAUSE = "can leave it so"
+TORN_FILE_NAMED = "the file at the error's path"
 # A call a hint spells: fsck or gc on the root, whose arguments may hold one call of their own.
 HINT_CALL = re.compile(r"\b(?:fsck|gc)\(root(?:[^()]|\([^()]*\))*\)")
 LIBRARY = Path(e8s.__file__).parent
@@ -208,6 +210,8 @@ def test_regression_torn_blob_or_record_hint_names_the_gc_that_clears_it(
     assert "fsck(root)" in hint
     assert UNREACHABLE in hint
     assert BACKUP in hint
+    assert STOPPED_CAUSE in hint
+    assert TORN_FILE_NAMED in hint
     assert (UNREACHABLE, relative(tmp_path, torn)) in codes(tmp_path)
     age_by(torn, STALE_TEMP_AGE - HOUR)
     assert isinstance(_run_hint_call(hint, tmp_path), GcReport)

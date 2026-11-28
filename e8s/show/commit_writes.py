@@ -48,8 +48,8 @@ STALE_TEMP_AGE = timedelta(hours=24)
 PROBE_SUFFIX = ".link-probe"
 TORN_IN_PLACE_HINT = (
     "a commit that stopped while writing this file can leave it so; run fsck(root): if it lists "
-    f"the file as {UNREACHABLE}, {GC_CALL} removes it once it is a day old, then commit again; "
-    "otherwise restore the show folder from a backup"
+    f"the file at the error's path as {UNREACHABLE}, {GC_CALL} removes it once it is a day old, "
+    "then commit again; otherwise restore the show folder from a backup"
 )
 # A writer that takes a name and fails its write frees the name again. Placing it again covers
 # that; a name freed on every attempt means writers keep failing, and the commit stops.
