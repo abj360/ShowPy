@@ -6,6 +6,7 @@
 //!     guard(): runs one core call, raising its error, or a panic it caught, as an e8s exception
 //!     to_py_err(): builds the e8s exception a core error names
 //!     loaded(): finds a loaded module by its current entry in `sys.modules`
+//!     py_int(): builds a Python int from decimal digits
 //!     add_probes(): adds the private boundary hook `_finite_probe` to a module
 
 use std::any::Any;
@@ -17,7 +18,7 @@ use e8s_core::base::{ContextValue, CoreError, CoreResult, ErrorCode, ErrorKind, 
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyDict, PyString};
+use pyo3::types::{PyDict, PyInt, PyString};
 
 /// The hint of every CORE_PANIC error.
 pub const PANIC_HINT: &str = "This is a bug in e8s; report it with the function name.";
@@ -68,6 +69,16 @@ pub fn to_py_err(py: Python<'_>, err: &CoreError) -> PyErr {
     build_exception(py, err).unwrap_or_else(|failure| failure)
 }
 
+/// Builds a Python int from decimal digits after an optional `-`, for a context value beyond
+/// 64 bits.
+///
+/// # Errors
+///
+/// Returns Python's error when the text is not an integer.
+pub fn py_int<'py>(py: Python<'py>, digits: &str) -> PyResult<Bound<'py, PyAny>> {
+    py.get_type::<PyInt>().call1((digits,))
+}
+
 /// Finds a loaded module by its current entry in `sys.modules`, importing it when absent.
 ///
 /// A reload or a re-import changes the entry, so the classes and the enum are always the
@@ -90,6 +101,7 @@ fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
         match value {
             ContextValue::Bool(flag) => context.set_item(key, *flag),
             ContextValue::Int(number) => context.set_item(key, *number),
+            ContextValue::Integer(digits) => context.set_item(key, py_int(context.py(), digits)?),
             ContextValue::Float(number) => context.set_item(key, *number),
             ContextValue::Text(text) => context.set_item(key, text),
         }?;

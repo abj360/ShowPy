@@ -17,3 +17,21 @@ expect = { facing_vector = [
   { error = "SchemaError", code = "SCHEMA" },
   { error = "SchemaError", code = "SCHEMA" },
 ], format_number = [{ error = "SchemaError", code = "SCHEMA" }] }
+
+[[case]]
+name = "core.util_inputs_v040_mishandled"
+reason = "lone surrogates show as U+FFFD in errors; other number types split as floats; other part types and non-text names raise TypeError"
+expect = { surrogate_errors = [
+  { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': \"number in 'T\\ufffd99999999999999999999999999999999999999999999999999999999999999'... has 65 digits\", 'hint': 'IDs hold at most 64 characters, so no number is longer', 'context': {'digits': 65, 'max': 64}}" },
+  { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': \"bad range '\\ufffd-'\", 'hint': 'write ranges as T1-T8', 'context': {'text': '\\ufffd-'}}" },
+  { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': \"number in 'T\\ufffd11111111111111111111111111111111111111111111111111111111111111'... has 70 digits\", 'hint': 'IDs hold at most 64 characters, so no number is longer', 'context': {'digits': 70, 'max': 64}}" },
+], chunk_counts = [
+  { types = ["float", "float", "float"], values = "[0.3333333333333333, 0.3333333333333333, 0.33333333333333337]" },
+  { types = ["float", "float", "float"], values = "[0.5, 0.5, 0.5]" },
+  { types = ["float", "float", "float", "float"], values = "[2.25, 2.25, 2.25, 2.25]" },
+  { types = ["float", "float", "float"], values = "[2.6666666666666665, 2.6666666666666665, 2.666666666666667]" },
+  { error = "TypeError", detail = "" },
+], close_matches = [
+  { error = "TypeError", detail = "" },
+  { error = "TypeError", detail = "" },
+] }

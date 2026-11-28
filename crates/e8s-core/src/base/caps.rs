@@ -16,8 +16,9 @@
 //!     MAX_SETS: bounds the sets of one show
 //!     size_error(): builds the error for a size that is negative or over its cap
 //!     require_size(): rejects a requested size that is negative or over its cap
+//!     size_beyond_i64(): builds the error for a size written as digits beyond 64 bits
 
-use super::error::{CoreError, CoreResult};
+use super::error::{ContextValue, CoreError, CoreResult};
 use super::error_codes::{ErrorCode, ErrorKind};
 
 /// Bounds the points one call returns.
@@ -92,6 +93,22 @@ pub fn require_size(requested: i64, cap: i64, what: &str) -> CoreResult<()> {
     )
 }
 
+/// Builds the error for a requested size beyond 64 bits, written as decimal digits after an
+/// optional `-`: a negative one, or one over every cap.
+#[must_use]
+pub fn size_beyond_i64(requested: &str, cap: i64, what: &str) -> CoreError {
+    let (message, hint) = size_error(
+        requested,
+        &cap.to_string(),
+        requested.starts_with('-'),
+        what,
+    );
+    CoreError::new(ErrorKind::Schema, ErrorCode::Schema, message, hint)
+        .with_context("what", what)
+        .with_context("requested", ContextValue::Integer(requested.to_owned()))
+        .with_context("cap", cap)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,5 +133,18 @@ mod tests {
         assert_eq!(err.message(), "points would need -1, which is negative");
         assert_eq!(require_size(0, MAX_POINTS, "points"), Ok(()));
         assert_eq!(require_size(MAX_POINTS, MAX_POINTS, "points"), Ok(()));
+    }
+
+    #[test]
+    fn a_size_beyond_64_bits_keeps_every_digit() {
+        let err = size_beyond_i64("100000000000000000000000", MAX_RANGE, "range IDs");
+        assert_eq!(
+            err.message(),
+            "range IDs would need 100000000000000000000000, over the cap of 10000"
+        );
+        assert_eq!(
+            err.context()[1].1,
+            ContextValue::Integer("100000000000000000000000".to_owned())
+        );
     }
 }

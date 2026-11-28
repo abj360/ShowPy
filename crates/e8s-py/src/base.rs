@@ -1,21 +1,28 @@
-//! base --- bindings of the base area: numbers, caps, angle helpers, IDs and references
+//! base --- bindings of the base area: numbers, caps, angle helpers, IDs, references, JSON,
+//! hashing and the small shared utilities
 //!
 //! Contains:
 //!     canonical: binds canonical values, canonical JSON bytes and content hashes
+//!     cells: binds close-name suggestions and the CSV formula guard
 //!     host: gives non-ASCII text the answers of Python's own Unicode tables
 //!     numeric: binds number text, angle wrapping, rounding and the size caps
+//!     ranges: binds natural sorting, ID splitting, range expansion and run compaction
 //!     rng: binds the seeded PCG64 generator for its tests
 //!     identifiers: binds the ID checks, references and transition IDs
 //!     strict: binds the strict JSON reader and the nesting count
+//!     util: binds noise ranks, float comparison and count chunks
 //!     walk: walks Python values into the canonical JSON model
 //!     add_all(): adds every public function and constant of the base area to a module
 
 mod canonical;
+mod cells;
 mod host;
 mod identifiers;
 mod numeric;
+mod ranges;
 mod rng;
 mod strict;
+mod util;
 mod walk;
 
 use e8s_core::base::{caps, ids, numbers, rounding, units};
@@ -32,6 +39,9 @@ pub fn add_all(module: &Bound<'_, PyModule>) -> PyResult<()> {
     identifiers::add_functions(module)?;
     canonical::add_functions(module)?;
     strict::add_functions(module)?;
+    util::add_functions(module)?;
+    ranges::add_functions(module)?;
+    cells::add_functions(module)?;
     rng::add_hooks(module)?;
     add_constants(module)
 }

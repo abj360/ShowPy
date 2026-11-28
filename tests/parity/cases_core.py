@@ -21,7 +21,7 @@ Contains:
     reference_and_transition_corpus_malformed_timed(): the timed share of the parsers' error path
     non_finite_inputs_raise_e8s_errors(): records the error class of inputs v0.4.0 mishandled
     CASES: the core area's cases, with the canonical JSON and strict JSON cases of core_json and
-        the utility cases of core_util
+        the utility cases of core_util and core_text
 """
 
 import hashlib
@@ -37,6 +37,7 @@ from pydantic import JsonValue
 
 from tests.parity.cases import Case, Output
 from tests.parity.core_json import JSON_CASES
+from tests.parity.core_text import TEXT_CASES
 from tests.parity.core_util import UTIL_CASES
 
 SEED = 20261124
@@ -476,4 +477,5 @@ CASES = (
     ),
     *JSON_CASES,
     *UTIL_CASES,
+    *TEXT_CASES,
 )

@@ -20,7 +20,7 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyType};
 
 use super::host::repr_of;
-use crate::errors::{guard, to_py_err};
+use crate::errors::{guard, py_int, to_py_err};
 
 static REAL: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 const ERRORS_MODULE: &str = "e8s.core.errors";
@@ -241,6 +241,7 @@ fn context_of<'py>(py: Python<'py>, err: &CoreError) -> PyResult<Bound<'py, PyDi
         match value {
             ContextValue::Bool(flag) => context.set_item(key, *flag),
             ContextValue::Int(number) => context.set_item(key, *number),
+            ContextValue::Integer(digits) => context.set_item(key, py_int(context.py(), digits)?),
             ContextValue::Float(number) => context.set_item(key, *number),
             ContextValue::Text(text) => context.set_item(key, text),
         }?;
