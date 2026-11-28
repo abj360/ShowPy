@@ -29,6 +29,10 @@ Contains:
     test_regression_gc_removes_files_a_listing_reports_without_inodes: removes unreachable and
         stale temp files where folder listings, as on Windows, report device and inode 0
     test_gc_never_follows_a_link: keeps old temp files behind a symlinked tmp folder
+    test_regression_gc_after_a_crash_between_link_and_temp_removal_cleans_in_one_run: removes a
+        temp and the other name a crashed link gave its file, in one run
+    test_gc_keeps_a_file_that_changed_after_its_rescan: keeps a crashed commit's blob a writer
+        touched after the scan gc makes once it removed the blob's temp
     test_gc_refuses_layout_1_and_a_time_without_a_zone: raises VersionError and SchemaError
 """
 
@@ -46,10 +50,11 @@ from e8s.examples import two_set_show
 from e8s.show import durable_io, durable_reads, fsck_scan
 from e8s.show import gc as gc_module
 from e8s.show.backend import digest
+from e8s.show.commit_writes import PROBE_SUFFIX
 from e8s.show.document_repository import DocumentRepository, revision_id
 from e8s.show.file_backend import FileBackend
 from e8s.show.fsck import fsck
-from e8s.show.fsck_findings import SET_ASIDE_PREFIX, Leftover
+from e8s.show.fsck_findings import SET_ASIDE_PREFIX, UNREACHABLE, Leftover
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.show_folders import show_folder
@@ -64,6 +69,8 @@ TITLES = [two_set_show().title, "second"]
 MOVED = "a slot landed while gc ran; run gc again"
 DAY = timedelta(days=1)
 OLD = 2 * DAY
+# Later than any file a run writes, whatever the real clock reads, so gc treats every file as old.
+AFTER_EVERY_FILE = datetime(2200, 1, 1, tzinfo=UTC)
 SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
 
 
@@ -511,3 +518,73 @@ def test_gc_refuses_layout_1_and_a_time_without_a_zone(tmp_path: Path) -> None:
     assert "upgrade_repository(Path(" in caught.value.hint
     with pytest.raises(SchemaError):
         gc(tmp_path, at=AT.replace(tzinfo=None))
+
+
+class _Crash(BaseException):
+    """Stops a commit the way a crash would: no library handler catches it."""
+
+
+def _crash_at_first_twin_removal(patches: pytest.MonkeyPatch, *, is_probe: bool) -> None:
+    """Stops the next commit as it removes a temp file a link just gave a second name.
+
+    Args:
+        patches: Patches the commit runs under.
+        is_probe: Whether to stop at the hard-link probe's second name, else at a placed blob's
+            temp file.
+    """
+    remove = durable_io.remove_file
+
+    def remove_or_crash(path: Path) -> None:
+        is_twin = path.exists() and path.lstat().st_nlink == 2
+        if is_twin and path.name.endswith(PROBE_SUFFIX) == is_probe:
+            raise _Crash
+        remove(path)
+
+    patches.setattr(durable_io, "remove_file", remove_or_crash)
+
+
+def _crashed_commit(root: Path, parent: Revision, *, is_probe: bool) -> None:
+    with pytest.MonkeyPatch.context() as patches:
+        _crash_at_first_twin_removal(patches, is_probe=is_probe)
+        with pytest.raises(_Crash):
+            DocumentRepository(FileBackend(root)).put_show(
+                SHOW_ID, two_set_show().replace(title="third"), expected_revision=parent.id, at=AT
+            )
+
+
+@pytest.mark.parametrize("is_probe", [False, True], ids=["blob", "probe"])
+def test_regression_gc_after_a_crash_between_link_and_temp_removal_cleans_in_one_run(
+    tmp_path: Path, *, is_probe: bool
+) -> None:
+    _, landed = _repository(tmp_path)
+    _crashed_commit(tmp_path, landed[-1], is_probe=is_probe)
+    assert fsck(tmp_path).findings
+    planned = gc(tmp_path, at=AFTER_EVERY_FILE)
+    report = gc(tmp_path, at=AFTER_EVERY_FILE, confirm=True)
+    assert report.removed == planned.removed
+    assert fsck(tmp_path).findings == ()
+    assert gc(tmp_path, at=AFTER_EVERY_FILE, confirm=True).removed == ()
+    _every_revision_loads(tmp_path, landed, TITLES)
+
+
+def test_gc_keeps_a_file_that_changed_after_its_rescan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, landed = _repository(tmp_path)
+    _crashed_commit(tmp_path, landed[-1], is_probe=False)
+    (blob,) = [tmp_path / item.path for item in fsck(tmp_path).findings if item.code == UNREACHABLE]
+    scan, scans = fsck_scan.scan_repository, list[object]()
+
+    def scan_then_touch(root: Path, show_id: str | None, at: datetime | None) -> object:
+        found = scan(root, show_id, at)
+        scans.append(found)
+        if len(scans) == 2:
+            _age(blob, OLD + DAY)
+        return found
+
+    monkeypatch.setattr(gc_module, "scan_repository", scan_then_touch)
+    report = gc(tmp_path, at=AFTER_EVERY_FILE, confirm=True)
+    assert len(scans) == 2
+    assert _relative(tmp_path, blob) not in report.removed
+    assert report.removed
+    assert blob.exists()
