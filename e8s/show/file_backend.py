@@ -34,12 +34,13 @@ from e8s.show.backend_checks import (
     parsed_record,
     parsed_slot,
     refuse_redirect,
-    require_blob_digest,
     require_caller_ids,
     require_plain_folders,
     require_readable_sizes,
+    require_sent_blob_digests,
     require_slot_record,
 )
+from e8s.show.blob_checks import require_unsent_blobs, stored_blob
 from e8s.show.commit_writes import (
     FilePlacer,
     flush_directories,
@@ -58,12 +59,8 @@ from e8s.show.fsck_findings import SET_ASIDE_PREFIX
 from e8s.show.history_models import Revision
 from e8s.show.layout import HOUSEKEEPING_NAMES, TEMP_DIR, require_usable_path
 from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
-from e8s.show.manifests import (
-    Manifest,
-    parsed_manifest,
-    require_legacy_bound,
-    require_legacy_digest,
-)
+from e8s.show.legacy_checks import require_legacy_bound_at, require_legacy_prefix
+from e8s.show.manifests import Manifest, parsed_manifest
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.stale_temps import remove_stale_temps_before
 from e8s.show.storage import ROOT_REVISION
@@ -169,15 +166,9 @@ class FileBackend:
         return self._manifests.get(show_id, Manifest(show_id)).legacy_before
 
     def _require_legacy_bound(self, show_id: str, last: int | None = None) -> None:
-        """Refuses a manifest whose `legacy_before` passes the slot after the last slot.
-
-        Only an upgraded show's manifest names legacy slots, so no other show looks anything up.
-        """
-        legacy_before = self._legacy_before(show_id)
-        if legacy_before == FIRST_SEQ:
-            return
-        seq = self._head(show_id)[0] if last is None else last
-        require_legacy_bound(show_id, self._folder(show_id) / MANIFEST_FILE, legacy_before, seq)
+        """Refuses a manifest whose `legacy_before` passes the slot after the last slot."""
+        path, head_seq = self._folder(show_id) / MANIFEST_FILE, lambda: self._head(show_id)[0]
+        require_legacy_bound_at(show_id, path, self._legacy_before(show_id), last, head_seq)
 
     def _require_legacy_prefix(self, show_id: str, read: list[Revision] | None = None) -> None:
         """Checks once per backend that the legacy slots hold the IDs the manifest's digest names.
@@ -187,10 +178,8 @@ class FileBackend:
         manifest = self._manifests.get(show_id)
         if manifest is None or not manifest.legacy_digest or show_id in self._legacy_checked:
             return
-        legacy = range(FIRST_SEQ, manifest.legacy_before)
-        ids = [r.id for r in read or [self._read_slot(show_id, seq) for seq in legacy]]
-        path = self._folder(show_id) / MANIFEST_FILE
-        require_legacy_digest(show_id, path, manifest, ids[: len(legacy)])
+        path, read_slot = self._folder(show_id) / MANIFEST_FILE, partial(self._read_slot, show_id)
+        require_legacy_prefix(show_id, path, manifest, read_slot, read)
         self._legacy_checked.add(show_id)
 
     def _require_plain_folders(self, show_id: str) -> None:
@@ -382,20 +371,7 @@ class FileBackend:
         """Returns the bytes of a blob after checking they hash to its digest."""
         with mapped_io(show_id, self._folder(show_id)):
             self._check_manifest(show_id)
-            objects = self._folder(show_id) / OBJECT_DIR
-            if not REVISION_ID_PATTERN.fullmatch(digest):
-                raise corrupt(show_id, objects, f"{digest!r} is not a 64-digit hex id")
-            if lstat_mode(show_id, objects / digest) is None:
-                raise missing_file(show_id, objects / digest, "a tree names this blob")
-            return self._verified_blob(show_id, objects / digest)
-
-    def _verified_blob(self, show_id: str, path: Path) -> bytes:
-        """Reads a stored object, raising CORRUPT unless its bytes hash to its file name."""
-        data = read_capped(
-            path, "blob", BLOB_MAX_BYTES, lambda source, why: corrupt(show_id, source, why)
-        )
-        require_blob_digest(show_id, path, data)
-        return data
+            return stored_blob(show_id, self._folder(show_id) / OBJECT_DIR, digest)
 
     def commit(
         self,
@@ -406,15 +382,19 @@ class FileBackend:
     ) -> None:
         """Writes the blobs and the record, then lands the revision by claiming its slot.
 
-        Raises ConflictError, listing what landed, when the parent is no longer the head.
+        Raises ConflictError, listing what landed, when the parent is no longer the head. A blob
+        whose bytes do not hash to its digest, and a tree naming a blob neither sent nor stored
+        for this show, are refused with CORRUPT before anything is written.
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._require_plain_folders(show_id)
             self._check_manifest(show_id)
             require_caller_ids(show_id, revision, tree, blobs)
             require_readable_sizes(show_id, tree, blobs)
+            require_sent_blob_digests(show_id, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._require_legacy_bound(show_id)
+            self._require_unsent_blobs(show_id, revision.parent, tree, blobs)
             self._prepare(show_id)
             remove_stale_temps_before(show_id, self.root / TEMP_DIR, revision.at)
             self._store_blobs(show_id, blobs)
@@ -428,6 +408,13 @@ class FileBackend:
                 remove_lost_record(self._record_path(show_id, revision.id), winner, revision.id)
                 raise
             self._remember(show_id, seq, revision.id)
+
+    def _require_unsent_blobs(
+        self, show_id: str, parent: str, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        """Requires every unsent tree blob to be stored for this show before anything is written."""
+        objects, read_record = self._folder(show_id) / OBJECT_DIR, partial(self._record, show_id)
+        require_unsent_blobs(show_id, objects, parent, tree, blobs, read_record)
 
     def _parent_seq(self, show_id: str, parent: str) -> int:
         """Returns the slot number of the commit's parent; an unlanded parent is a conflict."""

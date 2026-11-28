@@ -292,6 +292,8 @@ class DocumentRepository:
         >>> repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision=rev.id, at=at) == rev
         True
         """
+        # A copy, so a caller editing a bytearray afterwards cannot change what was stored.
+        changes = {path: None if raw is None else bytes(raw) for path, raw in changes.items()}
         for path, data in changes.items():
             split_path(path)
             require_known_path(path, is_write=data is not None)

@@ -59,6 +59,7 @@ class _MemoryBackend(RepositoryBackend):
         self._heads: dict[str, str] = {}
         self._trees: dict[tuple[str, str], dict[str, str]] = {}
         self._blobs: dict[str, bytes] = {}
+        self._show_blobs: dict[str, set[str]] = {}
         self._lock = threading.Lock()
 
     @override
@@ -105,10 +106,9 @@ class _MemoryBackend(RepositoryBackend):
     @override
     def blob(self, show_id: str, digest: str) -> bytes:
         with self._lock:
-            data = self._blobs.get(digest)
-            if data is None:
+            if digest not in self._show_blobs.get(show_id, set()):
                 raise _corrupt(show_id, f"blob {digest[:7]} is not stored")
-            return data
+            return self._blobs[digest]
 
     @override
     def commit(
@@ -118,13 +118,15 @@ class _MemoryBackend(RepositoryBackend):
         tree: Mapping[str, str],
         blobs: Mapping[str, bytes],
     ) -> None:
+        copies = {digest: bytes(data) for digest, data in blobs.items()}
         with self._lock:
-            self._require_valid(show_id, revision, tree, blobs)
+            self._require_valid(show_id, revision, tree, copies)
             if self._heads.get(show_id, ROOT_REVISION) != revision.parent:
                 raise conflict_error(show_id, revision.parent, self._landed(show_id, revision))
             if revision.id in self._revisions.get(show_id, {}):
                 raise _stored_id(show_id, revision.id)
-            self._blobs.update(blobs)
+            self._blobs.update(copies)
+            self._show_blobs.setdefault(show_id, set()).update(copies)
             self._trees[(show_id, revision.id)] = dict(tree)
             self._revisions.setdefault(show_id, {})[revision.id] = revision
             self._heads[show_id] = revision.id
@@ -148,7 +150,8 @@ class _MemoryBackend(RepositoryBackend):
                 raise _bad_id(show_id, "blob digest", digest)
             if blob_digest(data) != digest:
                 raise _corrupt(show_id, f"blob bytes do not match digest {digest[:7]}")
-        missing = sorted({d for d in tree.values() if d not in blobs and d not in self._blobs})
+        stored = self._show_blobs.get(show_id, set())
+        missing = sorted({d for d in tree.values() if d not in blobs and d not in stored})
         if missing:
             raise _corrupt(show_id, f"tree names blobs that are not stored: {missing[:3]}")
 
