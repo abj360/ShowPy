@@ -4,12 +4,13 @@
 test_phase3_scenario.py --- proves the Phase 3 storage exit criteria over 1,000 revisions
 
 Copies the layout-1 repository v0.4.0 wrote and upgrades it with `upgrade_repository`, keeps
-saving the upgraded show, then saves its head as a new show (an archive refuses the fixture's
-show ID `legacy-show`, whose hyphen a new show ID may not hold) and writes 1,000 revisions to it
-on the file backend. The revisions mix one-spot designer saves; three role agents editing one
-set (drill, facing and timing) whose edits `merge` combines with no conflict; proposals that are
-proposed, previewed and then accepted (the head takes the move), rejected or withdrawn (the head
-show stays as it was); a text form on a user font; and a `revert`.
+saving the upgraded show and checks its event replay and revalidation, then saves its head as a
+new show (an archive refuses the fixture's show ID `legacy-show`, whose hyphen a new show ID may
+not hold) and writes 1,000 revisions to it on the file backend. The revisions mix one-spot
+designer saves; three role agents editing one set (drill, facing and timing) whose edits `merge`
+combines with no conflict; proposals that are proposed, previewed and then accepted (the head
+takes the move), rejected or withdrawn (the head show stays as it was); a text form on a user
+font; and a `revert`.
 After every 100 revisions the head is read in under 1 ms (median of warm calls), `fsck` passes,
 `events_since` replays the last 100 revisions to the head show and `revalidate` chained from the
 last check equals `validate_show`; the log is one parent chain holding exactly one revision per
@@ -75,7 +76,7 @@ from e8s.show.revalidate import revalidate
 from e8s.show.show_io import load_show, load_show_at, save_show
 from e8s.show.upgrade import upgrade_repository
 from e8s.show.validate import validate_show
-from e8s.show.workspace import open_workspace
+from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.fonts import tiny_bytes
 
 pytestmark = [pytest.mark.slow, pytest.mark.timing]
@@ -88,6 +89,10 @@ CHECK_EVERY = 100
 LEGACY_SAVES = 3
 # The first save re-encodes the documents v0.4.0 stored in a revision of its own.
 NORMALIZING_SAVES = 1
+# Events never replay the first revision, which adds the sets, so the legacy replay starts after it.
+LEGACY_REPLAY_FROM = 1
+# Set 2 ends the fixture's route; moving its route members breaks continuity, a finding.
+LEGACY_SET = "2"
 HEAD_BUDGET_S = 1e-3
 HEAD_CALLS = 21
 SEED = 3
@@ -178,14 +183,20 @@ def upgraded_repository(root: Path) -> tuple[FileRepository, Show]:
     ws = open_workspace(repo, LEGACY_SHOW)
     for n in range(LEGACY_SAVES):
         show = load_show(ws)
-        spot = _free_spots(show, TEXT_SET, set())[n]
-        save_show(ws, _moved(show, TEXT_SET, spot, MOVE_M[1]), AT + STEP * n)
+        spot = _free_spots(show, LEGACY_SET, set())[n]
+        save_show(ws, _moved(show, LEGACY_SET, spot, MOVE_M[1]), AT + STEP * n)
     expected = json.loads((FIXTURE / "expected.json").read_text())
     log = [r.id for r in repo.revisions(LEGACY_SHOW)]
     assert log[: len(expected["revisions"])] == expected["revisions"]
     assert len(log) == len(expected["revisions"]) + NORMALIZING_SAVES + LEGACY_SAVES
     assert fsck(repo.root).ok
-    return repo, load_show(ws)
+    start = load_show_at(ws, log[LEGACY_REPLAY_FROM])
+    with unchanged(start):
+        since = Checkpoint(revision=start.revision, show=start, report=validate_show(start))
+    head = load_show(open_workspace(repo, LEGACY_SHOW))
+    chained = _replays_and_revalidates(open_workspace(repo, LEGACY_SHOW), since, head)
+    assert chained != since.report
+    return repo, head
 
 
 @dataclass(frozen=True)
@@ -201,6 +212,23 @@ class Checkpoint:
     revision: str
     show: Show
     report: ValidationReport
+
+
+def _replays_and_revalidates(reader: Workspace, since: Checkpoint, head: Show) -> ValidationReport:
+    """Checks events since a checkpoint replay to the head and revalidation matches validation.
+
+    Returns:
+        chained: revalidate's report of the head, built on the checkpoint's report.
+    """
+    replayed = since.show
+    for event in events_since(reader, since.revision):
+        with unchanged(replayed, event):
+            replayed = apply_event(replayed, event)
+    with unchanged(replayed, head, since.show):
+        assert encode_show(replayed) == encode_show(head)
+        chained = revalidate(since.report, since.show, head)
+        assert chained == validate_show(head)
+    return chained
 
 
 class ScenarioRun:
@@ -400,14 +428,7 @@ def _checked(run: ScenarioRun, last: Checkpoint) -> Checkpoint:
     reader = open_workspace(run.repo, SHOW_ID)
     head = load_show(reader)
     assert head.revision == run.repo.head(SHOW_ID)
-    replayed = last.show
-    for event in events_since(reader, last.revision):
-        with unchanged(replayed, event):
-            replayed = apply_event(replayed, event)
-    with unchanged(replayed, head):
-        assert encode_show(replayed) == encode_show(head)
-        chained = revalidate(last.report, last.show, head)
-        assert chained == validate_show(head)
+    chained = _replays_and_revalidates(reader, last, head)
     return Checkpoint(revision=head.revision, show=head, report=chained)
 
 
