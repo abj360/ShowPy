@@ -8,6 +8,8 @@ Contains:
     test_file_backend_conforms: passes every check on the file backend
     test_file_backend_without_hard_links_conforms: passes every check where os.link fails
     test_a_backend_that_lets_two_writers_win_fails_the_kit: fails one_winner_per_parent
+    test_a_backend_that_checks_then_writes_fails_the_race: fails one_winner_per_parent when
+        racing writers all pass a head check made before they write
     test_each_broken_rule_fails_its_check: fails the check of each rule an adapter breaks
     test_a_check_that_raises_fails_alone: reports the exception and still runs every check
     test_regression_a_backend_refusing_ids_outside_the_show_id_rule_conforms: passes every check
@@ -17,6 +19,7 @@ Contains:
 import errno
 import itertools
 import os
+import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -24,7 +27,7 @@ import pytest
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, StorageError
-from e8s.show.backend import RepositoryBackend
+from e8s.show.backend import RepositoryBackend, conflict_error
 from e8s.show.conformance import CHECK_NAMES, check_backend
 from e8s.show.document_repository import SHOW_ID_PATTERN
 from e8s.show.file_backend import FileBackend
@@ -32,6 +35,8 @@ from e8s.show.history_models import Revision
 from e8s.show.memory_backend import _MemoryBackend
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.storage_models import ConformanceReport
+
+RACE_WINDOW_S = 0.05
 
 
 def _fresh_roots(tmp_path: Path) -> Callable[[], RepositoryBackend]:
@@ -109,6 +114,29 @@ def test_a_backend_that_lets_two_writers_win_fails_the_kit() -> None:
     failed = dict(check_backend(_TwoWinners).failed)
     assert "one_winner_per_parent" in failed
     assert "did not raise ConflictError" in failed["one_winner_per_parent"]
+
+
+class _CheckThenWrite(_Adapter):
+    """Compares the parent with the head, waits, then writes, hiding a lost race as a success.
+
+    One writer at a time gets the right answer; racing writers all pass the comparison first.
+    """
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        if self.head(show_id) != revision.parent:
+            raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
+        time.sleep(RACE_WINDOW_S)
+        try:
+            super().commit(show_id, revision, tree, blobs)
+        except ConflictError:
+            return
+
+
+def test_a_backend_that_checks_then_writes_fails_the_race() -> None:
+    failed = dict(check_backend(_CheckThenWrite).failed)
+    assert failed["one_winner_per_parent"].endswith("racing commits on one parent landed")
 
 
 class _KeepsCallerBlobs(_Adapter):
