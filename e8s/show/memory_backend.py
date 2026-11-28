@@ -107,7 +107,7 @@ class _MemoryBackend(RepositoryBackend):
             self._require_valid(show_id, revision, tree, blobs)
             if self._heads.get(show_id, ROOT_REVISION) != revision.parent:
                 raise conflict_error(show_id, revision.parent, self._landed(show_id, revision))
-            self._blobs.update(blobs)
+            self._blobs.update({digest: bytes(data) for digest, data in blobs.items()})
             self._trees[(show_id, revision.id)] = dict(tree)
             self._revisions.setdefault(show_id, {})[revision.id] = revision
             self._heads[show_id] = revision.id

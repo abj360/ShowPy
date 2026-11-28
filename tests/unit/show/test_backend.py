@@ -17,6 +17,8 @@ Contains:
     test_memory_tree_and_blob_fail_closed_on_unknown_ids: raises on unknown IDs
     test_regression_memory_commit_verifies_its_inputs: checks IDs, blobs and tree digests
     test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs: accepts a valid tree
+    test_regression_memory_commit_keeps_a_copy_of_its_blobs: ignores a later bytearray change
+    test_regression_memory_repository_keeps_a_copy_of_written_bytes: ignores a later change
     test_tree_of_an_unknown_revision_is_unknown_ref: raises UnknownRefError in both adapters
     test_repository_reads_and_writes_at_the_head_touch_a_constant_number_of_revisions:
         reads O(1) entries
@@ -267,6 +269,25 @@ def test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs() -> None:
     _commit(backend, second, tree=tree, blobs={blob_digest(new): new})
     assert backend.tree(SHOW_ID, second.id) == tree
     assert backend.blob(SHOW_ID, blob_digest(new)) == new
+
+
+def test_regression_memory_commit_keeps_a_copy_of_its_blobs() -> None:
+    backend = _MemoryBackend()
+    buffer = bytearray(b"kept")
+    digest = blob_digest(b"kept")
+    revision = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
+    _commit(backend, revision, tree={"/a": digest}, blobs={digest: buffer})
+    buffer[:] = b"lost"
+    assert backend.blob(SHOW_ID, digest) == b"kept"
+
+
+def test_regression_memory_repository_keeps_a_copy_of_written_bytes() -> None:
+    repo = InMemoryRepository()
+    buffer = bytearray(b"kept")
+    repo.transaction(SHOW_ID, {"/renders/a.txt": cast(bytes, buffer)}, expected_revision="", at=AT)
+    buffer[:] = b"lost"
+    assert repo.read(SHOW_ID, "/renders/a.txt") == b"kept"
+    assert repo.documents(SHOW_ID)["/renders/a.txt"] == b"kept"
 
 
 def test_tree_of_an_unknown_revision_is_unknown_ref(backend_factory: BackendFactory) -> None:
