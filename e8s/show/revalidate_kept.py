@@ -49,6 +49,19 @@ def item_key(issue: ValidationIssue) -> ItemKey | None:
     """Returns the stored item an issue names, or None when it names none.
 
     Raises UnboundedError when the item does not parse.
+
+    >>> from e8s.examples import with_targets
+    >>> from e8s.show.validate import validate_show
+    >>> issue = validate_show(with_targets({"T1": {"x": 5000.0}})).issues[0]
+    >>> key = item_key(issue)
+    >>> key.kind, key.path, key.role
+    ('placement', ('2', 'T1'), 'drill')
+
+    Args:
+        issue: One issue of a validation report.
+
+    Returns:
+        key: The stored item `context["item"]` names, or None when the issue names no item.
     """
     raw = issue.context.get("item")
     if raw is None:
@@ -115,6 +128,12 @@ def kept_issues(previous: ValidationReport) -> dict[str, Kept]:
 
     Issues of checks that always rerun are left out. Raises UnboundedError when an issue
     cannot be placed.
+
+    >>> from e8s.examples import with_targets
+    >>> from e8s.show.validate import validate_show
+    >>> kept = kept_issues(validate_show(with_targets({"T1": {"x": 5000.0}})))
+    >>> list(kept), list(kept["far_off"]), [str(i.code) for i in kept["far_off"]["2"]]
+    (['far_off'], ['2'], ['FAR_OFF_SHEET'])
 
     Args:
         previous: validate_show's report of the show before the edit.
