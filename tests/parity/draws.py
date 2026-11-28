@@ -10,10 +10,11 @@ CI). A parity area whose digests are gated across cells draws through here: the
 product and the sum are separate numpy operations, each rounded once, as the x86_64 builds
 round them, so the inputs match those builds bit for bit and consume the same draws.
 
-Powers of ten come from exact integer arithmetic, never the C library's `pow`: 1e23 lies exactly
-halfway between two doubles, and glibc's `pow(10, 23)` returns the upper one where Apple's
-returns the even one (2026-11-28: the core cases' generated JSON differed between Linux and
-macOS by one ulp on values near 1e22).
+Powers of ten come from the float reader's correctly rounded parse of `1e<k>`, never the C
+library's `pow`: 1e23 lies exactly halfway between two doubles, and the glibc and Windows
+`pow(10, 23)` return the upper one where Apple's returns the even one (2026-11-28: the core
+cases' generated JSON differed between Linux and Windows on one side and macOS on the other,
+by 1 or 2 ulps on values near 1e22).
 
 Contains:
     uniform(): draws floats in [low, high) from a generator, rounded the same on every platform
