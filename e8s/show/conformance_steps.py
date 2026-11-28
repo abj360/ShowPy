@@ -50,8 +50,10 @@ def next_commit(
 ) -> Commit:
     """Builds the commit that applies document changes on top of a parent revision.
 
-    The revision ID is computed the way DocumentRepository computes it, so a backend that checks
-    stored IDs against their hash accepts it.
+    It rebuilds the tree and the changed paths on its own rather than calling
+    DocumentRepository.transaction, so the kit checks a backend against an independent oracle of
+    that logic. Only the revision ID comes from `revision_id`, so a backend that checks stored
+    IDs against their hash accepts it.
 
     Args:
         parent: ID of the parent revision; the root revision for a show's first commit.
