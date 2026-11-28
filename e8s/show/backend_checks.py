@@ -338,7 +338,7 @@ def require_sent_blob_digests(show_id: str, blobs: Mapping[str, bytes]) -> None:
     for digest, data in blobs.items():
         if blob_digest(data) != digest:
             raise StorageError(
-                f"blob bytes sent for {show_id} do not match digest {digest[:7]}",
+                f"blob bytes sent for {show_id} do not match digest {digest[:SHORT_ID]}",
                 hint="send each blob under the SHA-256 hex digest of its bytes, as "
                 "DocumentRepository.transaction does",
                 context={"show": show_id, "digest": digest},
