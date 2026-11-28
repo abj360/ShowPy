@@ -18,6 +18,7 @@ Contains:
 
 from functools import cache
 
+import pytest
 from hypothesis import example, given
 from hypothesis import strategies as st
 
@@ -39,6 +40,7 @@ from tests.fixtures.generators import seeded_show
 
 SEEDED_SPOTS = 6
 SEEDED_SETS = 3
+SEED_COUNT = 4
 PLACEMENT_KINDS = 4
 STRUCTURE_KINDS = 10
 CONTENT_KINDS = 19
@@ -52,7 +54,7 @@ ORDER_KINDS = frozenset({"set_order", "spot_order", "pin_order"})
 SWAP_THIRD_AND_FOURTH_SPOTS = (CONTENT_KINDS, 3, 2.0)
 FIRST_SPOT_AFTER_THIRD = (CONTENT_KINDS, 0, 2.0)
 type _Element = str | tuple[str, ...]
-seeds = st.integers(min_value=0, max_value=3)
+seeds = st.integers(min_value=0, max_value=SEED_COUNT - 1)
 edits = st.lists(
     st.tuples(
         st.integers(min_value=0, max_value=EDIT_KINDS - 1),
@@ -66,6 +68,13 @@ edits = st.lists(
 @cache
 def _base(seed: int) -> Show:
     return seeded_show(seed, SEEDED_SPOTS, SEEDED_SETS)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _built_bases() -> None:
+    """Builds every seeded base show before the properties run, so no timed example builds one."""
+    for seed in range(SEED_COUNT):
+        _base(seed)
 
 
 def _patched(show: Show, position: int, spot: str, patch: PlacementPatch) -> Show:

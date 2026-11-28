@@ -25,6 +25,7 @@ Contains:
 
 from functools import cache
 
+import pytest
 from hypothesis import example, given
 from hypothesis import strategies as st
 
@@ -51,6 +52,7 @@ SEEDED_SPOTS = 6
 SEEDED_SETS = 4
 PLAIN_SEEDS = 4
 SELECTING_SEEDS = 8
+SEED_COUNT = PLAIN_SEEDS + SELECTING_SEEDS
 SELECTING_SPOTS = 8
 SELECTING_SETS = 5
 FORM_WORD = "form:"
@@ -77,7 +79,7 @@ GROUP_COLORS = ("#112233", "#445566")
 ROUTE_STEP_M = 2.0
 type Step = tuple[int, int, float]
 
-seeds = st.integers(min_value=0, max_value=PLAIN_SEEDS + SELECTING_SEEDS - 1)
+seeds = st.integers(min_value=0, max_value=SEED_COUNT - 1)
 steps = st.tuples(
     st.integers(min_value=0, max_value=EDIT_KINDS - 1),
     st.integers(min_value=0, max_value=60),
@@ -98,6 +100,13 @@ def _base(seed: int) -> Show:
         )
         show = add_facing_override(show, override)
     return show
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _built_bases() -> None:
+    """Builds every seeded base show before the property runs, so no timed example builds one."""
+    for seed in range(SEED_COUNT):
+        _base(seed)
 
 
 def _form_words(show: Show) -> set[str]:
