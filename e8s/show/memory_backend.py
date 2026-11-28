@@ -103,12 +103,13 @@ class _MemoryBackend(RepositoryBackend):
         tree: Mapping[str, str],
         blobs: Mapping[str, bytes],
     ) -> None:
+        copies = {digest: bytes(data) for digest, data in blobs.items()}
         with self._lock:
-            self._require_valid(show_id, revision, tree, blobs)
+            self._require_valid(show_id, revision, tree, copies)
             if self._heads.get(show_id, ROOT_REVISION) != revision.parent:
                 raise conflict_error(show_id, revision.parent, self._landed(show_id, revision))
-            self._blobs.update({digest: bytes(data) for digest, data in blobs.items()})
-            self._show_blobs.setdefault(show_id, set()).update(blobs)
+            self._blobs.update(copies)
+            self._show_blobs.setdefault(show_id, set()).update(copies)
             self._trees[(show_id, revision.id)] = dict(tree)
             self._revisions.setdefault(show_id, {})[revision.id] = revision
             self._heads[show_id] = revision.id

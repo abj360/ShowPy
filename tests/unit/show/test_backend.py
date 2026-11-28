@@ -20,6 +20,7 @@ Contains:
     test_regression_memory_commit_keeps_a_copy_of_its_blobs: ignores a later bytearray change
     test_regression_memory_repository_keeps_a_copy_of_written_bytes: ignores a later change
     test_regression_memory_backend_keeps_each_shows_blobs_apart: refuses another show's blob
+    test_regression_memory_commit_stores_the_bytes_it_verified: reads each blob once
     test_tree_of_an_unknown_revision_is_unknown_ref: raises UnknownRefError in both adapters
     test_repository_reads_and_writes_at_the_head_touch_a_constant_number_of_revisions:
         reads O(1) entries
@@ -27,7 +28,7 @@ Contains:
         reads O(landed) entries
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -308,6 +309,31 @@ def test_regression_memory_backend_keeps_each_shows_blobs_apart() -> None:
     assert backend.head("show_2") == ROOT_REVISION
     backend.commit("show_2", borrowed, {"/a": digest}, {digest: data})
     assert backend.blob("show_2", digest) == data
+
+
+class _ShiftingBlobs(Mapping[str, bytes]):
+    """Hands out the claimed bytes on the first lookup and other bytes on every later one."""
+
+    def __init__(self, claimed: bytes, later: bytes) -> None:
+        self.claimed, self.later, self.lookups = claimed, later, 0
+
+    def __getitem__(self, key: str) -> bytes:
+        self.lookups += 1
+        return self.claimed if self.lookups == 1 else self.later
+
+    def __iter__(self) -> Iterator[str]:
+        return iter([blob_digest(self.claimed)])
+
+    def __len__(self) -> int:
+        return 1
+
+
+def test_regression_memory_commit_stores_the_bytes_it_verified() -> None:
+    backend = _MemoryBackend()
+    digest = blob_digest(b"claimed")
+    revision = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
+    backend.commit(SHOW_ID, revision, {"/a": digest}, _ShiftingBlobs(b"claimed", b"swapped"))
+    assert backend.blob(SHOW_ID, digest) == b"claimed"
 
 
 def test_tree_of_an_unknown_revision_is_unknown_ref(backend_factory: BackendFactory) -> None:
