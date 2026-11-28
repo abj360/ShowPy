@@ -39,6 +39,7 @@ from tests.parity.cases import Case, Output
 from tests.parity.core_json import JSON_CASES
 from tests.parity.core_text import TEXT_CASES
 from tests.parity.core_util import UTIL_CASES
+from tests.parity.draws import uniform
 
 SEED = 20261124
 MILLION = 1_000_000
@@ -132,14 +133,14 @@ def plain_decimal_floats(e8s: ModuleType, count: int) -> np.ndarray:
     rng = e8s.seeded_rng(SEED)
     share = count // 10
     bits = rng.integers(0, 2**64, size=share * 3, dtype=np.uint64).view(np.float64)
-    uniform = rng.uniform(-1e6, 1e6, size=share * 3)
+    spread = uniform(rng, -1e6, 1e6, size=share * 3)
     places = rng.integers(0, 9, size=share)
-    short = np.round(rng.uniform(-1e4, 1e4, size=share), 3) / 10.0**places
+    short = np.round(uniform(rng, -1e4, 1e4, size=share), 3) / 10.0**places
     ties = (rng.integers(-(2**20), 2**20, size=share) + 0.5) / 2.0 ** rng.integers(
         0, 12, size=share
     )
-    tiny = 10.0 ** rng.uniform(-324.0, -290.0, size=share)
-    pool = np.concatenate([bits, uniform, short, ties, tiny])
+    tiny = 10.0 ** uniform(rng, -324.0, -290.0, size=share)
+    pool = np.concatenate([bits, spread, short, ties, tiny])
     shuffled = rng.permutation(pool[np.isfinite(pool)])
     return np.concatenate([np.array(SPECIAL_FLOATS), shuffled])
 
@@ -172,7 +173,7 @@ def plain_decimal_text_on_a_million_floats(e8s: ModuleType) -> Mapping[str, Outp
 
 @cache
 def _timed_floats(e8s: ModuleType) -> list[float]:
-    meters = e8s.seeded_rng(SEED + 6).uniform(-500.0, 500.0, size=TIMED_FLOATS)
+    meters = uniform(e8s.seeded_rng(SEED + 6), -500.0, 500.0, size=TIMED_FLOATS)
     half = TIMED_FLOATS // 2
     return [float(value) for value in meters[:half]] + [
         float(np.round(value, 3)) for value in meters[half:]
@@ -197,7 +198,7 @@ def _seeded_angles(e8s: ModuleType, count: int) -> np.ndarray:
     rng = e8s.seeded_rng(SEED + 2)
     scale = rng.choice(UNIT_SCALES, size=count)
     return np.concatenate(
-        [rng.uniform(-1.0, 1.0, size=count) * scale, np.array([0.0, -0.0, 360.0])]
+        [uniform(rng, -1.0, 1.0, size=count) * scale, np.array([0.0, -0.0, 360.0])]
     )
 
 
@@ -218,9 +219,9 @@ def unit_conversions_on_seeded_values(e8s: ModuleType) -> Mapping[str, Output]:
     angles = _seeded_angles(e8s, TIMED_VALUES)
     others = np.roll(angles, 7)
     rng = e8s.seeded_rng(SEED + 3)
-    values = rng.uniform(-1e4, 1e4, size=TIMED_VALUES) * rng.choice(UNIT_SCALES, size=TIMED_VALUES)
+    values = uniform(rng, -1e4, 1e4, size=TIMED_VALUES) * rng.choice(UNIT_SCALES, size=TIMED_VALUES)
     steps = rng.choice(np.array(STEPS), size=TIMED_VALUES)
-    vectors = rng.uniform(-3.0, 3.0, size=(TIMED_VALUES, 2))
+    vectors = uniform(rng, -3.0, 3.0, size=(TIMED_VALUES, 2))
     return {
         "normalized": np.array([e8s.normalize_angle(float(a)) for a in angles]),
         "diff": np.array(

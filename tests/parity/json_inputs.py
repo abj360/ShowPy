@@ -18,6 +18,8 @@ from collections.abc import Callable, Iterator, Sequence
 
 import numpy as np
 
+from tests.parity.draws import uniform
+
 MAX_DEPTH = 4
 INT_CAP = 10**640
 FLOAT_SPECIALS = (
@@ -179,9 +181,9 @@ def _float(rng: np.random.Generator) -> float:
         bits = rng.integers(0, 2**63, dtype=np.int64)
         return float(np.array([bits], dtype=np.int64).view(np.float64)[0])
     if choice == 2:
-        return float(np.round(rng.uniform(-1e4, 1e4), int(rng.integers(0, 8))))
+        return float(np.round(uniform(rng, -1e4, 1e4), int(rng.integers(0, 8))))
     scale = 10.0 ** int(rng.integers(-30, 30))
-    return float(rng.uniform(-1.0, 1.0)) * scale
+    return float(uniform(rng, -1.0, 1.0)) * scale
 
 
 def _int(rng: np.random.Generator) -> int:
@@ -206,7 +208,7 @@ def _scalar(rng: np.random.Generator) -> object:
         lambda: Ratio(_float(rng)),
         lambda: np.float64(_float(rng)),
         lambda: np.int64(int(rng.integers(-(2**62), 2**62))),
-        lambda: np.float32(rng.uniform(-1e4, 1e4)),
+        lambda: np.float32(uniform(rng, -1e4, 1e4)),
         lambda: np.bool_(bool(rng.integers(0, 2))),
     ]
     return makers[int(rng.integers(0, len(makers)))]()
