@@ -22,7 +22,8 @@ pub enum ErrorCode {
     BadFont,
     /// A repository id is not 64-digit hex, or a show, set, note or form ID cannot be stored.
     BadId,
-    /// A show id or workspace path cannot be stored, or names a directory where a file belongs.
+    /// A show id, workspace path or upgrade folder cannot be used, or names a folder for a file, or
+    /// a repository root path holds a NUL or a character the file system cannot encode.
     BadPath,
     /// A similarity fit gets point arrays that are not matched (N, 2) arrays of numbers.
     BadShape,
@@ -110,6 +111,8 @@ pub enum ErrorCode {
     NOrSpacing,
     /// A write would store a show.json of an older format version than this release writes.
     OldFormat,
+    /// A write targets a layout-1 repository, which this release only reads until it is upgraded.
+    OldLayout,
     /// A facing override starts on or after the last count of the show, so covers no show time.
     PastTheShow,
     /// A path instruction is invalid.
@@ -263,6 +266,7 @@ impl ErrorCode {
             Self::NoHardlinks => "NO_HARDLINKS",
             Self::NOrSpacing => "N_OR_SPACING",
             Self::OldFormat => "OLD_FORMAT",
+            Self::OldLayout => "OLD_LAYOUT",
             Self::PastTheShow => "PAST_THE_SHOW",
             Self::Path => "PATH",
             Self::PinnedChanged => "PINNED_CHANGED",

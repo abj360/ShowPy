@@ -7,6 +7,8 @@ and every read is capped at a size before it allocates.
 Contains:
     READ_FLAGS: opens stored files without following symlinks or blocking on FIFOs
     SYMLINK_OPEN_ERRNOS: lists the errno values an O_NOFOLLOW open of a symlink raises
+    opened_capped(): opens a regular file of at most a given size for reading, never following a
+        symlink
     read_capped(): reads a regular file of at most a given size, reporting problems through a hook
     lstat_info(): returns the lstat result of a path, or None when it is absent
     lstat_mode(): returns the lstat mode of a path, or None when it is absent
@@ -17,6 +19,12 @@ Contains:
     is_same_file(): tells whether two lstat results show one file in one state
     COMPARE_PIECE_BYTES: sets how many bytes of each file one step of a comparison reads
     has_same_bytes(): tells whether two regular files hold the same bytes, reading in pieces
+    file_pieces(): yields the bytes of an open file a piece at a time, up to a size
+    stat_info(): returns the stat result of a path, following links, or None when it is absent
+    existing_ancestor(): splits a path into its deepest existing ancestor, resolved, and the
+        names below it
+    lies_within(): tells whether a path is a folder or lies under it, by file identity
+    is_own_file(): tells whether the current user owns a file, which it may then retime
 """
 
 import errno
@@ -72,6 +80,47 @@ def _read_sized(
     return data
 
 
+def opened_capped(
+    path: Path, kind: str, cap: int, fail: Callable[[Path, str], Exception]
+) -> BinaryIO:
+    """Opens a regular file of at most `cap` bytes for reading, checking it before and after open.
+
+    Args:
+        path: File to open; a symlink, a FIFO, a directory or a missing file is refused.
+        kind: What the file holds, named in the size message.
+        cap: Largest size accepted, in bytes.
+        fail: Builds the exception raised for a refused file from its path and the reason.
+
+    Returns:
+        handle: The open file; the caller closes it.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     (Path(folder) / "a").write_bytes(b"hi")
+    ...     refuse = lambda path, why: ValueError(why)
+    ...     with opened_capped(Path(folder) / "a", "note", 16, refuse) as handle:
+    ...         handle.read()
+    2
+    b'hi'
+    """
+    mode = path.lstat().st_mode
+    if stat.S_ISLNK(mode):
+        raise fail(path, "file is a symbolic link")
+    if not stat.S_ISREG(mode):
+        raise fail(path, "file is missing or not a regular file")
+    descriptor = _open_no_follow(path, fail)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise fail(path, "file is missing or not a regular file")
+        if info.st_size > cap:
+            raise fail(path, f"{kind} is larger than {cap} bytes")
+        return os.fdopen(descriptor, "rb")
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 def read_capped(
     path: Path,
     kind: str,
@@ -102,14 +151,7 @@ def read_capped(
     b'hi'
     """
     try:
-        mode = path.lstat().st_mode
-        if stat.S_ISLNK(mode):
-            raise fail(path, "file is a symbolic link")
-        if not stat.S_ISREG(mode):
-            raise fail(path, "file is missing or not a regular file")
-        with os.fdopen(_open_no_follow(path, fail), "rb") as handle:
-            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                raise fail(path, "file is missing or not a regular file")
+        with opened_capped(path, kind, cap, fail) as handle:
             return _read_sized(path, handle, kind, cap, fail, allows_growth=allows_growth)
     except (FileNotFoundError, IsADirectoryError) as error:
         raise fail(path, "file is missing or not a file") from error
@@ -317,3 +359,124 @@ def has_same_bytes(first: Path, second: Path) -> bool:
                 return _pieces_match(left, right)
     except (_RefusedError, FileNotFoundError):
         return False
+
+
+def file_pieces(handle: BinaryIO, size: int) -> Iterator[bytes]:
+    """Yields the first `size` bytes of an open file, COMPARE_PIECE_BYTES at a time.
+
+    A file that is shorter yields what it holds; bytes past `size` are never read, so memory and
+    time stay bounded however the file changes while it is read.
+
+    Args:
+        handle: File open for reading.
+        size: Most bytes to read.
+
+    Returns:
+        pieces: The bytes in order, each piece at most COMPARE_PIECE_BYTES long.
+
+    >>> import io
+    >>> list(file_pieces(io.BytesIO(b"abc"), 2))
+    [b'ab']
+    """
+    left = size
+    while left > 0:
+        piece = handle.read(min(COMPARE_PIECE_BYTES, left))
+        if not piece:
+            return
+        left -= len(piece)
+        yield piece
+
+
+def stat_info(path: Path) -> os.stat_result | None:
+    """Returns the stat result of `path`, following links, or None when it or a parent is absent.
+
+    Args:
+        path: Path to look up; a parent that is a file counts as absent.
+    """
+    try:
+        return path.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+
+
+def _identity(info: os.stat_result, path: Path) -> tuple[int, int] | str:
+    """Names the file a stat result is of: its device and inode, else its resolved path.
+
+    A file system that reports inode 0 proves nothing by it, so the resolved, case-folded path
+    names the file there instead.
+    """
+    if info.st_ino == 0:
+        return os.path.normcase(str(path.resolve()))
+    return (info.st_dev, info.st_ino)
+
+
+def existing_ancestor(path: Path) -> tuple[Path, tuple[str, ...]]:
+    """Splits a path into its deepest existing ancestor, resolved, and the names below it.
+
+    The file system walks the existing part, so its symlinks and `..` land where they lead;
+    the names below it are returned as spelled, since nothing on disk gives them meaning yet.
+
+    Args:
+        path: Path that may not exist yet.
+
+    Returns:
+        ancestor: Deepest ancestor of `path`, `path` itself included, that exists, resolved.
+        tail: Names under `ancestor` that do not exist yet, as spelled in `path`.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as root:
+    ...     ancestor, tail = existing_ancestor(Path(root) / "a" / "b")
+    ...     ancestor == Path(root).resolve(), tail
+    (True, ('a', 'b'))
+    """
+    absolute = path.absolute()
+    for depth, candidate in enumerate((absolute, *absolute.parents)):
+        if stat_info(candidate) is not None:
+            return candidate.resolve(strict=True), absolute.parts[len(absolute.parts) - depth :]
+    return Path(absolute.anchor), absolute.parts[1:]
+
+
+def lies_within(path: Path, folder: Path) -> bool:
+    """Tells whether `path` is `folder` or lies under it, comparing files, never spellings.
+
+    A name in another case, another Unicode normalization, through a symlink or through `..`
+    still names the same folder, so each existing ancestor of `path`, `path` itself included, is
+    compared with `folder` by device and inode.
+
+    Args:
+        path: Path that may not exist yet.
+        folder: Existing folder.
+
+    Returns:
+        is_within: True when an existing ancestor of `path`, or `path` itself, is `folder`.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as root:
+    ...     inside = lies_within(Path(root) / "a" / "b", Path(root))
+    ...     inside, lies_within(Path(root), Path(root) / "a")
+    (True, False)
+    """
+    folder_info = stat_info(folder)
+    if folder_info is None:
+        return False
+    wanted = _identity(folder_info, folder)
+    absolute = path.absolute()
+    for candidate in (absolute, *absolute.parents):
+        info = stat_info(candidate)
+        if info is not None and _identity(info, candidate) == wanted:
+            return True
+    return False
+
+
+def is_own_file(info: os.stat_result) -> bool:
+    """Tells whether the current user owns a file; True where the system has no POSIX owners.
+
+    Only a file's owner may set its times, so a hard link to another user's file could never
+    be freshened by a later commit that reuses it.
+
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     is_own_file(Path(folder).stat())
+    True
+    """
+    return not hasattr(os, "geteuid") or info.st_uid == os.geteuid()

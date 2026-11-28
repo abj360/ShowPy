@@ -300,7 +300,23 @@ def _show() -> dict[str, tuple[Changes, ...]]:
                 "skipped": (("shows/c", "a slot landed while gc ran; run gc again"),),
             },
         ),
-        "UpgradeReport": ({"shows": ("s",), "revisions": 3, "blobs_linked": 2, "blobs_copied": 1},),
+        "ShowUpgrade": (
+            {
+                "revisions": 3,
+                "blobs_linked": 2,
+                "blobs_copied": 1,
+                "skipped": (("s/next/.tmp-1", "temp file a layout-1 writer left behind"),),
+                "dropped": (("a" * 64, ("revision.actor", "revision.message")),),
+            },
+        ),
+        "UpgradeReport": (
+            {
+                "shows": (Example("ShowUpgrade"),),
+                "skipped": (("notes.txt", "not a layout-1 show folder"),),
+                "assets_linked": 2,
+                "assets_copied": 1,
+            },
+        ),
         "ConformanceReport": ({"passed": ("a",), "failed": (("b", "no lock"),)},),
         "Revision": ({"changed": ("/show/show.json",)},),
         "Show": (

@@ -89,14 +89,17 @@ from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
 from e8s.show.show_io import load_show, save_show
 from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC
+from e8s.show.upgrade import upgrade_repository
 from e8s.show.validate import validate_show
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
+from tests.fixtures.layout1 import append_layout1
 from tests.helpers import TWO_HASH_SEEDS, json_doc, outputs_under_hash_seeds
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "repos"
 LEGACY = {LEGACY_IDS_KEY: True}
 AT = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
+UPGRADED = "upgraded"
 SCRIPT = b"# set script\n"
 V020_FORM_RENAMES = 15
 DETERMINISM_SCRIPT = """
@@ -394,17 +397,19 @@ def test_regression_every_reference_follows_a_renamed_id() -> None:
     assert moved.notes[2].anchor.spots == ("B1",)
 
 
-def _commit_v1(repo: FileRepository, show_id: str, changed: dict[str, bytes]) -> None:
-    """Commits v1 documents through the backend, as a v0.3.0 writer stored them."""
+def _commit_v1(repo: FileRepository, show_id: str, changed: dict[str, bytes]) -> FileRepository:
+    """Commits v1 documents into the layout-1 copy, as a v0.3.0 writer stored them, and returns
+    the copy upgraded, since only layout 2 takes further writes."""
     head = repo.head(show_id)
     tree = dict(repo.backend.tree(show_id, head))
     tree.update({path: blob_digest(raw) for path, raw in changed.items()})
     body = {"parent": head, "at": AT.isoformat(), "tree": tree}
     revision_id = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     revision = Revision(id=revision_id, parent=head, at=AT, changed=tuple(sorted(changed)))
-    repo.backend.commit(
-        show_id, revision, tree, {blob_digest(raw): raw for raw in changed.values()}
-    )
+    blobs = {blob_digest(raw): raw for raw in changed.values()}
+    append_layout1(repo.root, show_id, revision, tree, blobs)
+    upgrade_repository(repo.root, repo.root.with_name(UPGRADED))
+    return FileRepository(repo.root.with_name(UPGRADED))
 
 
 def _hand_set_con(docs: dict[str, bytes]) -> dict[str, bytes]:
@@ -427,7 +432,7 @@ def test_regression_first_save_moves_the_files_of_renamed_set_folders(
     show_id = expected["show_id"]
     docs = dict(repo.documents(show_id))
     added = {} if set_doc("con") in docs else _hand_set_con(docs)
-    _commit_v1(repo, show_id, {**added, "/sets/con/set.py": SCRIPT})
+    repo = _commit_v1(repo, show_id, {**added, "/sets/con/set.py": SCRIPT})
     stored = [r.id for r in repo.revisions(show_id)]
     migrated, _ = migrate_documents(dict(repo.documents(show_id)))
     assert migrated["/sets/con_/set.py"] == SCRIPT
@@ -454,7 +459,7 @@ def test_regression_put_show_keeps_scripts_of_renamed_set_folders(tag: str, tmp_
     show_id = expected["show_id"]
     docs = dict(repo.documents(show_id))
     added = {} if set_doc("con") in docs else _hand_set_con(docs)
-    _commit_v1(repo, show_id, {**added, "/sets/con/set.py": SCRIPT})
+    repo = _commit_v1(repo, show_id, {**added, "/sets/con/set.py": SCRIPT})
     stored = [r.id for r in repo.revisions(show_id)]
     before = {p for p in repo.documents(show_id) if not is_show_doc(p)}
     first = repo.put_show(show_id, repo.get_show(show_id), expected_revision=stored[-1], at=AT)
@@ -471,7 +476,7 @@ def test_regression_put_show_keeps_scripts_of_renamed_set_folders(tag: str, tmp_
 def test_regression_reads_on_a_v1_head_find_the_script_of_a_renamed_set(tmp_path: Path) -> None:
     repo, expected = _fixture("v0.3.0", tmp_path)
     show_id = expected["show_id"]
-    _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT})
+    repo = _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT})
     head = repo.head(show_id)
     ws = open_workspace(repo, show_id)
     assert ws.read("/sets/con_/set.py") == SCRIPT.decode()
@@ -484,7 +489,7 @@ def test_regression_reads_on_a_v1_head_find_the_script_of_a_renamed_set(tmp_path
 def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path: Path) -> None:
     repo, expected = _fixture("v0.3.0", tmp_path)
     show_id = expected["show_id"]
-    _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT, "/sets/con/notes.txt": b"keep\n"})
+    repo = _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT, "/sets/con/notes.txt": b"keep\n"})
     stored = [r.id for r in repo.revisions(show_id)]
     ws = open_workspace(repo, show_id)
     assert ws.read("/sets/con_/set.py") == SCRIPT.decode()
@@ -516,7 +521,7 @@ def test_regression_migration_renames_ids_in_canvas_comments_and_selection(
         SELECTION_DOC: dump_json({"ids": ["T1"], "description": "first"}),
         CLAIMS_DOC: b'{"claims": [{"spot": "T1"}]}',
     }
-    _commit_v1(repo, show_id, canvas)
+    repo = _commit_v1(repo, show_id, canvas)
     stored = [r.id for r in repo.revisions(show_id)]
     migrated, _ = migrate_documents(dict(repo.documents(show_id)))
     assert migrated[COMMENTS_DOC] == _comments(

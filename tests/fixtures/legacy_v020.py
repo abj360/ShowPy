@@ -7,18 +7,18 @@ Contains:
     V020_FIXTURE: names the read-only v0.2.0 fixture folder
     NEGATIVE_ZERO: matches a stored `-0.0`, which v0.2 wrote and canonical JSON never does
     v020_expected(): loads the fixture's expected.json
-    v020_workspace(): copies the fixture and opens a repository and workspace on the copy
+    v020_workspace(): copies the fixture, upgrades the copy and opens a repository and workspace
     retitled(): returns a workspace's show.json with a new title, not canonically encoded
 """
 
 import json
 import re
-import shutil
 from pathlib import Path
 from typing import Any
 
 from e8s.show.file_repository import FileRepository
 from e8s.show.workspace import Workspace, open_workspace
+from tests.fixtures.layout1 import upgraded_copy
 
 V020_FIXTURE = Path(__file__).resolve().parent / "repos" / "v0.2.0"
 NEGATIVE_ZERO = re.compile(rb"-0\.0\b")
@@ -31,7 +31,7 @@ def v020_expected() -> dict[str, Any]:
 
 
 def v020_workspace(tmp_path: Path) -> tuple[FileRepository, Workspace, dict[str, Any]]:
-    """Copies the read-only v0.2.0 fixture under `tmp_path` and opens it.
+    """Copies the read-only v0.2.0 fixture under `tmp_path`, upgrades the copy and opens it.
 
     Returns:
         repo: The repository on the copy.
@@ -39,8 +39,7 @@ def v020_workspace(tmp_path: Path) -> tuple[FileRepository, Workspace, dict[str,
         expected: The fixture's expected.json.
     """
     expected = v020_expected()
-    shutil.copytree(V020_FIXTURE / "repo", tmp_path / "repo")
-    repo = FileRepository(tmp_path / "repo")
+    repo = FileRepository(upgraded_copy(V020_FIXTURE / "repo", tmp_path))
     return repo, open_workspace(repo, expected["show_id"]), expected
 
 

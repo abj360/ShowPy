@@ -28,6 +28,7 @@ from tests.fixtures.fsck_repos import (
     SHOW_ID,
     codes,
     landed_revisions,
+    legacy_manifest,
     record_path,
     relative,
     show_path,
@@ -48,7 +49,7 @@ def test_regression_fsck_reports_a_legacy_before_past_the_head(
     stored["tree"]["/render.txt"] = digest(b"render 1")
     path.write_bytes(dump_json(stored))
     manifest = show_path(tmp_path) / "show.json"
-    manifest.write_bytes(dump_json({"id": SHOW_ID, "legacy_before": legacy_before}))
+    manifest.write_bytes(legacy_manifest(SHOW_ID, [r.id for r in landed], legacy_before))
     report = fsck(tmp_path)
     assert ("BAD_RECORD", relative(tmp_path, manifest)) in codes(tmp_path)
     assert "legacy_before" in next(f.message for f in report.findings if f.path.endswith("json"))
@@ -62,9 +63,9 @@ def test_fsck_accepts_legacy_before_up_to_the_slot_after_the_last(
     tmp_path: Path, past_last: int, *, is_ok: bool
 ) -> None:
     """An upgrade writes the slot after its last legacy slot, never past the slot after the last."""
-    landed_revisions(tmp_path, 3)
+    landed = [revision.id for revision in landed_revisions(tmp_path, 3)]
     manifest = show_path(tmp_path) / "show.json"
-    manifest.write_bytes(dump_json({"id": SHOW_ID, "legacy_before": 3 + past_last}))
+    manifest.write_bytes(legacy_manifest(SHOW_ID, landed, 3 + past_last))
     report = fsck(tmp_path)
     expected = [] if is_ok else [("BAD_RECORD", relative(tmp_path, manifest))]
     assert [(f.code, f.path) for f in report.findings] == expected

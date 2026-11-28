@@ -1,37 +1,35 @@
 """
-layout1.py --- the layout-1 file backend: revisions as JSON and blob files under a root
+layout1.py --- reads layout-1 repositories, which keep revisions as JSON and blob files under a root
 
 Contains:
-    REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
     LINK_MAX_BYTES: caps the size of a next/ link file read
     TREE_MAX_BYTES: caps the size of a tree record read
     BLOB_MAX_BYTES: caps the size of a blob written or read
-    _FileBackend: lays out one folder per show with objects, trees and next/ links
+    UPGRADED_SUFFIX: ends the folder name the OLD_LAYOUT hint suggests for the upgraded copy
+    old_layout_error(): builds the error every write to a layout-1 root raises
+    Layout1Reader: reads one folder per show with objects, trees and next/ links, writing nothing
 """
 
 import errno
 import functools
 import os
-import re
 import stat
-import tempfile
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import cast
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import SchemaError, StorageError
+from e8s.core.errors import SchemaError, StorageError, VersionError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.backend import (
     MAX_REVISIONS,
-    conflict_error,
+    REVISION_ID_PATTERN,
     history_too_long_error,
     revisions_after,
     unknown_revision_error,
 )
-from e8s.show.documents import dump_json
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import lstat_mode, read_capped
 from e8s.show.history_models import STORED_TIME_KEY, Revision
@@ -43,8 +41,8 @@ TREE_DIR = "trees"
 LINK_DIR = "next"
 OBJECT_DIR = "objects"
 TEMP_PREFIX = ".tmp-"
-REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
+RECORD_PARTS = frozenset({"revision", "tree"})
 # A link holds one 64-digit hex ID; v0.1 and v0.2 may have added a newline. Rounded up.
 LINK_MAX_BYTES = 128
 # A 600-spot x 120-set show's tree record is 47 KB for 362 documents (130 bytes each, measured
@@ -54,68 +52,66 @@ TREE_MAX_BYTES = 8 * 2**20
 # /exports/ and /renders/ also hold rendered PDFs and videos, which can reach hundreds of MB,
 # so 1 GiB leaves headroom over both while refusing a sparse terabyte.
 BLOB_MAX_BYTES = 2**30
+UPGRADED_SUFFIX = "-layout2"
+UPGRADED_FALLBACK = "repository"
 
 
-def _temp_copy(directory: Path, data: bytes) -> Path:
-    directory.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=directory, delete=False, prefix=TEMP_PREFIX) as handle:
-        try:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        except OSError:
-            handle.close()
-            Path(handle.name).unlink(missing_ok=True)
-            raise
-    return Path(handle.name)
+def old_layout_error(root: Path, show_id: str = "", **refused: JsonValue) -> VersionError:
+    """Builds the VersionError OLD_LAYOUT every write to a layout-1 root raises.
 
+    Args:
+        root: Root folder of the layout-1 repository.
+        show_id: Show the write was for; empty for a repository-wide write.
+        refused: What the refused write held, added to the error's context.
 
-def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
-    """Creates `path` with `data` only if it does not exist; os.link refuses to overwrite."""
-    temp = _temp_copy(path.parent, data)
-    try:
-        with mapped_io(show_id, path, is_link=True):
-            try:
-                os.link(temp, path)
-            except FileExistsError:
-                return False
-    finally:
-        temp.unlink(missing_ok=True)
-    return True
+    Returns:
+        error: The error, whose hint is a call that copies the root into layout 2.
+
+    >>> error = old_layout_error(Path("repo"))
+    >>> error.code, "repo-layout2" in error.hint
+    (<ErrorCode.OLD_LAYOUT: 'OLD_LAYOUT'>, True)
+    """
+    folder = root.absolute()
+    upgraded = folder.parent / f"{folder.name or UPGRADED_FALLBACK}{UPGRADED_SUFFIX}"
+    context: dict[str, JsonValue] = {"root": str(root), "layout": 1, **refused}
+    if show_id:
+        context["show"] = show_id
+    return VersionError(
+        f"repository at {root} is layout 1, which this release reads but never writes",
+        hint=(
+            f"copy it into layout 2 with e8s.upgrade_repository(Path({str(root)!r}), "
+            f"Path({str(upgraded)!r})), then open the new folder; the old one is never changed"
+        ),
+        context=context,
+        code=ErrorCode.OLD_LAYOUT,
+    )
 
 
 def _guarded[F: Callable[..., object]](method: F) -> F:
     """Maps any OSError a backend method leaks to StorageError; `show_id` is its first argument."""
 
     @functools.wraps(method)
-    def wrapper(self: "_FileBackend", show_id: str, *args: object, **kwargs: object) -> object:
+    def wrapper(self: "Layout1Reader", show_id: str, *args: object, **kwargs: object) -> object:
         with mapped_io(show_id, self.root / show_id):
             return method(self, show_id, *args, **kwargs)
 
     return cast(F, wrapper)
 
 
-def _require_readable_sizes(
-    show_id: str, tree: Mapping[str, str], blobs: Mapping[str, bytes]
-) -> None:
-    """Refuses blobs over BLOB_MAX_BYTES before any write, since reads would refuse them."""
-    oversized = {d for d, data in blobs.items() if len(data) > BLOB_MAX_BYTES}
-    if not oversized:
-        return
-    paths = sorted(p for p, d in tree.items() if d in oversized)
-    raise StorageError(
-        f"files of {show_id} over the {BLOB_MAX_BYTES}-byte cap: {', '.join(paths)}",
-        hint="keep each file under the cap; store larger media outside the repository",
-        context={"show": show_id, "paths": paths, "cap": BLOB_MAX_BYTES},
-        code=ErrorCode.TOO_LARGE,
-    )
+class Layout1Reader:
+    """Reads `<root>/<show>/objects/<sha256>`, `trees/<rev>.json` and `next/<parent>`.
 
+    The chain of `next/<parent>` files is the history: each holds its child's ID. Every read
+    checks the chain, the records and the blob digests as the layout-1 writer left them; every
+    write raises VersionError OLD_LAYOUT, whose hint copies the root into layout 2.
 
-class _FileBackend:
-    """Lays out `<root>/<show>/objects/<sha256>`, `trees/<rev>.json` and `next/<parent>`.
+    Attributes:
+        root: Root folder of the layout-1 repository.
 
-    The chain of `next/<parent>` files is the history: each holds its child's ID, and creating
-    one with os.link is the atomic compare-and-swap that makes a commit land.
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     Layout1Reader(Path(folder)).shows()
+    []
     """
 
     def __init__(self, root: Path):
@@ -125,6 +121,7 @@ class _FileBackend:
         return self.root / show_id
 
     def shows(self) -> list[str]:
+        """Returns the names of the folders that hold a next/root link, one per show."""
         with mapped_io("", self.root):
             if not self.root.exists():
                 return []
@@ -141,17 +138,6 @@ class _FileBackend:
     def _checked_id(self, show_id: str, value: str, source: Path) -> str:
         if not REVISION_ID_PATTERN.fullmatch(value):
             raise self._corrupt(show_id, source, f"{value!r} is not a 64-digit hex id")
-        return value
-
-    def _caller_id(self, show_id: str, value: str, role: str) -> str:
-        if not REVISION_ID_PATTERN.fullmatch(value):
-            raise StorageError(
-                f"{role} {value!r} is not a 64-digit hex id",
-                hint="revision IDs and blob digests are 64 lowercase hex digits made by "
-                "DocumentRepository.transaction",
-                context={"show": show_id, role: value},
-                code=ErrorCode.BAD_ID,
-            )
         return value
 
     def _guard_dirs(self, show_id: str) -> None:
@@ -201,11 +187,13 @@ class _FileBackend:
 
     @_guarded
     def head(self, show_id: str) -> str:
+        """Returns the last revision of the chain, or the root revision for an unknown show."""
         log = self.log(show_id)
         return log[-1].id if log else ROOT_REVISION
 
     @_guarded
     def log(self, show_id: str, *, since: str = ROOT_REVISION) -> list[Revision]:
+        """Returns the revisions after `since`, oldest first, walking and checking the chain."""
         return revisions_after(show_id, self._walk(show_id), since)
 
     def _walk(self, show_id: str) -> list[Revision]:
@@ -244,6 +232,26 @@ class _FileBackend:
             path = self._tree_path(show_id, revision_id, source)
             raise self._corrupt(show_id, path, "stored revision is malformed") from error
 
+    @_guarded
+    def dropped_fields(self, show_id: str, revision_id: str) -> tuple[str, ...]:
+        """Names the stored fields of a revision's record that reading it leaves out.
+
+        Args:
+            show_id: The show.
+            revision_id: A revision the chain holds.
+
+        Returns:
+            dropped: `revision.<key>` for each authorship key v0.1 and v0.2 stored and
+                `record.<key>` for each key beside the revision and tree, sorted.
+        """
+        folder = self._dir(show_id) / TREE_DIR
+        record = self._record(show_id, revision_id, folder)
+        stored = record["revision"]
+        names = [f"record.{key}" for key in record if key not in RECORD_PARTS]
+        if isinstance(stored, dict):
+            names += [f"revision.{key}" for key in stored if key in LEGACY_REVISION_KEYS]
+        return tuple(sorted(names))
+
     def _check_revision(
         self, show_id: str, revision: Revision, expected_id: str, parent: str, source: Path
     ) -> None:
@@ -254,6 +262,7 @@ class _FileBackend:
 
     @_guarded
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
+        """Returns path to blob digest at a revision, read from its tree record."""
         self._guard_dirs(show_id)
         folder = self._dir(show_id) / TREE_DIR
         known_shape = REVISION_ID_PATTERN.fullmatch(revision_id)
@@ -272,6 +281,7 @@ class _FileBackend:
 
     @_guarded
     def blob(self, show_id: str, digest: str) -> bytes:
+        """Returns the bytes of a blob after checking they hash to its digest."""
         self._guard_dirs(show_id)
         objects = self._dir(show_id) / OBJECT_DIR
         return self._verified_blob(show_id, objects / self._checked_id(show_id, digest, objects))
@@ -283,23 +293,6 @@ class _FileBackend:
             raise self._corrupt(show_id, path, "blob bytes do not match their digest")
         return data
 
-    def _store_record(
-        self, show_id: str, path: Path, revision: Revision, tree: Mapping[str, str]
-    ) -> None:
-        """Links the tree record into place, or verifies the record already there byte for byte.
-
-        Files are linked, never replaced, because Windows refuses to replace a file another
-        writer holds. The record's name is the revision ID, which hashes the parent, time and
-        changes, so a racing identical commit writes the same bytes. Anything else under the
-        name (another tree, a truncated file, a symlink) blocks the commit before it lands.
-        """
-        record = dump_json({"revision": revision.to_json(), "tree": tree})
-        if _link_exclusive(show_id, path, record):
-            return
-        if self._read(show_id, path, "tree record", TREE_MAX_BYTES) != record:
-            raise self._corrupt(show_id, path, "tree record differs from this commit")
-
-    @_guarded
     def commit(
         self,
         show_id: str,
@@ -307,20 +300,10 @@ class _FileBackend:
         tree: Mapping[str, str],
         blobs: Mapping[str, bytes],
     ) -> None:
-        self._guard_dirs(show_id)
-        base = self._dir(show_id)
-        tree_name = self._caller_id(show_id, revision.id, "revision id")
-        if revision.parent:
-            self._caller_id(show_id, revision.parent, "parent id")
-        _require_readable_sizes(show_id, tree, blobs)
-        for digest, data in blobs.items():
-            target = base / OBJECT_DIR / self._caller_id(show_id, digest, "blob digest")
-            if lstat_mode(show_id, target) is None and _link_exclusive(show_id, target, data):
-                continue
-            # A blob already stored, or linked first by a racing writer, is kept only when it
-            # holds these bytes; a symlink or damaged file blocks the commit before it lands.
-            self._verified_blob(show_id, target)
-        self._store_record(show_id, base / TREE_DIR / f"{tree_name}.json", revision, tree)
-        link = base / LINK_DIR / (revision.parent or ROOT_LINK)
-        if not _link_exclusive(show_id, link, tree_name.encode()):
-            raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))
+        """Refuses every write: a layout-1 root is only read, until it is upgraded.
+
+        The error names the refused revision and counts its paths and new blobs.
+        """
+        raise old_layout_error(
+            self.root, show_id, revision=revision.id, paths=len(tree), blobs=len(blobs)
+        )

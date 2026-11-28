@@ -5,7 +5,8 @@ test_fsck_inputs.py --- tests fsck on the roots, show IDs, times, links and FIFO
 
 Contains:
     test_fsck_of_a_missing_root_is_an_io_error: never reports a mistyped root clean
-    test_fsck_of_a_layout_1_root_is_a_version_error: names layout 1 and changes nothing
+    test_fsck_of_a_layout_1_root_is_a_version_error: raises OLD_LAYOUT with the upgrade call and
+        changes nothing
     test_fsck_of_a_folder_that_is_no_repository_is_corrupt: raises what reading its layout raises
     test_fsck_never_follows_a_link_under_the_root: reports a symlinked folder without reading
         through it
@@ -29,10 +30,8 @@ import pytest
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError, UnknownRefError, VersionError
-from e8s.show.document_repository import DocumentRepository
 from e8s.show.fsck import fsck
 from e8s.show.history_models import Revision
-from e8s.show.layout1 import _FileBackend
 from tests.fixtures.fsck_repos import (
     AT,
     OTHER_ID,
@@ -46,6 +45,7 @@ from tests.fixtures.fsck_repos import (
     slot_path,
     snapshot,
 )
+from tests.fixtures.layout1 import stored_layout1
 
 FIFO_TIMEOUT_S = 10
 SKIP_LINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
@@ -62,14 +62,13 @@ def test_fsck_of_a_missing_root_is_an_io_error(tmp_path: Path) -> None:
 
 
 def test_fsck_of_a_layout_1_root_is_a_version_error(tmp_path: Path) -> None:
-    DocumentRepository(_FileBackend(tmp_path)).transaction(
-        "old", {"/renders/a.txt": b"x"}, expected_revision="", at=AT
-    )
+    stored_layout1(tmp_path, "old", {"/renders/a.txt": b"x"}, at=AT)
     before = snapshot(tmp_path)
     with pytest.raises(VersionError) as caught:
         fsck(tmp_path)
     assert caught.value.context["layout"] == 1
-    assert "FileRepository" in caught.value.hint
+    assert caught.value.code == ErrorCode.OLD_LAYOUT
+    assert "upgrade_repository(Path(" in caught.value.hint
     assert snapshot(tmp_path) == before
 
 
