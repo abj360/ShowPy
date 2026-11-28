@@ -1734,7 +1734,7 @@
   "highlight": "(target: e8s.show.anchors.Anchor | str, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> e8s.show.collab_models.CanvasEvent",
   "hold": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "id_changes": "(before: e8s.show.models.Show, after: e8s.show.models.Show) -> e8s.show.change_models.IdChanges",
-  "import_archive": "(repo: e8s.show.document_repository.DocumentRepository, data: bytes) -> str",
+  "import_archive": "(repo: e8s.show.document_repository.DocumentRepository, data: bytes | bytearray | memoryview) -> str",
   "import_fonts": "(d: collections.abc.Mapping[str, Any], font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.geo.fonts.FontRegistry",
   "import_json": "(d: collections.abc.Mapping[str, Any]) -> e8s.show.models.Show",
   "import_positions": "(base: e8s.show.models.Show, text: str, group: str, columns: collections.abc.Mapping[str, str] | None = None, *, force: bool = False) -> e8s.show.models.Show",

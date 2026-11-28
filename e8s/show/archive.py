@@ -211,7 +211,7 @@ def _commit_history(repo: DocumentRepository, archive: VerifiedArchive, landed: 
         stored.update(blobs)
 
 
-def import_archive(repo: DocumentRepository, data: bytes) -> str:
+def import_archive(repo: DocumentRepository, data: bytes | bytearray | memoryview) -> str:
     """Verifies a whole archive, then commits its history into a repository.
 
     Every entry is checked before anything is written: the ZIP form, sizes and CRCs, the
@@ -228,7 +228,7 @@ def import_archive(repo: DocumentRepository, data: bytes) -> str:
 
     Args:
         repo: Repository to import into.
-        data: Archive bytes, untrusted.
+        data: Archive bytes, untrusted; copied first, so a caller's buffer may change after.
 
     Returns:
         show_id: The show the archive held, now stored whole in `repo`.
@@ -244,6 +244,6 @@ def import_archive(repo: DocumentRepository, data: bytes) -> str:
     >>> target.revisions("show_1") == source.revisions("show_1")
     True
     """
-    archive = verified_archive(data)
+    archive = verified_archive(bytes(data))
     _commit_history(repo, archive, _landed_before(repo, archive))
     return archive.show_id

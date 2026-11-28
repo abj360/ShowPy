@@ -7,6 +7,8 @@ Contains:
     test_archive_round_trips_every_revision: carries a history from memory to files and back
         with the same revision IDs, parents, times, trees, blob bytes and shows at every revision
     test_import_into_a_file_repository_passes_fsck: leaves a root fsck finds clean
+    test_regression_import_takes_any_bytes_like_archive: imports from a memoryview and a
+        bytearray as from bytes
     test_import_into_a_memory_repository_takes_further_commits: lands the history and a later
         save on top of it
     test_import_refuses_an_existing_show: refuses a show ID whose head is no revision of the
@@ -89,6 +91,16 @@ def test_import_into_a_file_repository_passes_fsck(tmp_path: Path) -> None:
     report = fsck(tmp_path)
     assert report.findings == ()
     assert report.ok
+
+
+def test_regression_import_takes_any_bytes_like_archive() -> None:
+    source = InMemoryRepository()
+    landed = with_history(source, 3)
+    archive = export_archive(source, SHOW_ID)
+    for data in (memoryview(archive), bytearray(archive)):
+        target = InMemoryRepository()
+        assert import_archive(target, data) == SHOW_ID
+        assert target.revisions(SHOW_ID) == landed
 
 
 def test_import_into_a_memory_repository_takes_further_commits() -> None:
