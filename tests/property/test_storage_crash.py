@@ -15,7 +15,13 @@ same commit lands, or conflicts because the stopped commit had already landed.
 Without hard links a file is created in place and then written, so a stop in between leaves it
 empty. An empty layout file, first manifest or new slot makes reads refuse the root until a fsck
 repair removes it; an empty blob or record makes a retry fail closed until gc removes it. Both
-outcomes are pinned, and every check above then runs on the repaired or cleaned root.
+outcomes are pinned, and every check above then runs on the repaired or cleaned root. An
+unstopped commit must survive a power loss too.
+
+The model's limits: a stop falls between write calls, never inside one; a power loss empties a
+file whose bytes were not flushed but never keeps a part of them; unflushed changes are lost all
+together, never some kept and others reordered; a macOS barrier flush counts as a full one; and
+a lost modification time set by `freshen` is not modelled.
 
 Contains:
     Crash: stops a commit; a BaseException, so no library handler maps or swallows it
@@ -165,15 +171,17 @@ class Change:
     """Holds one change a write call made that a power loss undoes until it is flushed.
 
     Attributes:
-        kind: NAME or FOLDER for a created entry, CONTENT for a file's bytes written in place,
-            REMOVED for a removed file.
-        path: The entry the change concerns.
+        kind: NAME or FOLDER for a created entry, CONTENT for a new file's bytes, REMOVED for a
+            removed file.
+        path: The entry the change concerns; for CONTENT, the file's first name.
         data: Bytes of a removed file, which a power loss brings back.
+        file: For CONTENT, the number the shim gave the file, which every name of it shares.
     """
 
     kind: str
     path: Path
     data: bytes = b""
+    file: int = 0
 
 
 SCENARIOS = (
@@ -233,7 +241,9 @@ class WriteShim:
         self._depth = 0
         self._changes: list[Change] = []
         self._durable: set[int] = set()
-        self._descriptors: dict[int, Path] = {}
+        self._files: dict[tuple[int, int], int] = {}
+        self._names: dict[int, list[Path]] = {}
+        self._nested_flushes: set[tuple[int, int]] = set()
 
     def install(self, patches: pytest.MonkeyPatch) -> None:
         """Replaces each write function of durable_io with a counting wrapper."""
@@ -245,6 +255,8 @@ class WriteShim:
             if self.has_crashed:
                 raise Crash(self.calls)
             if self._depth:
+                if name == "flush_file" and isinstance(args[0], int):
+                    self._nested_flushes.add(_inode(os.fstat(args[0])))
                 return real(*args, **kwargs)
             self._depth += 1
             try:
@@ -271,27 +283,42 @@ class WriteShim:
         """Runs one write call and records the changes a power loss could undo."""
         created = _missing_folders(_as_path(args[0])) if name == "make_folder" else []
         removed = _saved_bytes(_as_path(args[0])) if name in {"remove_file", "move_new"} else None
+        self._nested_flushes.clear()
         result = real(*args, **kwargs)
         self._changes.extend(Change(FOLDER, folder) for folder in created)
         if name == "write_temp_pieces":
-            self._changes.append(Change(NAME, _as_path(result)))
+            temp = _as_path(result)
+            self._changes.append(Change(NAME, temp))
+            is_flushed = _inode(temp.lstat()) in self._nested_flushes
+            self._new_file(temp, temp.lstat(), is_flushed=is_flushed)
         elif name in {"link_new", "link_file", "move_new"} and result is True:
-            self._changes.append(Change(NAME, _as_path(args[1])))
+            target = _as_path(args[1])
+            self._changes.append(Change(NAME, target))
+            self._names.setdefault(self._files.get(_inode(target.lstat()), 0), []).append(target)
         elif name == "open_new" and isinstance(result, int):
             target = _as_path(args[0])
-            self._descriptors[result] = target
-            self._changes += [Change(NAME, target), Change(CONTENT, target)]
+            self._changes.append(Change(NAME, target))
+            self._new_file(target, os.fstat(result), is_flushed=False)
         elif name == "flush_file" and isinstance(args[0], int):
-            self._mark_durable(CONTENT, self._descriptors.get(args[0]))
+            self._mark_file_durable(self._files.get(_inode(os.fstat(args[0])), 0))
         elif name == "flush_directory":
             self._mark_folder_durable(_as_path(args[0]))
         if removed is not None and (name == "remove_file" or result is True):
             self._changes.append(Change(REMOVED, _as_path(args[0]), removed))
         return result
 
-    def _mark_durable(self, kind: str, path: Path | None) -> None:
+    def _new_file(self, path: Path, info: os.stat_result, *, is_flushed: bool) -> None:
+        """Records a new file's bytes, durable only when a flush of the file already ran."""
+        number = max(self._names, default=0) + 1
+        self._files[_inode(info)] = number
+        self._names[number] = [path]
+        self._changes.append(Change(CONTENT, path, file=number))
+        if is_flushed:
+            self._durable.add(len(self._changes) - 1)
+
+    def _mark_file_durable(self, number: int) -> None:
         for index, change in enumerate(self._changes):
-            if change.kind == kind and change.path == path:
+            if change.kind == CONTENT and change.file == number:
                 self._durable.add(index)
 
     def _mark_folder_durable(self, folder: Path) -> None:
@@ -309,10 +336,21 @@ class WriteShim:
                 shutil.rmtree(change.path)
             elif change.kind == NAME:
                 change.path.unlink(missing_ok=True)
-            elif change.kind == CONTENT and change.path.is_file():
-                change.path.write_bytes(b"")
+            elif change.kind == CONTENT:
+                self._empty_file(change.file)
             elif change.kind == REMOVED and not os.path.lexists(change.path):
                 change.path.write_bytes(change.data)
+
+    def _empty_file(self, number: int) -> None:
+        """Empties a file whose bytes no flush made durable, through any name it still has."""
+        for path in self._names[number]:
+            if path.is_file() and self._files.get(_inode(path.lstat())) == number:
+                path.write_bytes(b"")
+                return
+
+
+def _inode(info: os.stat_result) -> tuple[int, int]:
+    return info.st_dev, info.st_ino
 
 
 def _skip_flush(*_args: object, **_options: object) -> None:
@@ -386,11 +424,15 @@ def _counted(name: str, *, has_links: bool) -> Counted:
         root = _new_root(folder, has_links=has_links, patches=patches)
         history = _set_up(root, scenario)
         shim = WriteShim(stop_after=None)
-        shim.install(patches)
-        revision = _commit_crashed(root, scenario, _head_of(history))
-    assert revision.parent == _head_of(history)
-    before = history[-1].documents if history else {}
-    return Counted(shim.calls, Landed(revision, _applied(scenario.crashed, before)))
+        with pytest.MonkeyPatch.context() as shim_patches:
+            shim.install(shim_patches)
+            revision = _commit_crashed(root, scenario, _head_of(history))
+        assert revision.parent == _head_of(history)
+        before = history[-1].documents if history else {}
+        landed = Landed(revision, _applied(scenario.crashed, before))
+        shim.lose_unflushed()
+        _require_loads(root, [*history, landed])
+    return Counted(shim.calls, landed)
 
 
 def _require_loads(root: Path, landed: list[Landed]) -> None:
@@ -517,9 +559,7 @@ def _require_recovered(
         _require_retry(retry_root, history, new, has_landed=head == new.revision.id)
 
 
-def _crash_and_check(
-    scenario: Scenario, step: int, *, has_links: bool, is_power_loss: bool
-) -> None:
+def _crash_and_check(scenario: Scenario, step: int, *, has_links: bool, is_power_loss: bool) -> int:
     """Stops the scenario's last commit after write call `step` and checks what is left.
 
     Args:
@@ -527,6 +567,9 @@ def _crash_and_check(
         step: Number of the write call after which the commit stops, from 1.
         has_links: Whether the file system can hard-link.
         is_power_loss: Whether the changes no flush made durable are lost too.
+
+    Returns:
+        stopped_at: The write call after which the shim stopped the commit.
     """
     expected = _counted(scenario.name, has_links=has_links)
     with (
@@ -545,6 +588,7 @@ def _crash_and_check(
             shim.lose_unflushed()
         retry_root = Path(folder) / "retry"
         _require_recovered(root, history, expected.landed, retry_root, has_links=has_links)
+    return stopped.value.step
 
 
 @settings(max_examples=CRASH_EXAMPLES, deadline=None)
@@ -573,8 +617,8 @@ def test_every_write_step_of_every_scenario_survives_a_crash(
     """Stops each commit after every one of its write calls in turn, counted unstopped first."""
     steps = _counted(scenario.name, has_links=has_links).steps
     assert steps > 0
-    covered = 0
-    for step in range(1, steps + 1):
+    stopped = {
         _crash_and_check(scenario, step, has_links=has_links, is_power_loss=is_power_loss)
-        covered += 1
-    assert covered == steps
+        for step in range(1, steps + 1)
+    }
+    assert stopped == set(range(1, steps + 1))
