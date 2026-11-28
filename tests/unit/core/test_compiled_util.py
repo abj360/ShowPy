@@ -10,8 +10,8 @@ Contains:
     test_approx_equal_refuses_a_tolerance_of_none: compares None with 0 and raises TypeError
     test_numbers_beyond_64_bits_stay_exact: split_id, parse_range and chunk_counts keep every
         digit in values and error contexts
-    test_float_part_counts_fail_where_v040_failed: checks parts, then the total, then the cap,
-        then refuses the float
+    test_regression_float_part_counts_fail_where_v040_failed: checks parts, then the total, then
+        the cap, then refuses the float
     test_text_with_lone_surrogates_sorts_and_splits_by_code_point: orders and splits such text as
         Python's own string methods do
     test_non_text_arguments_raise_the_error_v040_raised: lets the object's own method fail first
@@ -108,7 +108,7 @@ def test_numbers_beyond_64_bits_stay_exact() -> None:
     assert util.chunk_counts(2**60 + 1, 3)[0] == (2**60 + 1) / 3
 
 
-def test_float_part_counts_fail_where_v040_failed() -> None:
+def test_regression_float_part_counts_fail_where_v040_failed() -> None:
     with pytest.raises(SchemaError, match="parts must be at least 1"):
         util.chunk_counts(8.0, cast("int", 0.5))
     with pytest.raises(SchemaError, match="total must be finite"):
