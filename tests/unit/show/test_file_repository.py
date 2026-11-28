@@ -1089,6 +1089,7 @@ PLANTED_RECORDS: dict[str, Callable[[Path, bytes], None]] = {
         for kind in sorted(PLANTED_RECORDS)
     ],
 )
+@pytest.mark.usefixtures("no_reread_pauses")
 def test_regression_planted_tree_record_blocks_the_commit(tmp_path: Path, kind: str) -> None:
     """Refuses a commit whose record name holds something else, before claiming its slot."""
     twin_repo, twin_rev, twin_base = _upgraded(tmp_path / "twin")
