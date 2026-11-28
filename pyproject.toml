@@ -123,7 +123,7 @@ banned-module-level-imports = ["tests"]
 "e8s/**/*_models.py" = ["RUF012"]
 "tests/**" = ["D", "EXE001", "FBT001", "FBT002", "TID251", "TID253"]
 "scripts/**" = ["EXE001"]
-# Atheris names its functions Setup and Fuzz; the runner, its stub and its fake mirror them.
+# Atheris names its functions Setup and Fuzz; the runner's protocol and the stub mirror them.
 "{scripts/fuzz_storage.py,typings/atheris.pyi}" = ["N802"]
 # The fixture script runs in a released checkout and takes its seeded show from the test helpers.
 "scripts/make_{legacy,bench}_fixture.py" = ["TID251", "TID253"]
