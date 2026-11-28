@@ -133,7 +133,8 @@ def _is_capped_mapping[K](mapping: Mapping[K, object]) -> bool:
 def _bounded_array(array: np.ndarray, depth: int) -> JsonValue:
     """Converts only the first 20 rows of an array, counting the rest."""
     if array.ndim == 0:
-        return _bounded_value(array.item(), depth)
+        # An unwrap counts as a level: a 0-d object array can hold itself.
+        return _bounded_value(array.item(), depth + 1)
     kept: list[object] = array[:MAX_CONTEXT_ITEMS].tolist()
     return _listed(kept, len(array) - len(kept), depth)
 

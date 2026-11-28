@@ -45,6 +45,8 @@ Contains:
     test_regression_context_shows_a_numpy_scalar_with_no_python_twin_as_its_repr: bounds a
         long double or complex long double, alone, in an array or in a list, to its repr instead
         of recursing on `item()`
+    test_regression_self_holding_zero_d_array_context_is_cut_to_text: bounds a 0-d object
+        array that holds itself, unwrapping it only to the depth cap
 """
 
 import copy
@@ -517,3 +519,12 @@ def test_regression_context_shows_a_numpy_scalar_with_no_python_twin_as_its_repr
         "items": [repr(np.longdouble(2)), 2.5],
     }
     assert json.loads(json.dumps(error.to_dict(), allow_nan=False)) == error.to_dict()
+
+
+def test_regression_self_holding_zero_d_array_context_is_cut_to_text() -> None:
+    """Counts each 0-d array unwrap as a level, so an array that holds itself ends as text."""
+    looped = np.empty((), dtype=object)
+    looped[()] = looped
+    error = SchemaError("x", hint="y", context={"looped": looped})
+    assert error.context["looped"] == repr(looped)
+    assert json.loads(json.dumps(error.to_dict())) == error.to_dict()
