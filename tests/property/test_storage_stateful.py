@@ -11,7 +11,7 @@ Contains:
     Landed: holds one revision the model expects in the store, with its documents
     MemoryStore: hands out repositories over one shared in-memory backend
     FileStore: hands out file repositories over one temporary root, removed at teardown
-    StorageRules: the rules and invariants both machines run against their store
+    StorageRules: runs commits, races, reverts and reads against a store and a model of it
     FileRules: adds reopening, gc and fsck, which only a file repository has
     MemoryStorageMachine: runs StorageRules over the in-memory backend
     FileStorageMachine: runs StorageRules and FileRules over the layout-2 file backend
@@ -182,6 +182,7 @@ class StorageRules:
         rival: A second writer on the same store, for races.
         log: Every revision the model expects, oldest first.
         lost_blobs: Digests a losing writer stored that no revision may need.
+        clock: Time stamp of the last write; each write moves it on by TICK.
     """
 
     store: MemoryStore | FileStore
