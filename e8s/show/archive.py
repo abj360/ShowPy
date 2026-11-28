@@ -12,6 +12,8 @@ so an import that stops part way leaves the revisions that landed: a complete, v
 history, which the error names and which importing the same archive again finishes.
 
 Contains:
+    FIXED_ENTRIES: counts the entries every archive holds besides its revisions' and blobs'
+    ENTRIES_PER_REVISION: counts the entries each revision adds: its slot and its record
     export_archive(): writes one show's whole history as an archive
     import_archive(): verifies a whole archive, then commits the history the show lacks
 """
@@ -19,6 +21,7 @@ Contains:
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, E8sError, StorageError, UnknownRefError
 from e8s.core.util import close_matches
+from e8s.show import archive_zip
 from e8s.show.archive_checks import (
     EXPORT_DAMAGE_HINT,
     MANIFEST_ENTRY,
@@ -38,6 +41,10 @@ from e8s.show.document_repository import DocumentRepository, require_new_show_id
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.storage import ROOT_REVISION
+
+# The manifest; every revision adds its slot and its record.
+FIXED_ENTRIES = 1
+ENTRIES_PER_REVISION = 2
 
 
 def _history(repo: DocumentRepository, show_id: str) -> list[Revision]:
@@ -64,6 +71,25 @@ def _require_importable_id(show_id: str) -> None:
             context={"show": show_id},
             code=error.code,
         ) from error
+
+
+def _require_entry_room(show_id: str, revisions: list[Revision]) -> None:
+    """Refuses, before reading any tree or blob, a history whose slots and records pass the cap.
+
+    Every archive holds its manifest and at least one blob besides a slot and a record per
+    revision, so that many revisions fit at most; more blobs fit fewer.
+    """
+    cap = archive_zip.MAX_ARCHIVE_ENTRIES
+    if FIXED_ENTRIES + ENTRIES_PER_REVISION * len(revisions) <= cap:
+        return
+    fits = (cap - FIXED_ENTRIES - 1) // ENTRIES_PER_REVISION
+    raise StorageError(
+        f"show {show_id} has {len(revisions)} revisions; an archive holds at most {fits} "
+        f"revisions, fewer as their blobs add entries, within its {cap} entries",
+        hint="save the head as a new show with put_show and archive that one",
+        context={"show": show_id, "revisions": len(revisions), "fits": fits, "cap": cap},
+        code=ErrorCode.TOO_LARGE,
+    )
 
 
 def _require_blob(show_id: str, digest: str, data: bytes) -> bytes:
@@ -102,6 +128,7 @@ def export_archive(repo: DocumentRepository, show_id: str) -> bytes:
     """
     revisions = _history(repo, show_id)
     _require_importable_id(show_id)
+    _require_entry_room(show_id, revisions)
     check = HistoryCheck(show_id, is_export=True)
     records: dict[str, bytes] = {}
     for seq, revision in enumerate(revisions, start=FIRST_SEQ):

@@ -19,8 +19,11 @@ Contains:
         whose tree gained a path its revision did not change, which reads accept
     test_export_refuses_a_blob_whose_bytes_do_not_hash_to_its_digest: refuses a backend that
         returns other bytes than a tree names
-    test_export_refuses_a_history_over_the_archive_caps: refuses a history with more entries
-        than an archive holds
+    test_export_refuses_a_history_over_the_archive_caps: refuses a history whose blobs take it
+        past the entries an archive holds
+    test_regression_export_refuses_a_history_over_the_entry_cap_before_reading_it: refuses a
+        history whose slots and records alone pass the entry cap before reading any tree, naming
+        how many revisions fit
 """
 
 import json
@@ -162,7 +165,26 @@ def test_export_refuses_a_blob_whose_bytes_do_not_hash_to_its_digest(
 def test_export_refuses_a_history_over_the_archive_caps(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = InMemoryRepository()
     with_history(repo, 4)
-    monkeypatch.setattr(archive_zip, "MAX_ARCHIVE_ENTRIES", 5)
+    monkeypatch.setattr(archive_zip, "MAX_ARCHIVE_ENTRIES", 12)
     with pytest.raises(StorageError) as caught:
         export_archive(repo, SHOW_ID)
     assert caught.value.code == ErrorCode.TOO_LARGE
+
+
+def test_regression_export_refuses_a_history_over_the_entry_cap_before_reading_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = InMemoryRepository()
+    with_history(repo, 4)
+    monkeypatch.setattr(archive_zip, "MAX_ARCHIVE_ENTRIES", 8)
+
+    def unread(_show: str, _revision: str) -> dict[str, str]:
+        raise AssertionError("export read a tree before refusing the history")
+
+    monkeypatch.setattr(repo.backend, "tree", unread)
+    with pytest.raises(StorageError) as caught:
+        export_archive(repo, SHOW_ID)
+    assert caught.value.code == ErrorCode.TOO_LARGE
+    assert caught.value.context["fits"] == 3
+    assert "at most 3 revisions" in caught.value.message
+    assert "put_show" in caught.value.hint
