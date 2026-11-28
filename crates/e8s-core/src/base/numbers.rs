@@ -22,6 +22,9 @@ pub const DEFAULT_DECIMALS: i64 = 6;
 pub const MAX_DECIMALS: i64 = 17;
 const REPR_EXPONENT_LOW: i64 = -4;
 const REPR_EXPONENT_HIGH: i64 = 16;
+/// Shortest digit counts below 16 leave one string of that length that reads back as the float,
+/// so only 16 or 17 digits can be ambiguous.
+const AMBIGUOUS_DIGITS: usize = 16;
 
 /// Splits a finite, non-zero float into its shortest round-trip digits and decimal exponent.
 ///
@@ -29,8 +32,28 @@ const REPR_EXPONENT_HIGH: i64 = 16;
 /// Python's `repr` reads it; the digits hold no trailing zero.
 #[must_use]
 pub fn float_digits(value: f64) -> (String, i64) {
-    let scientific = format!("{:e}", value.abs());
-    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
+    let size = value.abs();
+    let (digits, point) = scientific_digits(&format!("{size:e}"));
+    if digits.len() < AMBIGUOUS_DIGITS {
+        return (digits, point);
+    }
+    // Two strings of the shortest length can both read back as the value. Rust's shortest form
+    // breaks an exact tie between them upward; Python's repr takes the nearest one and breaks a
+    // tie to even, which is the correctly rounded string of that length when it reads back.
+    let nearest = format!("{size:.*e}", digits.len() - 1);
+    if nearest.parse::<f64>() == Ok(size) {
+        let (nearest_digits, nearest_point) = scientific_digits(&nearest);
+        return (
+            nearest_digits.trim_end_matches('0').to_owned(),
+            nearest_point,
+        );
+    }
+    (digits, point)
+}
+
+/// Splits Rust's `{:e}` text of a positive float into its digits and decimal point position.
+fn scientific_digits(scientific: &str) -> (String, i64) {
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((scientific, "0"));
     let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
     (digits, exponent.parse::<i64>().unwrap_or(0) + 1)
 }
@@ -193,6 +216,16 @@ mod tests {
         }
         assert_eq!(py_float_repr(-0.0), "-0.0");
         assert_eq!(py_float_repr(f64::NEG_INFINITY), "-inf");
+    }
+
+    #[test]
+    fn float_digits_break_a_tie_to_even_as_python_repr_does() {
+        assert_eq!(
+            float_digits(165.035_919_189_453_12),
+            ("16503591918945312".to_owned(), 3)
+        );
+        assert_eq!(py_float_repr(-649_435_869_553_220.2), "-649435869553220.2");
+        assert_eq!(float_digits(0.1), ("1".to_owned(), 0));
     }
 
     #[test]
