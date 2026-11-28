@@ -24,3 +24,5 @@ fuzz/corpus
 .mutmut
 mutants.out
 mutants-summary.json
+fuzz-corpus
+fuzz-crashes

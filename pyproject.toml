@@ -66,6 +66,7 @@ cache-keys = [
 [dependency-groups]
 dev = [
     "e8s[all]",
+    "atheris==3.1.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "deptry==0.25.1",
     "git-cliff==2.14.2",
     "hypothesis==6.170.15",
@@ -122,6 +123,8 @@ banned-module-level-imports = ["tests"]
 "e8s/**/*_models.py" = ["RUF012"]
 "tests/**" = ["D", "EXE001", "FBT001", "FBT002", "TID251", "TID253"]
 "scripts/**" = ["EXE001"]
+# Atheris names its functions Setup and Fuzz; the runner's protocol and the stub mirror them.
+"{scripts/fuzz_storage.py,typings/atheris.pyi}" = ["N802"]
 # The fixture script runs in a released checkout and takes its seeded show from the test helpers.
 "scripts/make_{legacy,bench}_fixture.py" = ["TID251", "TID253"]
 # Test motions implement MotionFn, whose parameter names are part of the protocol.
@@ -192,6 +195,7 @@ known_first_party = ["e8s"]
 [tool.deptry.package_module_name_map]
 pillow = "PIL"
 
-# noxfile.py and scripts/build_fonts.py (Pillow) are dev tooling, not shipped code.
+# noxfile.py, scripts/build_fonts.py (Pillow) and scripts/fuzz_storage.py (hypothesis, atheris)
+# are dev tooling, not shipped code.
 [tool.deptry.per_rule_ignores]
-DEP004 = ["nox", "PIL"]
+DEP004 = ["nox", "PIL", "hypothesis", "atheris"]

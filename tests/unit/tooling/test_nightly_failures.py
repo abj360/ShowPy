@@ -7,15 +7,17 @@ Contains:
     test_regression_nightly_runs_every_check_after_an_earlier_failure: tests, slow, fuzz and
         bench each run unless the run is cancelled or uv sync failed, and no step tolerates its
         own failure
-    step_script(): returns the literal block of one step's `run: |` script
+    step_script(): returns the block of one step's `run: |` or `run: >` script
     job_permissions(): reads one job's permissions, comments dropped
-    test_regression_each_nightly_reports_from_main_only: both nightly workflows end with a report
-        job that needs the check job, runs only on main, and alone may write issues
+    test_regression_each_nightly_reports_from_main_only: each nightly workflow ends with a report
+        job that needs its check job, runs only on main, and alone may write issues
     test_report_workflow_is_only_callable_and_least_privileged: workflow_call only, no default
         permissions, no checkout, a timeout and the job's own token
     test_regression_report_passes_inputs_and_run_data_only_through_env: no expression inside the
         script; every input and run field it reads comes from env
     test_step_script_reads_a_literal_block: proves the script reader can fail
+    test_regression_step_script_reads_every_block_indicator: literal and folded blocks with any
+        chomping indicator, on the step's first line or a later one
     test_job_permissions_stop_at_the_next_key: proves the permissions reader can fail
     run_report(): runs the report script against a fake gh that applies its filters with jq; a
         missing jq fails the report tests instead of skipping them
@@ -50,6 +52,7 @@ from tests.unit.tooling.test_noxfile import (
 
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly.yml"
 NIGHTLY_CORE_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-core.yml"
+NIGHTLY_STORAGE_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-storage.yml"
 REPORT_WORKFLOW = ROOT / ".github" / "workflows" / "report-nightly.yml"
 NIGHTLY_JOB = "nightly"
 CHECK_SESSIONS = ("tests", "slow", "fuzz", "bench")
@@ -57,7 +60,11 @@ NOX_SESSION = re.compile(r"\bnox -s (\w+)")
 SYNCED = "${{ !cancelled() && steps.sync.outcome == 'success' }}"
 SYNC_STEP = "id: sync\n        run: uv sync --locked\n"
 NIGHTLY_JOB_NAME = "tests, slow, fuzz and large benchmarks"
-CHECK_JOBS = {NIGHTLY_WORKFLOW: NIGHTLY_JOB, NIGHTLY_CORE_WORKFLOW: "core"}
+CHECK_JOBS = {
+    NIGHTLY_WORKFLOW: NIGHTLY_JOB,
+    NIGHTLY_CORE_WORKFLOW: "core",
+    NIGHTLY_STORAGE_WORKFLOW: "storage-fuzz",
+}
 REPORT_JOB = "report"
 REPORT_CONDITION = "${{ !cancelled() && github.ref == 'refs/heads/main' }}"
 REPORT_CALL = "$/.github/workflows/report-nightly.yml"
@@ -94,7 +101,8 @@ RUN_ENV = {
     "SERVER_URL": "${{ github.server_url }}",
     "RUN_ID": "${{ github.run_id }}",
 }
-LITERAL_BLOCK = "|"
+BLOCK_INDICATORS = ("|", "|-", "|+", ">", ">-", ">+")
+BLOCK_RUN = re.compile(rf"^ {{{STEP_INDENT}}}run: [|>][-+]?$", re.MULTILINE)
 NO_IGNORES = "zizmor: ignore"
 REPOSITORY = "abj360/e8s"
 SERVER_URL = "https://github.com"
@@ -182,18 +190,20 @@ def test_regression_nightly_runs_every_check_after_an_earlier_failure() -> None:
 
 
 def step_script(step: str) -> str:
-    """Returns the literal block of one step's `run: |` script, dedented; empty when absent.
+    """Returns the block of one step's `run:` script, dedented; empty when it has none.
 
     Args:
         step: One step's text from job_steps.
 
     Returns:
-        script: The script lines with the block's indentation removed, or "" when the step's
-            `run:` is missing or not a literal block.
+        script: The script lines with the block's indentation removed, for a literal (`|`) or
+            folded (`>`) block with any chomping indicator, or "" when the step's `run:` is
+            missing or a one-line value.
     """
-    if step_value(step, "run") != LITERAL_BLOCK:
+    header = BLOCK_RUN.search(" " * STEP_INDENT + step)
+    if header is None:
         return ""
-    lines = step.split(f"\n{' ' * STEP_INDENT}run: |\n", 1)[1].splitlines()
+    lines = (" " * STEP_INDENT + step)[header.end() :].splitlines()[1:]
     indent = " " * BLOCK_INDENT
     block = []
     for line in lines:
@@ -277,6 +287,14 @@ def test_step_script_reads_a_literal_block() -> None:
     assert step_script(step) == "echo 1\n\necho 2\n"
     assert step_script("name: x\n        run: echo ${{ github.ref }}\n") == ""
     assert step_script("uses: actions/cache@x # v1\n") == ""
+
+
+@pytest.mark.parametrize("indicator", BLOCK_INDICATORS)
+def test_regression_step_script_reads_every_block_indicator(indicator: str) -> None:
+    """A `run: |-` script came back as the text "|-", so an expression inside it passed."""
+    step = f"name: x\n        run: {indicator}\n          echo ${{{{ github.ref }}}}\n"
+    assert step_script(step) == "echo ${{ github.ref }}\n"
+    assert step_script(f"run: {indicator}\n          echo 1\n") == "echo 1\n"
 
 
 def test_job_permissions_stop_at_the_next_key() -> None:

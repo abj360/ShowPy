@@ -1,0 +1,77 @@
+name: nightly-storage
+
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A dispatch waits for a running scheduled run instead of cancelling it.
+concurrency:
+  group: nightly-storage-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Fuzzes every storage property test in turn under libFuzzer, each for 300 s in its own
+  # process. A crash fails the run only after every later test has run, and its input is
+  # uploaded; an empty glob fails it too. One cache holds every test's corpus: it is restored on
+  # every run and saved only from main, where the schedule runs, so a dispatch on another branch
+  # never plants inputs that main later restores.
+  storage-fuzz:
+    name: fuzz the storage tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.8"
+          enable-cache: true
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz-corpus/
+          key: storage-fuzz-corpus-${{ github.run_id }}
+          restore-keys: storage-fuzz-corpus-
+      - id: sync
+        run: uv sync --locked
+      - name: fuzz
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run nox -s storagefuzz
+      # Saved after a crash or a timeout too, so the inputs found before it are kept.
+      - if: ${{ always() && github.ref == 'refs/heads/main' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz-corpus/
+          key: storage-fuzz-corpus-${{ github.run_id }}
+      # A job timeout cancels the job, so only always() still uploads what libFuzzer saved.
+      - name: Upload the crash inputs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: storage-fuzz-crashes
+          path: fuzz-crashes/
+          if-no-files-found: ignore
+
+  # Reports the check job's result on main only. A fork's pull_request run cannot reach this
+  # job: its github.ref is never refs/heads/main, and its token is read-only.
+  report:
+    name: report the nightly result
+    needs: [storage-fuzz]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    permissions:
+      actions: read # lets the report list the jobs of this run
+      issues: write # lets the report open, comment on and close the nightly failure issue
+    uses: $/.github/workflows/report-nightly.yml
+    with:
+      workflow: ${{ github.workflow }}
+      result: ${{ needs.storage-fuzz.result }}
