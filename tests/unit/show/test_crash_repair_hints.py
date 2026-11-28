@@ -17,6 +17,8 @@ Contains:
         removes the file once it is a day old so the retry lands
     test_damaged_blob_or_record_keeps_the_restore_hint: keeps the backup hint for a blob or
         record that is no shorter start of what the commit writes
+    test_regression_truncated_reachable_blob_hint_falls_back_to_a_backup: names the backup for a
+        cut-short blob a slot reaches, which fsck reports as BAD_BLOB and gc never removes
     test_regression_torn_layout_or_manifest_hint_names_the_fsck_repair_that_clears_it: fails a
         read of a root whose first commit stopped while writing layout.json or show.json with a
         hint naming the fsck repair, which removes the file once it is a day old
@@ -48,7 +50,7 @@ from e8s.show.commit_writes import STALE_TEMP_AGE
 from e8s.show.file_backend import MANIFEST_FILE, FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.fsck import fsck
-from e8s.show.fsck_findings import UNREACHABLE
+from e8s.show.fsck_findings import BAD_BLOB, UNREACHABLE
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.layout import LAYOUT_FILE
@@ -57,6 +59,7 @@ from tests.fixtures.fsck_repos import (
     AT,
     DAY,
     SHOW_ID,
+    STATIC_BYTES,
     age_by,
     blob_path,
     codes,
@@ -198,6 +201,7 @@ def test_regression_torn_blob_or_record_hint_names_the_gc_that_clears_it(
     hint = _refused_retry(tmp_path, change).hint
     assert "fsck(root)" in hint
     assert UNREACHABLE in hint
+    assert BACKUP in hint
     assert (UNREACHABLE, relative(tmp_path, torn)) in codes(tmp_path)
     age_by(torn, STALE_TEMP_AGE - HOUR)
     assert isinstance(_run_hint_call(hint, tmp_path), GcReport)
@@ -218,6 +222,18 @@ def test_damaged_blob_or_record_keeps_the_restore_hint(tmp_path: Path, kind: str
     damaged.parent.mkdir(parents=True, exist_ok=True)
     damaged.write_bytes(b"not what this commit writes")
     assert _refused_retry(tmp_path, change).hint == CORRUPT_HINT
+
+
+@pytest.mark.parametrize("share", WRITTEN_SHARES, ids=WRITTEN_IDS)
+def test_regression_truncated_reachable_blob_hint_falls_back_to_a_backup(
+    tmp_path: Path, share: float
+) -> None:
+    landed = landed_revisions(tmp_path, 1)
+    reached = blob_path(tmp_path, STATIC_BYTES)
+    reached.write_bytes(STATIC_BYTES[: int(len(STATIC_BYTES) * share)])
+    hint = _refused_retry(tmp_path, numbered_change(landed[-1].id, 1)).hint
+    assert (BAD_BLOB, relative(tmp_path, reached)) in codes(tmp_path)
+    assert BACKUP in hint
 
 
 @pytest.mark.parametrize("share", WRITTEN_SHARES, ids=WRITTEN_IDS)

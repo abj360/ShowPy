@@ -44,7 +44,7 @@ RESTORE_LAYOUT_HINT = (
     f"restore {LAYOUT_FILE} from a backup, or move the folder away to start a new one"
 )
 TORN_LAYOUT_HINT = (
-    "a first commit that stopped while writing it leaves it so; while the root holds no show "
+    "a first commit that stopped while writing it can leave it so; while the root holds no show "
     f"folder, {FSCK_REPAIR_CALL} removes it once it is a day old; otherwise "
     f"{RESTORE_LAYOUT_HINT}"
 )

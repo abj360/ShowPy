@@ -37,7 +37,7 @@ from e8s.show.torn_reads import FSCK_REPAIR_CALL
 
 LEGACY_KEYS = frozenset({"legacy_before", "legacy_count", "legacy_digest"})
 TORN_MANIFEST_HINT = (
-    "a first commit that stopped while writing it leaves it so; while the show has no slot, "
+    "a first commit that stopped while writing it can leave it so; while the show has no slot, "
     f"{FSCK_REPAIR_CALL} removes it once it is a day old; otherwise restore the show folder from "
     "a backup"
 )

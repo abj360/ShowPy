@@ -47,8 +47,9 @@ from e8s.show.torn_reads import is_short_of, read_settled
 STALE_TEMP_AGE = timedelta(hours=24)
 PROBE_SUFFIX = ".link-probe"
 TORN_IN_PLACE_HINT = (
-    "a commit that stopped while writing this file leaves it so; run fsck(root), and if it lists "
-    f"the file as {UNREACHABLE}, {GC_CALL} removes it once it is a day old; then commit again"
+    "a commit that stopped while writing this file can leave it so; run fsck(root): if it lists "
+    f"the file as {UNREACHABLE}, {GC_CALL} removes it once it is a day old, then commit again; "
+    "otherwise restore the show folder from a backup"
 )
 # A writer that takes a name and fails its write frees the name again. Placing it again covers
 # that; a name freed on every attempt means writers keep failing, and the commit stops.
@@ -207,9 +208,10 @@ def place_or_check(
 def _read_stored(show_id: str, target: Path, kind: str, cap: int, data: bytes) -> bytes:
     """Reads a stored file, rereading it while it is a shorter start of `data`.
 
-    A blob's or record's bytes are fixed by its name, so one still a shorter start of `data`
-    after every reread was left by a writer that stopped, and only a clean-up removes it: a name
-    is never written over.
+    A blob's or record's bytes are fixed by its name, and a name is never written over. One still
+    a shorter start of `data` after every reread was left by a writer that stopped, which a
+    clean-up removes while no slot reaches it, or was cut short later, which only a backup
+    repairs.
 
     Raises:
         StorageError: CORRUPT, with the hint that clears it, when the file is still a shorter
@@ -217,8 +219,9 @@ def _read_stored(show_id: str, target: Path, kind: str, cap: int, data: bytes) -
     """
     fail = partial(corrupt, show_id)
     read = partial(durable_reads.read_capped, target, kind, cap, fail, allows_growth=True)
-    stored = read_settled(read, is_short_of(data))
-    if is_short_of(data)(stored):
+    is_short = is_short_of(data)
+    stored = read_settled(read, is_short)
+    if is_short(stored):
         reason = f"{kind} is empty or cut short after every reread"
         raise corrupt(show_id, target, reason, hint=TORN_IN_PLACE_HINT)
     return stored
