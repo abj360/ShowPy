@@ -69,11 +69,12 @@ def refuse_links_from(monkeypatch: pytest.MonkeyPatch, source: Path, code: int) 
     real = os.link
     refused: list[Path] = []
 
-    def link(src: StrPath, dst: StrPath, *, follow_symlinks: bool = True) -> None:
+    def link(src: StrPath, dst: StrPath, **options: bool) -> None:
         if Path(src).is_relative_to(source):
             refused.append(Path(src))
             raise OSError(code, os.strerror(code), str(src))
-        real(src, dst, follow_symlinks=follow_symlinks)
+        # Windows rejects an explicit follow_symlinks=True, so pass only what the caller passed.
+        real(src, dst, **options)
 
     monkeypatch.setattr(os, "link", link)
     return refused
