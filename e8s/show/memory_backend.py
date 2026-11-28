@@ -33,6 +33,17 @@ def _bad_id(show_id: str, role: str, value: str) -> StorageError:
     )
 
 
+def _stored_id(show_id: str, revision_id: str) -> StorageError:
+    """Builds the error of a commit whose revision ID names a revision the show already holds."""
+    return StorageError(
+        f"revision id {revision_id!r} is already stored in {show_id}",
+        hint="a revision ID hashes its parent, time and changes; build the revision with "
+        "DocumentRepository.transaction on the current head",
+        context={"show": show_id, "revision id": revision_id},
+        code=ErrorCode.BAD_ID,
+    )
+
+
 def _corrupt(show_id: str, reason: str) -> StorageError:
     return StorageError(
         f"repository of {show_id} is corrupt: {reason}",
@@ -111,6 +122,8 @@ class _MemoryBackend(RepositoryBackend):
             self._require_valid(show_id, revision, tree, blobs)
             if self._heads.get(show_id, ROOT_REVISION) != revision.parent:
                 raise conflict_error(show_id, revision.parent, self._landed(show_id, revision))
+            if revision.id in self._revisions.get(show_id, {}):
+                raise _stored_id(show_id, revision.id)
             self._blobs.update(blobs)
             self._trees[(show_id, revision.id)] = dict(tree)
             self._revisions.setdefault(show_id, {})[revision.id] = revision
@@ -128,7 +141,7 @@ class _MemoryBackend(RepositoryBackend):
             raise _bad_id(show_id, "revision id", revision.id)
         if revision.parent and not REVISION_ID_PATTERN.fullmatch(revision.parent):
             raise _bad_id(show_id, "parent id", revision.parent)
-        if revision.id == revision.parent or revision.id in self._revisions.get(show_id, {}):
+        if revision.id == revision.parent:
             raise _bad_id(show_id, "revision id", revision.id)
         for digest, data in blobs.items():
             if not REVISION_ID_PATTERN.fullmatch(digest):
