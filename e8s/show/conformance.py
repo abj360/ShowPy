@@ -52,7 +52,10 @@ def check_backend(make_backend: Callable[[], RepositoryBackend]) -> ConformanceR
 
     A check that finds a broken rule, or that raises anything, fails with the reason; the other
     checks still run. Each check writes shows `show_1`, `show_2` and a few more with odd names,
-    so `make_backend` must return an empty backend each time it is called.
+    so `make_backend` must return an empty backend each time it is called. No check asserts
+    whether a backend accepts or refuses a later commit that names, without sending its bytes,
+    a blob only a lost commit stored: a backend may store nothing before its compare-and-swap
+    and refuse it, or keep the verified blob until gc and accept it.
 
     Args:
         make_backend: Returns a new, empty backend; called once per check.
