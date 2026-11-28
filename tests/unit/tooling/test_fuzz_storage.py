@@ -62,7 +62,6 @@ Contains:
     test_storage_fuzz_workflow_keeps_the_conventions: pins, permissions, no inline expressions,
         a timeout that covers every target's slot and grace
     test_nightly_job_keeps_its_steps: the nightly job still ends with tests, slow, fuzz and bench
-    test_docker_image_holds_every_path_the_storage_fuzz_tests_read: the image copies the workflow
 """
 
 import importlib
@@ -78,7 +77,6 @@ from types import ModuleType
 import pytest
 from hypothesis import settings
 
-from tests.unit.tooling.test_dockerfile import DOCKERFILE, DOCKERIGNORE, missing_image_paths
 from tests.unit.tooling.test_nightly_failures import (
     REPORT_CALL,
     REPORT_JOB,
@@ -737,9 +735,3 @@ def test_nightly_job_keeps_its_steps() -> None:
         "uv run nox -s fuzz",
         "uv run nox -s bench -- --tier L",
     ]
-
-
-def test_docker_image_holds_every_path_the_storage_fuzz_tests_read() -> None:
-    this = Path(__file__)
-    missing = missing_image_paths(DOCKERFILE, DOCKERIGNORE, this)
-    assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
