@@ -7,10 +7,12 @@ test_export_properties.py --- checks interchange round-trips: JSON documents and
 import json
 from collections.abc import Sequence
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from e8s.choreo.models import PlacementPatch
+from e8s.geo.fonts import bundled_fonts
 from e8s.show.interchange import export_json, import_json, import_positions
 from e8s.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -20,6 +22,12 @@ ENTITIES = ("T1", "T2", "T3", "T4", "N1", "N2", "N3")
 ORDER_COUNTS = {"0": 4.0, "1": 0.0, "1A": 4.0, "2": 8.0, "3": 4.0, "4": 2.0, "5": 4.0}
 coordinates = st.floats(min_value=-50.0, max_value=50.0, allow_nan=False)
 facings = st.floats(min_value=0.0, max_value=359.0, allow_nan=False)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _loaded_fonts() -> None:
+    """Loads the bundled font registry that export_json reads, so no timed example loads it."""
+    bundled_fonts()
 
 
 @st.composite
