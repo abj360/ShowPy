@@ -16,6 +16,8 @@ Contains:
         landed when a later commit fails, leaving that complete shorter history
     test_a_failed_first_commit_raises_its_own_error: raises the backend's error when nothing
         landed, and a later conflict as ConflictError naming what landed
+    test_regression_an_archive_dated_year_one_imports_into_a_file_repository: imports a history
+        a memory repository saved within a day of the earliest time
     test_archive_bytes_do_not_depend_on_the_hash_seed: gives equal bytes under two hash seeds
     test_a_thousand_revision_archive_round_trips: carries 1,000 revisions to files and back
 """
@@ -25,6 +27,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -204,6 +207,18 @@ def test_a_failed_first_commit_raises_its_own_error() -> None:
         import_archive(DocumentRepository(_Interrupted(later.backend, 3, conflict)), archive)
     assert raced.value.context["landed"] == 2
     assert later.revisions(SHOW_ID) == landed[:2]
+
+
+def test_regression_an_archive_dated_year_one_imports_into_a_file_repository(
+    tmp_path: Path,
+) -> None:
+    memory = InMemoryRepository()
+    year_one = datetime(1, 1, 1, 12, tzinfo=UTC)
+    memory.put_show(SHOW_ID, two_set_show(), expected_revision="", at=year_one)
+    files = FileRepository(tmp_path)
+    assert import_archive(files, export_archive(memory, SHOW_ID)) == SHOW_ID
+    assert files.revisions(SHOW_ID) == memory.revisions(SHOW_ID)
+    assert fsck(tmp_path).ok
 
 
 def test_archive_bytes_do_not_depend_on_the_hash_seed() -> None:
