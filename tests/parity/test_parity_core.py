@@ -16,13 +16,29 @@ Contains:
         hashes and errors for seeded JSON values, numbers in ECMAScript text included
     test_strict_json_refuses_what_v040_refuses: parses and refuses the same texts, with the same
         error codes, messages and contexts, and parses a 300 x 60 show the same way
+    test_float_comparison_and_id_ranges_match_v040: compares floats, ranks noise, splits counts,
+        expands and compacts ID ranges, sorts naturally, suggests close names and guards CSV
+        cells as v0.4.0 did
 """
 
 from collections.abc import Callable
 
-from e8s import asset_uri, canonical_value, content_hash, jcs
+from e8s import (
+    approx_equal,
+    asset_uri,
+    canonical_value,
+    chunk_counts,
+    close_matches,
+    content_hash,
+    format_ranges,
+    jcs,
+    natural_key,
+    natural_sort,
+    parse_range,
+    split_id,
+)
 from e8s._core import core
-from e8s.core import strict_json
+from e8s.core import csv_cells, strict_json, util
 from tests.parity.run import AreaRun
 
 PREFIX = "core."
@@ -80,3 +96,34 @@ def test_strict_json_refuses_what_v040_refuses(parity_area: Callable[[str], Area
     run = parity_area("core")
     _passed(run, "strict_json_on_hostile_text")
     _passed(run, "strict_json_on_a_300_by_60_show")
+
+
+def test_float_comparison_and_id_ranges_match_v040(
+    parity_area: Callable[[str], AreaRun],
+) -> None:
+    served = (approx_equal, chunk_counts, close_matches, format_ranges, natural_key, natural_sort)
+    assert served == (
+        core.approx_equal,
+        core.chunk_counts,
+        core.close_matches,
+        core.format_ranges,
+        core.natural_key,
+        core.natural_sort,
+    )
+    assert (parse_range, split_id, util.noise_rank) == (
+        core.parse_range,
+        core.split_id,
+        core.noise_rank,
+    )
+    assert csv_cells.neutralize_cell is core.neutralize_cell
+    run = parity_area("core")
+    for case in (
+        "float_comparison_on_seeded_values",
+        "float_comparison_timed",
+        "id_ranges_on_seeded_text",
+        "id_ranges_timed",
+        "close_matches_on_seeded_names",
+        "close_matches_timed",
+        "csv_cells_on_seeded_text",
+    ):
+        _passed(run, case)

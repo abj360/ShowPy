@@ -20,7 +20,7 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyType};
 
 use super::host::repr_of;
-use crate::errors::{guard, to_py_err};
+use crate::errors::{guard, py_int, to_py_err};
 
 static REAL: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 const ERRORS_MODULE: &str = "e8s.core.errors";
@@ -241,6 +241,7 @@ fn context_of<'py>(py: Python<'py>, err: &CoreError) -> PyResult<Bound<'py, PyDi
         match value {
             ContextValue::Bool(flag) => context.set_item(key, *flag),
             ContextValue::Int(number) => context.set_item(key, *number),
+            ContextValue::Integer(digits) => context.set_item(key, py_int(context.py(), digits)?),
             ContextValue::Float(number) => context.set_item(key, *number),
             ContextValue::Text(text) => context.set_item(key, text),
         }?;
@@ -248,7 +249,18 @@ fn context_of<'py>(py: Python<'py>, err: &CoreError) -> PyResult<Bound<'py, PyDi
     Ok(context)
 }
 
-/// Rejects a size too large for 64 bits: it is over every cap, or below zero.
+/// Tells whether a value that is not an int is a real number, as v0.4.0's comparisons took it.
+fn is_real(requested: &Bound<'_, PyAny>) -> PyResult<bool> {
+    Ok(requested.is_instance_of::<PyFloat>()
+        || requested.is_instance(REAL.import(requested.py(), "numbers", "Real")?.as_any())?)
+}
+
+/// Rejects a size that is not a 64-bit int.
+///
+/// An int beyond 64 bits is over every cap or below zero. A real number outside [0, cap], NaN
+/// included, gets the same error, as v0.4.0 compared it. A real number in range, such as 3.5 or
+/// 3.0, gets the same error class asking for a whole-number int: a size is a count. Any other
+/// value raises the TypeError v0.4.0's comparison raised.
 fn require_huge_size(
     requested: &Bound<'_, PyAny>,
     cap: i64,
@@ -256,14 +268,19 @@ fn require_huge_size(
     error: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let py = requested.py();
-    if !requested.is_instance_of::<PyInt>() {
+    let is_int = requested.is_instance_of::<PyInt>();
+    if !is_int && !is_real(requested)? {
         return Err(requested.extract::<i64>().err().unwrap_or_else(|| {
             pyo3::exceptions::PyTypeError::new_err("requested must be an int")
         }));
     }
-    let is_negative = requested.lt(0)?;
     let shown = requested.str()?.to_string_lossy().into_owned();
-    let (message, hint) = caps::size_error(&shown, &cap.to_string(), is_negative, what);
+    let in_range = !is_int && requested.ge(0)? && requested.le(cap)?;
+    let (message, hint) = if in_range {
+        caps::whole_number_error(&shown, what)
+    } else {
+        caps::size_error(&shown, &cap.to_string(), requested.lt(0)?, what)
+    };
     let context = PyDict::new(py);
     context.set_item("what", what)?;
     context.set_item("requested", requested)?;

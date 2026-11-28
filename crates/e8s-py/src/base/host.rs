@@ -4,6 +4,9 @@
 //!     PyText: answers the core's Unicode questions by asking Python's `str` and `unicodedata`
 //!     run(): runs one core call with a Python host, raising Python's own error if a question failed
 //!     read_text(): reads a Python string, replacing a lone surrogate with U+FFFD
+//!     text_bytes(): reads a Python string as UTF-8, lone surrogates encoded as `surrogatepass`
+//!     text_from_bytes(): builds a Python string from such bytes
+//!     code_points_of(): reads a Python string's code points, lone surrogates included
 //!     repr_of(): returns the Python `repr` of any object
 
 use std::borrow::Cow;
@@ -15,7 +18,7 @@ use e8s_core::base::text::TextHost;
 use e8s_core::base::{CoreError, CoreResult, ErrorCode, ErrorKind};
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+use pyo3::types::{PyBytes, PyString};
 
 use crate::errors::{guard, loaded, to_py_err};
 
@@ -156,4 +159,51 @@ pub fn repr_of(object: &Bound<'_, PyAny>) -> String {
         },
         |shown| shown.to_string_lossy().into_owned(),
     )
+}
+
+/// Reads a Python string as UTF-8; a string holding a lone surrogate is encoded as Python's
+/// `surrogatepass` does, so every character, surrogates included, keeps its own bytes.
+///
+/// # Errors
+///
+/// Returns Python's error when the string cannot be encoded.
+pub fn text_bytes<'a>(text: &'a Bound<'_, PyString>) -> PyResult<Cow<'a, [u8]>> {
+    if let Ok(utf8) = text.to_str() {
+        return Ok(Cow::Borrowed(utf8.as_bytes()));
+    }
+    let py = text.py();
+    let encoded = text.call_method1(
+        intern!(py, "encode"),
+        (intern!(py, "utf-8"), intern!(py, "surrogatepass")),
+    )?;
+    Ok(Cow::Owned(encoded.cast::<PyBytes>()?.as_bytes().to_vec()))
+}
+
+/// Builds a Python string from bytes that `text_bytes` wrote, lone surrogates included.
+///
+/// # Errors
+///
+/// Returns Python's error when the bytes do not decode.
+pub fn text_from_bytes<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Bound<'py, PyString>> {
+    if let Ok(utf8) = std::str::from_utf8(bytes) {
+        return Ok(PyString::new(py, utf8));
+    }
+    Ok(PyBytes::new(py, bytes)
+        .call_method1(
+            intern!(py, "decode"),
+            (intern!(py, "utf-8"), intern!(py, "surrogatepass")),
+        )?
+        .cast_into::<PyString>()?)
+}
+
+/// Reads a Python string's code points, lone surrogates included.
+///
+/// # Errors
+///
+/// Returns Python's error when the string cannot be encoded.
+pub fn code_points_of(text: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
+    if let Ok(utf8) = text.to_str() {
+        return Ok(utf8.chars().map(u32::from).collect());
+    }
+    Ok(e8s_core::base::text_bytes::code_points(&text_bytes(text)?))
 }

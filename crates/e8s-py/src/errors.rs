@@ -6,18 +6,20 @@
 //!     guard(): runs one core call, raising its error, or a panic it caught, as an e8s exception
 //!     to_py_err(): builds the e8s exception a core error names
 //!     loaded(): finds a loaded module by its current entry in `sys.modules`
+//!     py_int(): builds a Python int from decimal digits
 //!     add_probes(): adds the private boundary hook `_finite_probe` to a module
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::panic::{self, PanicHookInfo, UnwindSafe};
-use std::sync::Once;
+use std::sync::{Mutex, Once};
 
 use e8s_core::base::{ContextValue, CoreError, CoreResult, ErrorCode, ErrorKind, require_finite};
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyDict, PyString};
+use pyo3::types::{PyDict, PyInt, PyString};
 
 /// The hint of every CORE_PANIC error.
 pub const PANIC_HINT: &str = "This is a bug in e8s; report it with the function name.";
@@ -39,6 +41,9 @@ thread_local! {
 }
 
 static QUIET_HOOK: Once = Once::new();
+/// Holds the interned names of the error classes and codes raised so far, so raising an error
+/// builds no new string.
+static NAMES: Mutex<Option<HashMap<&'static str, Py<PyString>>>> = Mutex::new(None);
 
 /// Runs one core call and raises its error, or a panic it caught, as an e8s exception.
 ///
@@ -68,6 +73,16 @@ pub fn to_py_err(py: Python<'_>, err: &CoreError) -> PyErr {
     build_exception(py, err).unwrap_or_else(|failure| failure)
 }
 
+/// Builds a Python int from decimal digits after an optional `-`, for a context value beyond
+/// 64 bits.
+///
+/// # Errors
+///
+/// Returns Python's error when the text is not an integer.
+pub fn py_int<'py>(py: Python<'py>, digits: &str) -> PyResult<Bound<'py, PyAny>> {
+    py.get_type::<PyInt>().call1((digits,))
+}
+
 /// Finds a loaded module by its current entry in `sys.modules`, importing it when absent.
 ///
 /// A reload or a re-import changes the entry, so the classes and the enum are always the
@@ -82,14 +97,27 @@ pub fn loaded<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
     }
 }
 
+/// Returns the interned Python string of a class or code name, interning it on first use.
+fn interned<'py>(py: Python<'py>, name: &'static str) -> Bound<'py, PyString> {
+    let Ok(mut names) = NAMES.lock() else {
+        return PyString::intern(py, name);
+    };
+    names
+        .get_or_insert_with(HashMap::new)
+        .entry(name)
+        .or_insert_with(|| PyString::intern(py, name).unbind())
+        .bind(py)
+        .clone()
+}
+
 fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
-    let class =
-        loaded(py, ERRORS_MODULE)?.getattr(PyString::intern(py, err.kind().class_name()))?;
+    let class = loaded(py, ERRORS_MODULE)?.getattr(interned(py, err.kind().class_name()))?;
     let context = PyDict::new(py);
     for (key, value) in err.context() {
         match value {
             ContextValue::Bool(flag) => context.set_item(key, *flag),
             ContextValue::Int(number) => context.set_item(key, *number),
+            ContextValue::Integer(digits) => context.set_item(key, py_int(context.py(), digits)?),
             ContextValue::Float(number) => context.set_item(key, *number),
             ContextValue::Text(text) => context.set_item(key, text),
         }?;
@@ -100,7 +128,7 @@ fn build_exception(py: Python<'_>, err: &CoreError) -> PyResult<PyErr> {
     if !has_default_code(&class, err)? {
         let code = loaded(py, CODES_MODULE)?
             .getattr(CODE_ENUM)?
-            .getattr(PyString::intern(py, err.code().as_str()))?;
+            .getattr(interned(py, err.code().as_str()))?;
         kwargs.set_item(intern!(py, "code"), code)?;
     }
     Ok(PyErr::from_value(
