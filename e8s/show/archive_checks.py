@@ -238,7 +238,8 @@ class HistoryCheck:
     def _unrecomputable(self, revision: Revision) -> StorageError:
         return StorageError(
             f"revision {revision.id[:SHORT_ID]} in slot {self._seq} of {self.show_id} has an ID"
-            " that does not recompute from its parent, time and changes",
+            " hashed under an older scheme or time: it is not the hash of the parent, time and"
+            " changes it holds",
             hint=LEGACY_ID_HINT,
             context={
                 "show": self.show_id,

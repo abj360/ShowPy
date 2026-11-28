@@ -115,6 +115,7 @@ def test_regression_export_refuses_a_history_whose_ids_do_not_recompute() -> Non
     assert caught.value.context["revision"] == older.id
     assert caught.value.context["seq"] == len(landed) + 1
     assert "layout 1" in caught.value.hint
+    assert "hashed under an older scheme or time" in caught.value.message
 
 
 @pytest.mark.parametrize("release", RELEASES)
