@@ -19,6 +19,7 @@ Contains:
     Intended: a case whose output differs from v0.4.0 by decision, compared against its expectation
     load_intended(): reads intended.toml, refusing unknown, repeated or already flipped cases
     compare_case(): compares a case against the oracle, or a flipped case against its fix
+    first_difference(): names the first record where two per-value output lists differ
     digest_lines(): lists the SHA-256 of every core output
     format_table(): renders the per-case reports as a text table
     format_speed(): renders the speed report as a text table
@@ -370,6 +371,25 @@ def compare_case(
     """
     entry = flips.get(name) or (intended or {}).get(name)
     return compare(oracle if entry is None else _expectation(entry), core)
+
+
+def first_difference(name: str, oracle: Sequence[object], core: Sequence[object]) -> str | None:
+    """Names the first record where two per-value output lists differ.
+
+    Args:
+        name: The `<case>/<key>` the lists come from, used in the result.
+        oracle: The oracle's records, one per input value.
+        core: The core's records for the same inputs.
+
+    Returns:
+        difference: `name[index]` with both records, a length mismatch, or None when equal.
+    """
+    if len(oracle) != len(core):
+        return f"{name}: oracle has {len(oracle)} records, core {len(core)}"
+    for index, (expected, actual) in enumerate(zip(oracle, core, strict=True)):
+        if expected != actual:
+            return f"{name}[{index}]: oracle {expected!r}, core {actual!r}"
+    return None
 
 
 def digest_lines(name: str, outputs: Mapping[str, Output]) -> list[str]:
