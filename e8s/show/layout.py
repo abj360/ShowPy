@@ -6,6 +6,9 @@ Contains:
     LAYOUT_FORMAT: names the format string that file holds
     CURRENT_LAYOUT: numbers the newest layout this release reads
     LAYOUT_MAX_BYTES: caps the size of the layout file read
+    LAYOUT_BYTES: holds the content of `layout.json` for the layout this release writes
+    RESTORE_LAYOUT_HINT: tells the caller how to replace a damaged layout file
+    TORN_LAYOUT_HINT: tells the caller how to clear a layout file a stopped first commit left torn
     HOUSEKEEPING_NAMES: lists the entries operating systems add to a folder, which a root skips
     TEMP_DIR: names the folder under a layout-2 root that holds every writer's temp files
     ASSET_DIR: names the folder under a root that the file asset store keeps assets in
@@ -24,9 +27,10 @@ from pathlib import Path
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError, VersionError
 from e8s.core.strict_json import parse_strict_json
+from e8s.show.document_dump import dump_json
 from e8s.show.durable_reads import read_capped
 from e8s.show.layout1 import LINK_DIR, ROOT_LINK
-from e8s.show.torn_reads import is_unfinished_json, read_settled
+from e8s.show.torn_reads import FSCK_REPAIR_CALL, is_short_of, is_unfinished_json, read_settled
 
 LAYOUT_FILE = "layout.json"
 LAYOUT_FORMAT = "e8.repository"
@@ -35,6 +39,15 @@ LEGACY_LAYOUT = 1
 # The file holds two keys, about 40 bytes; the cap only refuses a file that is not one.
 LAYOUT_MAX_BYTES = 1024
 LAYOUT_KEYS = frozenset({"format", "layout"})
+LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
+RESTORE_LAYOUT_HINT = (
+    f"restore {LAYOUT_FILE} from a backup, or move the folder away to start a new one"
+)
+TORN_LAYOUT_HINT = (
+    "a first commit that stopped while writing it leaves it so; while the root holds no show "
+    f"folder, {FSCK_REPAIR_CALL} removes it once it is a day old; otherwise "
+    f"{RESTORE_LAYOUT_HINT}"
+)
 TEMP_DIR = "tmp"
 ASSET_DIR = "assets"
 # Operating systems add these to a folder on their own: macOS Finder, Spotlight, the trash and the
@@ -88,10 +101,10 @@ def _unusable_path(spelled: str, reason: str, fix: str) -> StorageError:
     )
 
 
-def _corrupt(root: Path, reason: str) -> StorageError:
+def _corrupt(root: Path, reason: str, hint: str = RESTORE_LAYOUT_HINT) -> StorageError:
     return StorageError(
         f"repository at {root} is corrupt: {reason}",
-        hint=f"restore {LAYOUT_FILE} from a backup, or move the folder away to start a new one",
+        hint=hint,
         context={"root": str(root), "file": LAYOUT_FILE},
         code=ErrorCode.CORRUPT,
     )
@@ -163,6 +176,9 @@ def _declared_layout(root: Path, path: Path) -> int:
     try:
         document = parse_strict_json(raw, document="layout file")
     except SchemaError as error:
+        if is_short_of(LAYOUT_BYTES)(raw):
+            reason = f"{LAYOUT_FILE} is empty or cut short after every reread"
+            raise _corrupt(root, reason, TORN_LAYOUT_HINT) from error
         raise _corrupt(root, f"{LAYOUT_FILE} is not valid JSON") from error
     if not isinstance(document, dict) or document.keys() != LAYOUT_KEYS:
         raise _corrupt(root, f"{LAYOUT_FILE} must hold exactly {sorted(LAYOUT_KEYS)}")

@@ -20,7 +20,7 @@ from typing import NamedTuple
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError, UnknownRefError, VersionError
 from e8s.show.backend_checks import corrupt
-from e8s.show.commit_writes import LAYOUT_BYTES, STALE_TEMP_AGE
+from e8s.show.commit_writes import STALE_TEMP_AGE
 from e8s.show.durable_io import TEMP_PREFIX, is_stale_temp, mapped_io
 from e8s.show.durable_reads import listed_entries, lstat_info, read_capped
 from e8s.show.file_backend import SHOWS_DIR
@@ -39,6 +39,7 @@ from e8s.show.layout import (
     ASSET_DIR,
     CURRENT_LAYOUT,
     HOUSEKEEPING_NAMES,
+    LAYOUT_BYTES,
     LAYOUT_FILE,
     LAYOUT_MAX_BYTES,
     TEMP_DIR,

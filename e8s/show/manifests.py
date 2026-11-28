@@ -11,10 +11,12 @@ legacy record swapped for another, is refused.
 
 Contains:
     LEGACY_KEYS: names the three manifest keys that describe the legacy prefix
+    TORN_MANIFEST_HINT: tells the caller how to clear a manifest a stopped first commit left torn
     Manifest: holds a parsed manifest: the show ID and its legacy prefix
     legacy_digest(): returns the digest of a legacy prefix's revision IDs
     manifest_json(): builds a manifest for a show and the IDs of its legacy prefix
     parsed_manifest(): checks a parsed manifest and returns it
+    stored_manifest(): parses and checks a manifest's bytes, naming the repair of a torn one
     require_legacy_bound(): raises CORRUPT when the legacy prefix passes the last slot
     require_legacy_digest(): raises CORRUPT unless the legacy slots hold the IDs the digest names
 """
@@ -25,12 +27,20 @@ from pathlib import Path
 from typing import NamedTuple
 
 from e8s.core.canonical import jcs
+from e8s.core.errors import StorageError
 from e8s.core.json_types import JsonValue
 from e8s.show.backend import REVISION_ID_PATTERN
-from e8s.show.backend_checks import FIRST_SEQ, corrupt
+from e8s.show.backend_checks import FIRST_SEQ, corrupt, parsed_json
+from e8s.show.fsck_findings import is_torn_manifest
 from e8s.show.show_folders import show_folder
+from e8s.show.torn_reads import FSCK_REPAIR_CALL
 
 LEGACY_KEYS = frozenset({"legacy_before", "legacy_count", "legacy_digest"})
+TORN_MANIFEST_HINT = (
+    "a first commit that stopped while writing it leaves it so; while the show has no slot, "
+    f"{FSCK_REPAIR_CALL} removes it once it is a day old; otherwise restore the show folder from "
+    "a backup"
+)
 
 
 class Manifest(NamedTuple):
@@ -120,6 +130,30 @@ def parsed_manifest(show_id: str, path: Path, stored: JsonValue) -> Manifest:
     if stored.keys() == {"id"}:
         return Manifest(listed)
     return Manifest(listed, *_legacy_prefix(show_id, path, stored))
+
+
+def stored_manifest(show_id: str, path: Path, raw: bytes) -> Manifest:
+    """Parses and checks the bytes of a manifest, naming the repair of one left torn.
+
+    A manifest still a shorter start of one its folder could hold was left by a first commit
+    that stopped while writing it; the error's hint names the fsck repair that removes it.
+
+    Args:
+        show_id: Show being read, named in errors.
+        path: The manifest file.
+        raw: Bytes read from it.
+
+    Returns:
+        manifest: The listed show ID and its legacy prefix.
+    """
+    try:
+        stored = parsed_json(show_id, path, "manifest", raw)
+    except StorageError as error:
+        if not is_torn_manifest(raw, path.parent.name):
+            raise
+        reason = "manifest is empty or cut short after every reread"
+        raise corrupt(show_id, path, reason, hint=TORN_MANIFEST_HINT) from error
+    return parsed_manifest(show_id, path, stored)
 
 
 def require_legacy_bound(show_id: str, path: Path, legacy_before: int, last: int) -> None:

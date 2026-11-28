@@ -3,7 +3,6 @@ commit_writes.py --- the writes of a layout-2 commit: files placed under names n
 
 Contains:
     STALE_TEMP_AGE: sets how old a temp file must be before a commit removes it
-    LAYOUT_BYTES: holds the content of `layout.json` for the layout this backend writes
     write_layout_file(): places `layout.json` under a layout-2 root, after `tmp/` exists
     slot_bytes(): encodes a slot: its revision as one line of canonical JSON
     record_bytes(): encodes a revision record: the revision, its slot number and its tree
@@ -36,8 +35,8 @@ from e8s.show.fsck_findings import UNREACHABLE
 from e8s.show.history_models import Revision
 from e8s.show.layout import (
     CURRENT_LAYOUT,
+    LAYOUT_BYTES,
     LAYOUT_FILE,
-    LAYOUT_FORMAT,
     TEMP_DIR,
     read_layout,
     read_layout_file,
@@ -46,7 +45,6 @@ from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES, old_layout_error
 from e8s.show.torn_reads import is_short_of, read_settled
 
 STALE_TEMP_AGE = timedelta(hours=24)
-LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
 PROBE_SUFFIX = ".link-probe"
 TORN_IN_PLACE_HINT = (
     "a commit that stopped while writing this file leaves it so; run fsck(root), and if it lists "

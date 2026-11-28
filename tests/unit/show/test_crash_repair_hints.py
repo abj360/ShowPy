@@ -15,6 +15,11 @@ Contains:
         removes the file once it is a day old so the retry lands
     test_damaged_blob_or_record_keeps_the_restore_hint: keeps the backup hint for a blob or
         record that is no shorter start of what the commit writes
+    test_regression_torn_layout_or_manifest_hint_names_the_fsck_repair_that_clears_it: fails a
+        read of a root whose first commit stopped while writing layout.json or show.json with a
+        hint naming the fsck repair, which removes the file once it is a day old
+    test_damaged_layout_or_manifest_keeps_the_restore_hint: keeps the backup hint for a layout
+        file or manifest that is no shorter start of what a commit writes
 """
 
 import errno
@@ -30,10 +35,13 @@ from e8s.core.errors import StorageError
 from e8s.show import durable_io
 from e8s.show.backend_checks import CORRUPT_HINT
 from e8s.show.commit_writes import STALE_TEMP_AGE
-from e8s.show.file_backend import FileBackend
+from e8s.show.file_backend import MANIFEST_FILE, FileBackend
+from e8s.show.file_repository import FileRepository
+from e8s.show.fsck import fsck
 from e8s.show.fsck_findings import UNREACHABLE
 from e8s.show.gc import gc
 from e8s.show.history_models import Revision
+from e8s.show.layout import LAYOUT_FILE
 from tests.fixtures.fsck_repos import (
     AT,
     DAY,
@@ -45,16 +53,19 @@ from tests.fixtures.fsck_repos import (
     numbered_change,
     record_path,
     relative,
+    show_path,
 )
 
 pytestmark = pytest.mark.usefixtures("no_reread_pauses")
 
 GC_CALL = "gc(root, at=datetime.now(UTC), confirm=True)"
+REPAIR_CALL = "fsck(root, repair=True, confirm=True, at=datetime.now(UTC))"
 HOUR = timedelta(hours=1)
 # The share of a file's bytes the stopped writer got onto the disk.
 WRITTEN_SHARES = [0.0, 0.5]
 WRITTEN_IDS = ["empty", "cut_short"]
 TORN_KINDS = ["blob", "record"]
+FIRST_FILES = [LAYOUT_FILE, MANIFEST_FILE]
 NEW_BLOB = b"render 1"
 
 type Change = tuple[Revision, dict[str, str], dict[str, bytes]]
@@ -103,6 +114,18 @@ def _torn_path(root: Path, kind: str, change: Change) -> Path:
     return blob_path(root, NEW_BLOB)
 
 
+def _first_file_path(root: Path, name: str) -> Path:
+    """Names the layout file or the manifest a show's first commit writes."""
+    return root / LAYOUT_FILE if name == LAYOUT_FILE else show_path(root) / MANIFEST_FILE
+
+
+def _refused_read(root: Path) -> StorageError:
+    with pytest.raises(StorageError) as caught:
+        FileRepository(root).head(SHOW_ID)
+    assert caught.value.code == ErrorCode.CORRUPT
+    return caught.value
+
+
 def _refused_retry(root: Path, change: Change) -> StorageError:
     with pytest.raises(StorageError) as caught:
         FileBackend(root).commit(SHOW_ID, *change)
@@ -146,3 +169,35 @@ def test_damaged_blob_or_record_keeps_the_restore_hint(tmp_path: Path, kind: str
     damaged.parent.mkdir(parents=True, exist_ok=True)
     damaged.write_bytes(b"not what this commit writes")
     assert _refused_retry(tmp_path, change).hint == CORRUPT_HINT
+
+
+@pytest.mark.parametrize("share", WRITTEN_SHARES, ids=WRITTEN_IDS)
+@pytest.mark.parametrize("name", FIRST_FILES)
+def test_regression_torn_layout_or_manifest_hint_names_the_fsck_repair_that_clears_it(
+    tmp_path: Path, name: str, share: float
+) -> None:
+    change = numbered_change("", 0)
+    torn = _first_file_path(tmp_path, name)
+    _commit_stopped_writing(tmp_path, change, lambda target: target == torn, share)
+    hint = _refused_read(tmp_path).hint
+    assert REPAIR_CALL in hint
+    assert "a day old" in hint
+    assert STALE_TEMP_AGE == DAY
+    age_by(torn, STALE_TEMP_AGE - HOUR)
+    assert fsck(tmp_path, repair=True, confirm=True, at=AT).repaired == ()
+    age_by(torn, STALE_TEMP_AGE + HOUR)
+    report = fsck(tmp_path, repair=True, confirm=True, at=AT)
+    assert report.repaired == (relative(tmp_path, torn),)
+    assert report.ok
+    FileBackend(tmp_path).commit(SHOW_ID, *change)
+    assert FileRepository(tmp_path).head(SHOW_ID) == change[0].id
+    assert fsck(tmp_path).ok
+
+
+@pytest.mark.parametrize("name", FIRST_FILES)
+def test_damaged_layout_or_manifest_keeps_the_restore_hint(tmp_path: Path, name: str) -> None:
+    landed_revisions(tmp_path, 1)
+    _first_file_path(tmp_path, name).write_bytes(b"not what a commit writes")
+    hint = _refused_read(tmp_path).hint
+    assert "from a backup" in hint
+    assert "fsck(" not in hint

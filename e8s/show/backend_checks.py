@@ -49,7 +49,7 @@ from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import BLOB_MAX_BYTES
 from e8s.show.storage import ROOT_REVISION
-from e8s.show.torn_reads import is_unfinished_line
+from e8s.show.torn_reads import FSCK_REPAIR_CALL, is_unfinished_line
 
 CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
 GC_CALL = "gc(root, at=datetime.now(UTC), confirm=True)"
@@ -62,8 +62,7 @@ MISSING_FILE_HINT = (
 )
 TORN_SLOT_HINT = (
     "read again later; if the slot stays torn, its writer stopped before writing it: run "
-    "fsck(root, repair=True, confirm=True, at=datetime.now(UTC)), which removes a torn last "
-    "slot once it is a day old"
+    f"{FSCK_REPAIR_CALL}, which removes a torn last slot once it is a day old"
 )
 
 

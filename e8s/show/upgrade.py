@@ -15,7 +15,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.show import durable_io
 from e8s.show.backend_checks import FIRST_SEQ, ReadBudget, corrupt, recomputes
-from e8s.show.commit_writes import LAYOUT_BYTES, FilePlacer, record_bytes, slot_bytes
+from e8s.show.commit_writes import FilePlacer, record_bytes, slot_bytes
 from e8s.show.document_dump import dump_json
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import (
@@ -41,6 +41,7 @@ from e8s.show.history_models import Revision
 from e8s.show.layout import (
     ASSET_DIR,
     HOUSEKEEPING_NAMES,
+    LAYOUT_BYTES,
     LAYOUT_FILE,
     LEGACY_LAYOUT,
     TEMP_DIR,
