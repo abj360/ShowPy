@@ -596,6 +596,10 @@ if TYPE_CHECKING:
     from e8s.show.anchors import (
         Anchor,
     )
+    from e8s.show.archive import (
+        export_archive,
+        import_archive,
+    )
     from e8s.show.assets import (
         FileAssetStore,
         InMemoryAssetStore,
@@ -1186,6 +1190,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "energy_curve": ("e8s.choreo.motion_stats", "energy_curve"),
     "events_since": ("e8s.show.events", "events_since"),
     "expand": ("e8s.choreo.set_transforms", "expand"),
+    "export_archive": ("e8s.show.archive", "export_archive"),
     "export_json": ("e8s.show.interchange", "export_json"),
     "face_along": ("e8s.choreo.facing", "face_along"),
     "face_audience": ("e8s.choreo.facing", "face_audience"),
@@ -1226,6 +1231,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "highlight": ("e8s.show.collab", "highlight"),
     "hold": ("e8s.choreo.paths", "hold"),
     "id_changes": ("e8s.show.id_changes", "id_changes"),
+    "import_archive": ("e8s.show.archive", "import_archive"),
     "import_fonts": ("e8s.show.interchange", "import_fonts"),
     "import_json": ("e8s.show.interchange", "import_json"),
     "import_positions": ("e8s.show.interchange", "import_positions"),
@@ -1786,6 +1792,7 @@ __all__ = [
     "energy_curve",
     "events_since",
     "expand",
+    "export_archive",
     "export_json",
     "face_along",
     "face_audience",
@@ -1826,6 +1833,7 @@ __all__ = [
     "highlight",
     "hold",
     "id_changes",
+    "import_archive",
     "import_fonts",
     "import_json",
     "import_positions",
