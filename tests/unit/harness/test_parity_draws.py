@@ -15,6 +15,7 @@ Contains:
     test_core_area_modules_include_its_inputs_and_draws: the import walk reaches every helper
     test_regression_core_parity_inputs_never_use_libm_pow: no power a C math library rounds
     test_regression_core_parity_inputs_never_call_libm_functions: no exp, log or trig either
+    test_ported_area_inputs_never_use_libm: every gated area's case modules pass both checks
 """
 
 import ast
@@ -26,6 +27,7 @@ import numpy as np
 import pytest
 
 from tests.parity.draws import power_of_ten, powers_of_ten, uniform
+from tests.parity.run import PORTED_AREAS
 
 SEED = 20261128
 DRAWS = 20_000
@@ -231,3 +233,9 @@ def test_regression_core_parity_inputs_never_use_libm_pow() -> None:
 def test_regression_core_parity_inputs_never_call_libm_functions() -> None:
     found = _findings("core", libm_calls)
     assert found == [], f"{FUNCTION_HINT}:\n" + "\n".join(found)
+
+
+@pytest.mark.parametrize("area", sorted(PORTED_AREAS))
+def test_ported_area_inputs_never_use_libm(area: str) -> None:
+    found = _findings(area, libm_powers) + _findings(area, libm_calls)
+    assert found == [], f"{POWER_HINT}; {FUNCTION_HINT}:\n" + "\n".join(found)
