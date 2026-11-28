@@ -33,7 +33,8 @@ Contains:
         every target
     test_fuzz_all_refuses_an_empty_glob_and_a_host_without_atheris: nothing runs
     test_regression_storage_fuzz_runs_each_target_in_its_own_process: a crash that ends one
-        target's process leaves the later targets running
+        target's process leaves the later targets running, and each child fuzzes the parent's
+        root
     test_fuzz_in_own_process_stops_a_target_that_runs_past_its_slot: the grace bound holds
     test_storagefuzz_session_is_on_demand_and_runs_the_nightly_profile: not a default session
     test_atheris_is_a_linux_x86_64_dev_dependency: the marker keeps it off other hosts
@@ -490,15 +491,15 @@ class RecordingRunner:
     """Stands in for the per-process runner, recording each call and failing chosen targets.
 
     Attributes:
-        calls: Each (target ID, seconds) pair it was asked to run, in order.
+        calls: Each (target ID, seconds, root) it was asked to run, in order.
     """
 
     def __init__(self, failing: Sequence[str] = ()) -> None:
-        self.calls: list[tuple[str, int]] = []
+        self.calls: list[tuple[str, int, Path]] = []
         self._failing = set(failing)
 
-    def __call__(self, target_id: str, seconds: int) -> int:
-        self.calls.append((target_id, seconds))
+    def __call__(self, target_id: str, seconds: int, root: Path) -> int:
+        self.calls.append((target_id, seconds, root))
         return CRASH_EXIT if target_id in self._failing else 0
 
 
@@ -514,7 +515,7 @@ def test_regression_storage_fuzz_runs_every_target_after_a_crash(
     """A per-test matrix could not report through the one nightly check job; one job runs all."""
     run = RecordingRunner(failing=BETA_IDS)
     assert fuzz_all(runner, package, run) != 0
-    assert run.calls == [(target, 300) for target in ALPHA_IDS + BETA_IDS]
+    assert run.calls == [(target, 300, package) for target in ALPHA_IDS + BETA_IDS]
     errors = [line for line in capsys.readouterr().err.splitlines() if line.startswith("E: ")]
     assert [line.split()[1] for line in errors] == BETA_IDS
     assert all(f"exit {CRASH_EXIT}" in line for line in errors)
@@ -525,7 +526,7 @@ def test_fuzz_all_passes_the_slot_and_exits_zero_when_every_target_passes(
 ) -> None:
     run = RecordingRunner()
     assert fuzz_all(runner, package, run, "--seconds", str(SECONDS)) == 0
-    assert run.calls == [(target, SECONDS) for target in ALPHA_IDS + BETA_IDS]
+    assert run.calls == [(target, SECONDS, package) for target in ALPHA_IDS + BETA_IDS]
     assert "E: " not in capsys.readouterr().err
 
 
@@ -546,14 +547,6 @@ def test_fuzz_all_refuses_an_empty_glob_and_a_host_without_atheris(
     assert run.calls == []
 
 
-def copy_runner(root: Path) -> Path:
-    """Copies the runner script under root/scripts, so its ROOT is root."""
-    script = root / "scripts" / "fuzz_storage.py"
-    script.parent.mkdir()
-    script.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
-    return script
-
-
 def fake_atheris_env(root: Path, **extra: str) -> dict[str, str]:
     """Writes a fake atheris module and returns an environment that imports it first."""
     folder = root / "fake_atheris"
@@ -565,11 +558,13 @@ def fake_atheris_env(root: Path, **extra: str) -> dict[str, str]:
 
 
 def test_regression_storage_fuzz_runs_each_target_in_its_own_process(tmp_path: Path) -> None:
-    """libFuzzer ends the process on a crash, so targets after it ran only in their own process."""
-    script = copy_runner(tmp_path)
+    """libFuzzer ends the process on a crash, so targets after it ran only in their own process.
+
+    The children fuzz the root given to the parent, not the script's own repository.
+    """
     make_package(tmp_path, {"test_storage_alpha.py": ALPHA, "test_storage_beta.py": BETA})
     done = subprocess.run(
-        [sys.executable, str(script), "--seconds", "1"],
+        [sys.executable, str(SCRIPT), "--root", str(tmp_path), "--seconds", "1"],
         capture_output=True,
         text=True,
         env=fake_atheris_env(tmp_path),
@@ -591,12 +586,11 @@ def test_fuzz_in_own_process_stops_a_target_that_runs_past_its_slot(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    script = copy_runner(tmp_path)
     make_package(tmp_path, {"test_storage_alpha.py": ALPHA})
     env = fake_atheris_env(tmp_path, FAKE_FUZZ_SLEEP="30")
     monkeypatch.setenv("PYTHONPATH", env["PYTHONPATH"])
     monkeypatch.setenv("FAKE_FUZZ_SLEEP", env["FAKE_FUZZ_SLEEP"])
-    code = runner.run_in_own_process(ALPHA_IDS[1], 1, script=script, grace=1)
+    code = runner.run_in_own_process(ALPHA_IDS[1], 1, tmp_path, grace=1)
     assert code != 0
     assert f"E: {ALPHA_IDS[1]} ran past 2 s" in capsys.readouterr().err
 

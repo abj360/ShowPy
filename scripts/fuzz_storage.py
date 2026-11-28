@@ -60,7 +60,7 @@ USAGE_ERROR = 2
 FAILURE = 1
 
 TestInput = Callable[[bytes], None]
-TargetRunner = Callable[[str, int], int]
+TargetRunner = Callable[[str, int, Path], int]
 
 
 class AtherisModule(Protocol):
@@ -196,20 +196,21 @@ def fuzz_target(atheris: AtherisModule, root: Path, target_id: str, seconds: int
 
 
 def run_in_own_process(
-    target_id: str, seconds: int, *, script: Path = SCRIPT, grace: int = TARGET_GRACE_SECONDS
+    target_id: str, seconds: int, root: Path, *, grace: int = TARGET_GRACE_SECONDS
 ) -> int:
     """Fuzzes one target in a child process of the runner script, stopped past its slot.
 
     Args:
         target_id: The target to fuzz, as discover_targets names it.
         seconds: How long libFuzzer runs.
-        script: The runner script the child runs; its repository is the child's root.
+        root: The repository root the child reads the tests from and keeps its folders under.
         grace: How long past `seconds` the child may run before it is stopped.
 
     Returns:
         exit_code: The child's exit code, or 1 when it was stopped.
     """
-    command = [sys.executable, str(script), "--target", target_id, "--seconds", str(seconds)]
+    command = [sys.executable, str(SCRIPT), "--root", str(root), "--target", target_id]
+    command += ["--seconds", str(seconds)]
     limit = seconds + grace
     try:
         return subprocess.run(command, check=False, timeout=limit).returncode
@@ -224,7 +225,8 @@ def fuzz_all(root: Path, seconds: int, run_target: TargetRunner) -> int:
     Args:
         root: The repository root that STORAGE_GLOB is read from.
         seconds: How long libFuzzer fuzzes each target.
-        run_target: Fuzzes one target for a number of seconds and returns its exit code.
+        run_target: Fuzzes one target for a number of seconds under a root and returns its exit
+            code.
 
     Returns:
         exit_code: 0 when every target passed, 1 otherwise.
@@ -232,7 +234,7 @@ def fuzz_all(root: Path, seconds: int, run_target: TargetRunner) -> int:
     failed: dict[str, int] = {}
     for target_id in discover_targets(root):
         print(f"Fuzzing {target_id} for {seconds} s", flush=True)
-        code = run_target(target_id, seconds)
+        code = run_target(target_id, seconds, root)
         if code != 0:
             failed[target_id] = code
     for target_id, code in failed.items():
@@ -277,6 +279,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", help="the target to fuzz or replay; all targets when absent")
     parser.add_argument("--seconds", type=_positive_seconds, default=FUZZ_SECONDS_PER_TEST)
     parser.add_argument("--replay", type=Path, help="run this saved input once")
+    parser.add_argument(
+        "--root", type=Path, help="the repository root; the script's own by default"
+    )
     return parser
 
 
@@ -300,7 +305,7 @@ def main(
 
     Args:
         argv: The arguments after the script name, sys.argv[1:] when None.
-        root: The repository root that STORAGE_GLOB is read from.
+        root: The repository root that STORAGE_GLOB is read from, unless --root names another.
         load_atheris: Returns the atheris module; fails on a host without it.
         run_target: Fuzzes one target in its own process when no --target is given.
 
@@ -309,6 +314,8 @@ def main(
     """
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.root is not None:
+        root = args.root
     target: str | None = args.target
     replay: Path | None = args.replay
     if args.list and target is not None:
