@@ -18,7 +18,7 @@ from collections.abc import Callable, Iterator, Sequence
 
 import numpy as np
 
-from tests.parity.draws import uniform
+from tests.parity.draws import power_of_ten, uniform
 
 MAX_DEPTH = 4
 INT_CAP = 10**640
@@ -182,7 +182,7 @@ def _float(rng: np.random.Generator) -> float:
         return float(np.array([bits], dtype=np.int64).view(np.float64)[0])
     if choice == 2:
         return float(np.round(uniform(rng, -1e4, 1e4), int(rng.integers(0, 8))))
-    scale = 10.0 ** int(rng.integers(-30, 30))
+    scale = power_of_ten(int(rng.integers(-30, 30)))
     return float(uniform(rng, -1.0, 1.0)) * scale
 
 

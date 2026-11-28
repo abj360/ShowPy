@@ -52,6 +52,16 @@ jobs:
           save-cache: ${{ github.ref == 'refs/heads/main' }}
       - name: Fuzz each core parser for 10 minutes
         run: uv run --locked nox -s rustfuzz -- --seconds 600
+      # The runner was shut down mid-mutants twice on 2026-11-28: log what is left, then free
+      # the fuzz builds, which the mutation run does not use.
+      - name: Free the fuzz builds before the mutation run
+        if: ${{ !cancelled() }}
+        run: |
+          df -h /
+          free -m
+          if [ -d fuzz/target ]; then du -sh fuzz/target; fi
+          rm -rf fuzz/target
+          df -h /
       - name: Record the mutation scores
         if: ${{ !cancelled() }}
         run: uv run --locked nox -s mutants
