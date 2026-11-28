@@ -418,7 +418,9 @@ def test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revis
 
 def test_regression_v020_revision_with_a_naive_time_reads_as_utc(tmp_path: Path) -> None:
     """Reads a stored v0.2.0 revision with no timezone as UTC, keeping its stored record."""
-    repo, _, expected = v020_workspace(tmp_path)
+    expected = v020_expected()
+    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
+    repo = FileRepository(tmp_path / "repo")
     first = expected["revisions"][0]
     record_path = tmp_path / "repo" / expected["show_id"] / "trees" / f"{first}.json"
     record = json.loads(record_path.read_text())
