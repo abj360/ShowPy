@@ -25,6 +25,7 @@ import re
 import sys
 import textwrap
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,14 +164,29 @@ def _raiser(chain: list[ast.AST], returns: dict[str, str | None]) -> str | None:
     return None
 
 
-def _module_raisers(tree: ast.Module) -> list[tuple[str, str]]:
-    """Lists (code, class) for each ErrorCode member a module raises or reports."""
-    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
-    returns = {
+def _returns(tree: ast.Module) -> dict[str, str | None]:
+    return {
         node.name: _annotation_name(node.returns)
         for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef)
     }
+
+
+def _module_raisers(
+    tree: ast.Module, shared: Mapping[str, str] | None = None
+) -> list[tuple[str, str]]:
+    """Lists (code, class) for each ErrorCode member a module raises or reports.
+
+    Args:
+        tree: The module's syntax tree.
+        shared: Classes returned by functions of other library modules, so a call to an imported
+            issue builder names its class; the module's own functions take precedence.
+
+    Returns:
+        found: One (member name, class name) pair per use of a member that names a class.
+    """
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    returns = {**(shared or {}), **_returns(tree)}
     found: list[tuple[str, str]] = []
     for node in ast.walk(tree):
         if not (
@@ -217,10 +233,18 @@ def code_raisers() -> dict[str, list[str]]:
         raisers: Member name to the sorted names of the classes that carry it.
     """
     raisers: dict[str, set[str]] = defaultdict(set)
-    for path in sorted(LIBRARY_ROOT.rglob("*.py")):
-        if path == CATALOGUE_PATH:
-            continue
-        for code, raiser in _module_raisers(ast.parse(path.read_text(encoding="utf-8"))):
+    paths = [path for path in sorted(LIBRARY_ROOT.rglob("*.py")) if path != CATALOGUE_PATH]
+    trees = [ast.parse(path.read_text(encoding="utf-8")) for path in paths]
+    shared = {
+        name: returned
+        for tree in trees
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        for name, returned in [(node.name, _annotation_name(node.returns))]
+        if returned is not None
+    }
+    for tree in trees:
+        for code, raiser in _module_raisers(tree, shared):
             raisers[code].add(raiser)
     for code, names in rust_raisers().items():
         raisers[code].update(names)

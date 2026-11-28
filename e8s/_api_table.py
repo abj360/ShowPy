@@ -502,6 +502,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("reorder", "e8s.choreo.form_ops", "reorder"),
     ("require_finite", "e8s.core.validation", "require_finite"),
     ("require_size", "e8s.core.caps", "require_size"),
+    ("revalidate", "e8s.show.revalidate", "revalidate"),
     ("revert", "e8s.show.history", "revert"),
     ("ripple", "e8s.choreo.paths", "ripple"),
     ("rose_points", "e8s.choreo.form_fns", "rose_points"),

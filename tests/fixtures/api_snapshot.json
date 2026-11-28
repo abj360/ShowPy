@@ -1843,6 +1843,7 @@
   "reorder": "(form: e8s.choreo.form_models.Form, order: Order, prev_set: e8s.choreo.models.Set | None = None, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "require_finite": "(value: SupportsFloat, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
   "require_size": "(requested: int, cap: int, *, what: str, error: type[e8s.core.errors.E8sError] = ...) -> None",
+  "revalidate": "(previous: e8s.core.validation.ValidationReport, before: e8s.show.models.Show, after: e8s.show.models.Show) -> e8s.core.validation.ValidationReport",
   "revert": "(ws: e8s.show.workspace.Workspace, revision_id: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
   "ripple": "(spec: e8s.choreo.path_models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "rose_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",

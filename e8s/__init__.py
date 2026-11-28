@@ -757,6 +757,9 @@ if TYPE_CHECKING:
     from e8s.show.renumber import (
         renumber,
     )
+    from e8s.show.revalidate import (
+        revalidate,
+    )
     from e8s.show.sections import (
         join_sections,
         split_section,
@@ -1344,6 +1347,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "reorder": ("e8s.choreo.form_ops", "reorder"),
     "require_finite": ("e8s.core.validation", "require_finite"),
     "require_size": ("e8s.core.caps", "require_size"),
+    "revalidate": ("e8s.show.revalidate", "revalidate"),
     "revert": ("e8s.show.history", "revert"),
     "ripple": ("e8s.choreo.paths", "ripple"),
     "rose_points": ("e8s.choreo.form_fns", "rose_points"),
@@ -1947,6 +1951,7 @@ __all__ = [
     "reorder",
     "require_finite",
     "require_size",
+    "revalidate",
     "revert",
     "ripple",
     "rose_points",

@@ -18,7 +18,7 @@ from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey
 from e8s.show.item_table import set_keys_by_id, transition_key
 from e8s.show.models import Show
-from e8s.show.validate_refs import ERROR, make_issue
+from e8s.show.validate_issue import ERROR, make_issue
 
 
 def _facing_issue(

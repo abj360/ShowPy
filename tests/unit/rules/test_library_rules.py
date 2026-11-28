@@ -40,6 +40,8 @@ Contains:
         generator
     test_rust_raiser_scan_reads_each_kind_and_code_pair: proves the core raise-site scan reads
         a pair split over lines and skips Rust tests
+    test_regression_code_raisers_name_the_class_an_imported_issue_builder_returns: names the
+        class an issue builder from another module returns for the code it is given
     find_positional_booleans(): lists file, line and parameter of each positional bool parameter
     test_regression_library_has_no_positional_boolean_parameter: fails on any such parameter
     test_regression_public_functions_take_booleans_by_keyword: fails when a public signature
@@ -581,6 +583,26 @@ def test_rust_raiser_scan_reads_each_kind_and_code_pair(
     )
     monkeypatch.setattr(generator, "CRATES_ROOT", tmp_path)
     assert generator.rust_raisers() == {"NOT_FINITE": ["SchemaError"]}
+
+
+def test_regression_code_raisers_name_the_class_an_imported_issue_builder_returns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Names ValidationIssue for a code passed to an issue builder imported from another module."""
+    generator = _load_code_generator()
+    (tmp_path / "issue.py").write_text(
+        "def make_issue(code: ErrorCode) -> ValidationIssue:\n    return ValidationIssue(code)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "checks.py").write_text(
+        "from issue import make_issue\n\n"
+        "def checks() -> list[ValidationIssue]:\n"
+        "    return [make_issue(ErrorCode.ZERO_COUNTS)]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(generator, "LIBRARY_ROOT", tmp_path)
+    monkeypatch.setattr(generator, "CRATES_ROOT", tmp_path)
+    assert generator.code_raisers() == {"ZERO_COUNTS": ["ValidationIssue"]}
 
 
 def _is_boolean_annotation(annotation: ast.expr | None) -> bool:
