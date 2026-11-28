@@ -27,11 +27,13 @@ DRAWS = 1_000
 GOLDEN_RATIO_64 = 0x9E3779B97F4A7C15
 WORD = 2**64
 # One exclusive bound per bounded-draw path: no draw, 32-bit Lemire, the full 32-bit word,
-# 64-bit Lemire and the widest int64 bound.
-HIGHS = (1, 2, 7, 1_000, 2**31, 2**32 - 1, 2**32, 2**32 + 1, 2**40 + 3, 2**63 - 1)
+# 64-bit Lemire and the widest int64 bound. 2**62 + 2 rejects about a quarter of its 64-bit
+# draws, so Lemire's rejection threshold decides most of its stream.
+HIGHS = (1, 2, 7, 1_000, 2**31, 2**32 - 1, 2**32, 2**32 + 1, 2**40 + 3, 2**62 + 2, 2**63 - 1)
 # Population sizes for both sampling methods: Floyd's set (small or sparse samples) and the
-# tail shuffle (populations over 10,000 sampled more than one in fifty).
-POPULATIONS = (1_000, 1_001, 5_000, 10_000, 10_001, 40_000, 60_000, 2**33 + 7, 2**40)
+# tail shuffle (populations over 10,000 sampled more than one in fifty). Populations past
+# 2**32 draw Floyd's values with 64-bit Lemire.
+POPULATIONS = (1_000, 1_001, 5_000, 10_000, 10_001, 40_000, 60_000, 2**33 + 7, 5 * 10**10, 2**40)
 
 
 def _seed(index: int) -> int:
