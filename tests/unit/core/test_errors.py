@@ -42,6 +42,11 @@ Contains:
     test_regression_mixed_set_context_is_ordered_by_type_then_value: orders a mixed-type set
     test_regression_context_mappings_are_capped: keeps 20 entries of a 1,000-entry mapping
     test_regression_context_survives_a_broken_repr: names the type of a value whose repr raises
+    test_regression_context_shows_a_numpy_scalar_with_no_python_twin_as_its_repr: bounds a
+        long double or complex long double, alone, in an array or in a list, to its repr instead
+        of recursing on `item()`
+    test_regression_self_holding_zero_d_array_context_is_cut_to_text: bounds a 0-d object
+        array that holds itself, unwrapping it only to the depth cap
 """
 
 import copy
@@ -491,3 +496,35 @@ def test_regression_unorderable_set_past_the_cap_is_summarized(
     assert bounded == [f"<set of {count} items>", f"(not shown: {count} unorderable items)"]
     assert calls["_bounded_value"] == 1
     assert calls["bounded_repr"] == 1
+
+
+def test_regression_context_shows_a_numpy_scalar_with_no_python_twin_as_its_repr() -> None:
+    """Shows a scalar whose `item()` returns a numpy scalar as its bounded repr, never recursing."""
+    error = SchemaError(
+        "x",
+        hint="y",
+        context={
+            "long": np.longdouble(11),
+            "complex": np.clongdouble(1 + 2j),
+            "zero_d": np.array(np.longdouble(-1)),
+            "row": np.array([np.longdouble(3)]),
+            "items": [np.longdouble(2), np.float64(2.5)],
+        },
+    )
+    assert error.context == {
+        "long": repr(np.longdouble(11)),
+        "complex": repr(np.clongdouble(1 + 2j)),
+        "zero_d": repr(np.longdouble(-1)),
+        "row": [repr(np.longdouble(3))],
+        "items": [repr(np.longdouble(2)), 2.5],
+    }
+    assert json.loads(json.dumps(error.to_dict(), allow_nan=False)) == error.to_dict()
+
+
+def test_regression_self_holding_zero_d_array_context_is_cut_to_text() -> None:
+    """Counts each 0-d array unwrap as a level, so an array that holds itself ends as text."""
+    looped = np.empty((), dtype=object)
+    looped[()] = looped
+    error = SchemaError("x", hint="y", context={"looped": looped})
+    assert error.context["looped"] == repr(looped)
+    assert json.loads(json.dumps(error.to_dict())) == error.to_dict()

@@ -31,6 +31,9 @@ Contains:
     test_regression_decode_refuses_a_malformed_or_truncated_record: bounds every header field
     test_load_cases_reads_the_time_self_check: cases_time.py holds the clock self-check
     test_load_cases_rejects_an_unknown_area: an area without a case module fails closed
+    test_first_difference_names_the_first_differing_record: a changed float text is found at
+        its index, with both records
+    test_first_difference_flags_a_missing_record: lists of different lengths differ
 """
 
 import math
@@ -55,6 +58,7 @@ from tests.parity.compare import (
     compare,
     compare_case,
     compare_speed,
+    first_difference,
     format_table,
     load_flipped,
     load_intended,
@@ -335,3 +339,23 @@ def test_load_cases_reads_the_time_self_check() -> None:
 def test_load_cases_rejects_an_unknown_area() -> None:
     with pytest.raises(SystemExit, match="cases_nowhere"):
         load_cases("nowhere")
+
+
+def test_first_difference_names_the_first_differing_record() -> None:
+    oracle = [{"jcs": {"ok": "[1]"}}, {"jcs": {"ok": "[0.1]"}}, {"jcs": {"ok": "[2e-7]"}}]
+    core = [
+        {"jcs": {"ok": "[1]"}},
+        {"jcs": {"ok": "[0.10000000000000001]"}},
+        {"jcs": {"ok": "[x]"}},
+    ]
+    assert first_difference("c/values", oracle, oracle) is None
+    assert first_difference("c/values", oracle, core) == (
+        "c/values[1]: oracle {'jcs': {'ok': '[0.1]'}}, "
+        "core {'jcs': {'ok': '[0.10000000000000001]'}}"
+    )
+
+
+def test_first_difference_flags_a_missing_record() -> None:
+    assert first_difference("c/nesting", [1, 2, 3], [1, 2]) == (
+        "c/nesting: oracle has 3 records, core 2"
+    )

@@ -29,6 +29,7 @@ import numpy as np
 from pydantic import JsonValue
 
 from tests.parity.cases import Case, Output
+from tests.parity.draws import uniform
 from tests.parity.json_inputs import (
     HAND_PICKED,
     Count,
@@ -243,9 +244,9 @@ def big_show(e8s: ModuleType) -> object:
     spot = doc["cast"]["spots"][0]
     placement = doc["sets"][0]["placements"][0]
     header = {key: value for key, value in doc["sets"][0].items() if key != "placements"}
-    xs = rng.uniform(-18.0, 18.0, size=(SETS, SPOTS))
-    ys = rng.uniform(1.0, 18.0, size=(SETS, SPOTS))
-    facings = rng.uniform(0.0, 360.0, size=(SETS, SPOTS))
+    xs = uniform(rng, -18.0, 18.0, size=(SETS, SPOTS))
+    ys = uniform(rng, 1.0, 18.0, size=(SETS, SPOTS))
+    facings = uniform(rng, 0.0, 360.0, size=(SETS, SPOTS))
     doc["id"] = SHOW_ID
     doc["cast"]["spots"] = [{**spot, "id": spot_id} for spot_id in ids]
     doc["transitions"] = []

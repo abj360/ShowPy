@@ -1,0 +1,24 @@
+# The core package moved its computation to the compiled core without deleting a module:
+# `e8s/show/` imports the re-export modules by path. `canonical` stays because it keeps
+# `JsonValue` from `json_types`; `units` and `util` stay because they keep their Python-only
+# names (unit registries, timers, logging, seeded generators, Shapely conversion).
+moves = []
+reexport = ["caps", "csv_cells", "numbers", "strict_json"]
+stays = [
+  "arrays",
+  "canonical",
+  "error_codes",
+  "error_context",
+  "errors",
+  "extras",
+  "ids",
+  "json_types",
+  "readonly",
+  "resources",
+  "selection",
+  "types",
+  "units",
+  "util",
+  "validation",
+]
+interop = ["e8s/core/types.py", "e8s/core/util.py"]
