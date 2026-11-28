@@ -247,15 +247,24 @@ class StorageRules:
         loser=change_sets,
         main_wins=st.booleans(),
         through_backend=st.booleans(),
+        repeats_winner=st.booleans(),
     )
     def racing_commit(
-        self, winner: Changes, loser: Changes, *, main_wins: bool, through_backend: bool
+        self,
+        winner: Changes,
+        loser: Changes,
+        *,
+        main_wins: bool,
+        through_backend: bool,
+        repeats_winner: bool,
     ) -> None:
         """Lets two writers that read the same head both write: one lands, one changes nothing.
 
         The loser either asks its repository, which sees the moved head, or sends its commit
         straight to the backend, as a writer that passed that check just before the winner
-        landed would; then only the backend's compare-and-swap stops it.
+        landed would; then only the backend's compare-and-swap stops it. A loser that repeats
+        the winner's edit at the winner's time builds the very revision that landed, same ID
+        included, and still gets ConflictError, never a refusal of the stored ID.
         """
         first, second = (self.repo, self.rival) if main_wins else (self.rival, self.repo)
         parent, before = self._head(), self._documents()
@@ -264,14 +273,19 @@ class StorageRules:
         at = self._next_at()
         landed = first.transaction(SHOW_ID, winner, expected_revision=parent, at=at)
         self._record(landed, _applied(winner, before), at)
-        lost_at = self._next_at()
+        if repeats_winner:
+            loser, lost_at = winner, at
+            event("loser repeats the winner's revision")
+        else:
+            lost_at = self._next_at()
         lose: Callable[[], object] = (
             partial(second.backend.commit, SHOW_ID, *_prepared(parent, before, loser, lost_at))
             if through_backend
             else partial(second.transaction, SHOW_ID, loser, expected_revision=parent, at=lost_at)
         )
-        with pytest.raises(ConflictError):
+        with pytest.raises(ConflictError) as lost:
             lose()
+        assert lost.value.code == ErrorCode.CONFLICT
         event(f"loser stopped by the {'backend' if through_backend else 'repository'}")
         if through_backend:
             self.lost_blobs |= {digest(data) for data in loser.values() if data is not None}
