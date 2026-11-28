@@ -8,6 +8,7 @@ a file pauses and reads it again before it judges the file.
 Contains:
     TORN_READ_PAUSES_S: sets the pause before each reread of a file that looks torn
     TORN_READ_RETRIES: counts the rereads before a file that still looks torn is reported
+    FSCK_REPAIR_CALL: spells the fsck call a hint names to remove a file a crashed writer left torn
     read_settled(): reads a file again after each pause while it looks torn
     is_unfinished_line(): tells whether bytes lack the newline that ends a finished slot
     is_unfinished_json(): tells whether bytes do not yet parse as one JSON document
@@ -24,6 +25,7 @@ from e8s.core.strict_json import parse_strict_json
 # that is scheduled at once and the last one a writer paused by a busy machine.
 TORN_READ_PAUSES_S = (0.001, 0.01, 0.1)
 TORN_READ_RETRIES = len(TORN_READ_PAUSES_S)
+FSCK_REPAIR_CALL = "fsck(root, repair=True, confirm=True, at=datetime.now(UTC))"
 
 
 def read_settled(read: Callable[[], bytes], is_torn: Callable[[bytes], bool]) -> bytes:

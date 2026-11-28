@@ -60,7 +60,7 @@ from e8s.show.history_models import Revision
 from e8s.show.layout import HOUSEKEEPING_NAMES, TEMP_DIR, require_usable_path
 from e8s.show.layout1 import BLOB_MAX_BYTES, TREE_MAX_BYTES
 from e8s.show.legacy_checks import require_legacy_bound_at, require_legacy_prefix
-from e8s.show.manifests import Manifest, parsed_manifest
+from e8s.show.manifests import Manifest, stored_manifest
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.stale_temps import remove_stale_temps_before
 from e8s.show.storage import ROOT_REVISION
@@ -146,8 +146,7 @@ class FileBackend:
         """Reads a manifest: the show ID its folder must encode and its legacy prefix."""
         path = folder / MANIFEST_FILE
         read = partial(self._read_raw, show_id, path, "manifest", MANIFEST_MAX_BYTES, None)
-        stored = parsed_json(show_id, path, "manifest", read_settled(read, is_unfinished_json))
-        return parsed_manifest(show_id, path, stored)
+        return stored_manifest(show_id, path, read_settled(read, is_unfinished_json))
 
     def _check_manifest(self, show_id: str) -> None:
         """Checks once per backend that no folder is a link and the manifest names this show."""
