@@ -1621,6 +1621,7 @@
   "change_amount": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set) -> Meters",
   "changelog": "(ws: e8s.show.workspace.Workspace, since: str = '') -> str",
   "changes": "(before: e8s.show.models.Show, after: e8s.show.models.Show) -> e8s.show.change_models.ChangeSet",
+  "check_backend": "(make_backend: collections.abc.Callable[[], e8s.show.backend.RepositoryBackend]) -> e8s.show.storage_models.ConformanceReport",
   "check_id": "(text: str, *, kind: str) -> str",
   "check_sheet_id": "(text: str, *, kind: str) -> str",
   "check_unlocked": "(form: e8s.choreo.form_models.Form, *, force: bool) -> None",

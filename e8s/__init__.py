@@ -637,6 +637,9 @@ if TYPE_CHECKING:
         Proposal,
         ProposalPreview,
     )
+    from e8s.show.conformance import (
+        check_backend,
+    )
     from e8s.show.counts import (
         spot_counts,
     )
@@ -1124,6 +1127,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "change_amount": ("e8s.choreo.set_analysis", "change_amount"),
     "changelog": ("e8s.show.history", "changelog"),
     "changes": ("e8s.show.items", "changes"),
+    "check_backend": ("e8s.show.conformance", "check_backend"),
     "check_id": ("e8s.core.ids", "check_id"),
     "check_sheet_id": ("e8s.core.ids", "check_sheet_id"),
     "check_unlocked": ("e8s.choreo.forms", "check_unlocked"),
@@ -1723,6 +1727,7 @@ __all__ = [
     "change_amount",
     "changelog",
     "changes",
+    "check_backend",
     "check_id",
     "check_sheet_id",
     "check_unlocked",
