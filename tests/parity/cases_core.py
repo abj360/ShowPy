@@ -13,7 +13,8 @@ Contains:
     plain_decimal_floats(): builds the floats whose text the million-float case writes
     plain_decimal_text_on_a_million_floats(): writes each float with a seeded decimals count
     plain_decimal_text_on_20000_floats(): the timed share of the same writer
-    unit_conversions_on_seeded_values(): angles, facings, rounding and size caps
+    unit_conversions_on_seeded_values(): angles, facings, rounding and size caps, with floats
+        halfway between two shortest digit strings
     unit_conversions_timed(): the timed share of the unit helpers
     reference_and_transition_corpus(): the ID, reference and transition parsers on text
     reference_and_transition_corpus_timed(): the timed share of the parsers, on mostly valid text
@@ -25,6 +26,7 @@ Contains:
 import hashlib
 import math
 from collections.abc import Callable, Mapping
+from decimal import Decimal
 from functools import cache
 from types import ModuleType
 from typing import cast
@@ -45,6 +47,13 @@ TIMED_STRINGS = 3_000
 HOSTILE_SHARE = 10
 PREFIXES = ("T", "S", "form", "route", "set_")
 MAX_DECIMALS = 17
+TIE_DRAWS = 40_000
+TIE_MIN_BITS = 20
+TIE_MAX_BITS = 54
+TIE_MAX_SHIFT = 40
+TIE_MIN_DIGITS = 16
+TINY_STEP = 1e-300
+DIGIT_TIES = ((165.035919189453125, 2e-14), (-649435869553220.25, 0.2))
 SPECIAL_FLOATS = (0.0, -0.0, 1e308, -1e308, 1.7976931348623157e308, 5e-324, -5e-324, 1e-308)
 STEPS = (0.01, 0.25, 0.5, 1.0, 5.0, 1e-3, 0.0625, 3.0, 0.1, 1e-7, 2.54, 1e5, 0.3, 7.0)
 UNIT_SCALES = (1.0, 10.0, 360.0, 1e4, 1e8)
@@ -217,8 +226,42 @@ def unit_conversions_on_seeded_values(e8s: ModuleType) -> Mapping[str, Output]:
             [e8s.vector_facing((float(x), float(y))) for x, y in vectors]
         ),
         "rounded": np.array(_rounded(e8s, values, steps)),
+        "rounded_ties": np.array([e8s.round_to(v, s) for v, s in _digit_ties(e8s)]),
+        "tie_errors": [describe(e8s.round_to, v, TINY_STEP) for v, _ in _digit_ties(e8s)[:200]],
         "odd": odd_inputs(e8s),
     }
+
+
+def _significant(text: str) -> str:
+    return text.replace("-", "").split("e")[0].replace(".", "").strip("0")
+
+
+@cache
+def _digit_ties(e8s: ModuleType) -> list[tuple[float, float]]:
+    """Finds floats k * 2**-n that lie exactly halfway between two shortest digit strings, each
+    with a step at its last repr digit and one a digit before.
+
+    Args:
+        e8s: The e8s module under test.
+
+    Returns:
+        ties: (value, step) pairs, the hand-picked ones first.
+    """
+    rng = e8s.seeded_rng(SEED + 7)
+    widths = rng.integers(TIE_MIN_BITS, TIE_MAX_BITS, size=TIE_DRAWS)
+    numerators = [int(rng.integers(2 ** (w - 1), 2**w)) | 1 for w in widths]
+    shifts = rng.integers(1, TIE_MAX_SHIFT, size=TIE_DRAWS)
+    ties: list[tuple[float, float]] = list(DIGIT_TIES)
+    for numerator, shift in zip(numerators, shifts, strict=True):
+        value = math.ldexp(float(numerator), -int(shift))
+        exact = _significant(format(Decimal(value), "f"))
+        shown = _significant(repr(value))
+        if len(shown) < TIE_MIN_DIGITS or len(exact) != len(shown) + 1 or exact[-1] != "5":
+            continue
+        place = math.floor(math.log10(value)) - len(shown) + 1
+        for step in (10.0**place, 2.0 * 10.0**place, 10.0 ** (place + 1)):
+            ties += [(value, step), (-value, step)]
+    return ties
 
 
 def odd_inputs(e8s: ModuleType) -> list[JsonValue]:
