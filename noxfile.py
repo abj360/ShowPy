@@ -13,8 +13,9 @@ Contains:
         workers that each take whole modules, except the timing tests, which run in one
         process
     fuzz: runs the fuzz targets under the nightly Hypothesis profile
-    storagefuzz: lists the storage property tests that Atheris fuzzes, or fuzzes or replays one
-        of them under libFuzzer, on the nightly Hypothesis profile
+    storagefuzz: fuzzes every storage property test in turn under Atheris and libFuzzer, each in
+        its own process, or lists them, or fuzzes or replays one, on the nightly Hypothesis
+        profile
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, refuses an rpath or a linked libpython in its extension, installs
         it with every extra in a clean venv and runs the README usage example
@@ -315,10 +316,11 @@ def fuzz(session: nox.Session) -> None:
 def storagefuzz(session: nox.Session) -> None:
     """Fuzzes the storage property tests: `nox -s storagefuzz -- [--list | --target ID ...]`.
 
-    `--list` prints the target IDs as JSON; `--target ID [--seconds N]` fuzzes one target under
-    Atheris and libFuzzer, `--target ID --replay FILE` runs one saved crash input. Atheris
-    installs on Linux x86_64 only. Not a default session: it runs on demand and in the nightly
-    workflow, one job per target.
+    With no argument it fuzzes every target in turn, each in its own process for `--seconds N`
+    (300 by default), and fails after the last one when any failed. `--list` prints the target
+    IDs as JSON; `--target ID [--seconds N]` fuzzes one target under Atheris and libFuzzer,
+    `--target ID --replay FILE` runs one saved crash input. Atheris installs on Linux x86_64
+    only. Not a default session: it runs on demand and in the nightly storage workflow.
     """
     session.env["HYPOTHESIS_PROFILE"] = FUZZ_PROFILE
     session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED

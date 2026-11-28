@@ -5,6 +5,7 @@ test_fuzz_storage.py --- checks the Atheris runner of the storage tests, its ses
 
 Contains:
     FakeAtheris: stands in for atheris, feeding one fixed input and saving a crash like libFuzzer
+    RecordingRunner: stands in for the per-process runner, recording calls and failing some
     test_discovery_finds_given_tests_and_state_machines: sorted target IDs of a fake package
     test_discovery_skips_imported_and_plain_names: only names defined in the module count
     test_regression_storage_fuzz_refuses_an_empty_glob: no matching file exits non-zero
@@ -22,6 +23,14 @@ Contains:
     test_replay_of_a_passing_input_exits_zero: the same path stays green
     test_fuzz_refuses_unknown_targets_and_bad_seconds: bad arguments exit non-zero
     test_fuzz_without_atheris_fails_closed: a host without atheris exits with an E: line
+    test_regression_storage_fuzz_runs_every_target_after_a_crash: with no --target every target
+        runs, each failed one gets an E: line, and the run exits non-zero
+    test_fuzz_all_passes_the_slot_and_exits_zero_when_every_target_passes: --seconds reaches
+        every target
+    test_fuzz_all_refuses_an_empty_glob_and_a_host_without_atheris: nothing runs
+    test_regression_storage_fuzz_runs_each_target_in_its_own_process: a crash that ends one
+        target's process leaves the later targets running
+    test_fuzz_in_own_process_stops_a_target_that_runs_past_its_slot: the grace bound holds
     test_storagefuzz_session_is_on_demand_and_runs_the_nightly_profile: not a default session
     test_atheris_is_a_linux_x86_64_dev_dependency: the marker keeps it off other hosts
     test_storage_fuzz_workflow_lists_then_fuzzes_each_test: list job feeds the matrix
@@ -151,6 +160,37 @@ SYNC_BUDGET_SECONDS = 600
 CRASH_NAME = "crash-0"
 SECONDS = 7
 NO_ATHERIS = "E: atheris is not installed"
+FAKE_ATHERIS_MODULE = """
+import os
+import time
+from contextlib import nullcontext
+from pathlib import Path
+
+_STATE = {}
+
+
+def instrument_imports(include=None, exclude=None):
+    return nullcontext()
+
+
+def Setup(args, test_one_input):
+    _STATE["argv"] = list(args)
+    _STATE["test"] = test_one_input
+    return list(args)
+
+
+def Fuzz():
+    time.sleep(float(os.environ.get("FAKE_FUZZ_SLEEP", "0")))
+    try:
+        _STATE["test"](b"\\x00" * 8)
+    except Exception:
+        prefix = next(arg for arg in _STATE["argv"] if arg.startswith("-artifact_prefix="))
+        crashes = Path(prefix.split("=", 1)[1])
+        crashes.mkdir(parents=True, exist_ok=True)
+        (crashes / "crash-0").write_bytes(b"\\x00" * 8)
+        raise SystemExit(77) from None
+"""
+CRASH_EXIT = 77
 
 
 class FakeAtheris:
@@ -392,7 +432,8 @@ def test_replay_of_a_passing_input_exits_zero(
         ["--target", ALPHA_IDS[1], "--seconds", "0"],
         ["--target", ALPHA_IDS[1], "--seconds", "-3"],
         ["--replay", "missing-file", "--target", ALPHA_IDS[1]],
-        [],
+        ["--replay", "missing-file"],
+        ["--list", "--target", ALPHA_IDS[1]],
     ],
 )
 def test_fuzz_refuses_unknown_targets_and_bad_seconds(
@@ -410,6 +451,121 @@ def test_fuzz_without_atheris_fails_closed(
     code = runner.main(["--target", ALPHA_IDS[1]], root=package, load_atheris=missing)
     assert code != 0
     assert NO_ATHERIS in capsys.readouterr().err
+
+
+class RecordingRunner:
+    """Stands in for the per-process runner, recording each call and failing chosen targets.
+
+    Attributes:
+        calls: Each (target ID, seconds) pair it was asked to run, in order.
+    """
+
+    def __init__(self, failing: Sequence[str] = ()) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self._failing = set(failing)
+
+    def __call__(self, target_id: str, seconds: int) -> int:
+        self.calls.append((target_id, seconds))
+        return CRASH_EXIT if target_id in self._failing else 0
+
+
+def fuzz_all(runner: ModuleType, root: Path, run: RecordingRunner, *args: str) -> int:
+    """Runs the runner's main with no --target, a fake atheris and a recording runner."""
+    fake = FakeAtheris()
+    return int(runner.main(list(args), root=root, load_atheris=lambda: fake, run_target=run))
+
+
+def test_regression_storage_fuzz_runs_every_target_after_a_crash(
+    runner: ModuleType, package: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A per-test matrix could not report through the one nightly check job; one job runs all."""
+    run = RecordingRunner(failing=BETA_IDS)
+    assert fuzz_all(runner, package, run) != 0
+    assert run.calls == [(target, 300) for target in ALPHA_IDS + BETA_IDS]
+    errors = [line for line in capsys.readouterr().err.splitlines() if line.startswith("E: ")]
+    assert [line.split()[1] for line in errors] == BETA_IDS
+    assert all(f"exit {CRASH_EXIT}" in line for line in errors)
+
+
+def test_fuzz_all_passes_the_slot_and_exits_zero_when_every_target_passes(
+    runner: ModuleType, package: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = RecordingRunner()
+    assert fuzz_all(runner, package, run, "--seconds", str(SECONDS)) == 0
+    assert run.calls == [(target, SECONDS) for target in ALPHA_IDS + BETA_IDS]
+    assert "E: " not in capsys.readouterr().err
+
+
+def test_fuzz_all_refuses_an_empty_glob_and_a_host_without_atheris(
+    runner: ModuleType, package: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = tmp_path / "empty"
+    (empty / "tests" / "property").mkdir(parents=True)
+    run = RecordingRunner()
+    assert fuzz_all(runner, empty, run) != 0
+    assert "E: no storage fuzz targets match" in capsys.readouterr().err
+
+    def missing() -> ModuleType:
+        raise ImportError("no atheris")
+
+    assert runner.main([], root=package, load_atheris=missing, run_target=run) != 0
+    assert NO_ATHERIS in capsys.readouterr().err
+    assert run.calls == []
+
+
+def copy_runner(root: Path) -> Path:
+    """Copies the runner script under root/scripts, so its ROOT is root."""
+    script = root / "scripts" / "fuzz_storage.py"
+    script.parent.mkdir()
+    script.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+    return script
+
+
+def fake_atheris_env(root: Path, **extra: str) -> dict[str, str]:
+    """Writes a fake atheris module and returns an environment that imports it first."""
+    folder = root / "fake_atheris"
+    folder.mkdir()
+    (folder / "atheris.py").write_text(FAKE_ATHERIS_MODULE, encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(folder), **extra}
+    env.pop("HYPOTHESIS_PROFILE", None)
+    return env
+
+
+def test_regression_storage_fuzz_runs_each_target_in_its_own_process(tmp_path: Path) -> None:
+    """libFuzzer ends the process on a crash, so targets after it ran only in their own process."""
+    script = copy_runner(tmp_path)
+    make_package(tmp_path, {"test_storage_alpha.py": ALPHA, "test_storage_beta.py": BETA})
+    done = subprocess.run(
+        [sys.executable, str(script), "--seconds", "1"],
+        capture_output=True,
+        text=True,
+        env=fake_atheris_env(tmp_path),
+        cwd=tmp_path,
+        check=False,
+    )
+    assert done.returncode != 0
+    errors = [line for line in done.stderr.splitlines() if line.startswith("E: ")]
+    assert [line.split()[1] for line in errors] == BETA_IDS, done.stderr
+    crashes = sorted(path.parent.name for path in (tmp_path / "fuzz-crashes").rglob(CRASH_NAME))
+    assert crashes == [target.replace("::", "__") for target in BETA_IDS]
+    corpora = sorted(path.name for path in (tmp_path / "fuzz-corpus").iterdir())
+    assert corpora == [target.replace("::", "__") for target in ALPHA_IDS + BETA_IDS]
+
+
+def test_fuzz_in_own_process_stops_a_target_that_runs_past_its_slot(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    script = copy_runner(tmp_path)
+    make_package(tmp_path, {"test_storage_alpha.py": ALPHA})
+    env = fake_atheris_env(tmp_path, FAKE_FUZZ_SLEEP="30")
+    monkeypatch.setenv("PYTHONPATH", env["PYTHONPATH"])
+    monkeypatch.setenv("FAKE_FUZZ_SLEEP", env["FAKE_FUZZ_SLEEP"])
+    code = runner.run_in_own_process(ALPHA_IDS[1], 1, script=script, grace=1)
+    assert code != 0
+    assert f"E: {ALPHA_IDS[1]} ran past 2 s" in capsys.readouterr().err
 
 
 def test_storagefuzz_session_is_on_demand_and_runs_the_nightly_profile() -> None:

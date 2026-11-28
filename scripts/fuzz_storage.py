@@ -5,14 +5,20 @@ fuzz_storage.py --- fuzzes the storage property tests under libFuzzer through At
 
 Every `@given` test and every `RuleBasedStateMachine` that tests/property/test_storage_*.py
 defines is a target. Hypothesis turns each into a function of one byte string, so libFuzzer's
-coverage of e8s steers the test's choices. A run with no target fails closed.
+coverage of e8s steers the test's choices. A run with no target fails closed. Without --target
+every target is fuzzed in turn, each in its own process, because libFuzzer ends the process on a
+crash; the run goes on after a crash and fails at the end, naming each failed target.
 
 Contains:
     STORAGE_GLOB: the files whose tests are fuzz targets
     FUZZ_SECONDS_PER_TEST: how long libFuzzer fuzzes one target in a nightly run
+    TARGET_GRACE_SECONDS: how long past its slot one target's process may run before it is
+        stopped and counted as failed
     NoTargetsError: raised when no file or no target is found
     discover_targets(): maps each target ID to the function that runs one input
     fuzz_target(): fuzzes one target under Atheris and libFuzzer
+    run_in_own_process(): fuzzes one target in a child process of this script, bounded in time
+    fuzz_all(): fuzzes every target in turn and names each one that failed
     replay_target(): runs one saved input through one target, once
     main(): parses the arguments and returns the exit code
 """
@@ -21,6 +27,7 @@ import argparse
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import traceback
 from collections.abc import Callable, Sequence
@@ -34,6 +41,8 @@ from hypothesis.stateful import RuleBasedStateMachine, get_state_machine_test
 
 STORAGE_GLOB = "tests/property/test_storage_*.py"
 FUZZ_SECONDS_PER_TEST = 300
+# libFuzzer checks its time limit only between inputs, and each process imports e8s first.
+TARGET_GRACE_SECONDS = 120
 PROFILE_ENV = "HYPOTHESIS_PROFILE"
 NIGHTLY_PROFILE = "nightly"
 ID_SEPARATOR = "::"
@@ -41,11 +50,13 @@ PATH_SEPARATOR = "__"
 CORPUS_ROOT = "fuzz-corpus"
 CRASH_ROOT = "fuzz-crashes"
 INSTRUMENTED_PACKAGES = ["e8s"]
-ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = Path(__file__).resolve()
+ROOT = SCRIPT.parents[1]
 USAGE_ERROR = 2
 FAILURE = 1
 
 TestInput = Callable[[bytes], None]
+TargetRunner = Callable[[str, int], int]
 
 
 class AtherisModule(Protocol):
@@ -179,6 +190,51 @@ def fuzz_target(atheris: AtherisModule, root: Path, target_id: str, seconds: int
     return 0
 
 
+def run_in_own_process(
+    target_id: str, seconds: int, *, script: Path = SCRIPT, grace: int = TARGET_GRACE_SECONDS
+) -> int:
+    """Fuzzes one target in a child process of the runner script, stopped past its slot.
+
+    Args:
+        target_id: The target to fuzz, as discover_targets names it.
+        seconds: How long libFuzzer runs.
+        script: The runner script the child runs; its repository is the child's root.
+        grace: How long past `seconds` the child may run before it is stopped.
+
+    Returns:
+        exit_code: The child's exit code, or 1 when it was stopped.
+    """
+    command = [sys.executable, str(script), "--target", target_id, "--seconds", str(seconds)]
+    limit = seconds + grace
+    try:
+        return subprocess.run(command, check=False, timeout=limit).returncode
+    except subprocess.TimeoutExpired:
+        print(f"E: {target_id} ran past {limit} s", file=sys.stderr)
+        return FAILURE
+
+
+def fuzz_all(root: Path, seconds: int, run_target: TargetRunner) -> int:
+    """Fuzzes every target in turn, going on after a failure, then names each failed target.
+
+    Args:
+        root: The repository root that STORAGE_GLOB is read from.
+        seconds: How long libFuzzer fuzzes each target.
+        run_target: Fuzzes one target for a number of seconds and returns its exit code.
+
+    Returns:
+        exit_code: 0 when every target passed, 1 otherwise.
+    """
+    failed: dict[str, int] = {}
+    for target_id in discover_targets(root):
+        print(f"Fuzzing {target_id} for {seconds} s", flush=True)
+        code = run_target(target_id, seconds)
+        if code != 0:
+            failed[target_id] = code
+    for target_id, code in failed.items():
+        print(f"E: {target_id} failed with exit {code}", file=sys.stderr)
+    return FAILURE if failed else 0
+
+
 def replay_target(root: Path, target_id: str, crash_file: Path) -> int:
     """Runs one saved input through one target, once.
 
@@ -213,7 +269,7 @@ def _parser() -> argparse.ArgumentParser:
     """Builds the command-line parser."""
     parser = argparse.ArgumentParser(prog="fuzz_storage.py", description=__doc__)
     parser.add_argument("--list", action="store_true", help="print the target IDs as JSON")
-    parser.add_argument("--target", help="the target to fuzz or replay")
+    parser.add_argument("--target", help="the target to fuzz or replay; all targets when absent")
     parser.add_argument("--seconds", type=_positive_seconds, default=FUZZ_SECONDS_PER_TEST)
     parser.add_argument("--replay", type=Path, help="run this saved input once")
     return parser
@@ -233,6 +289,7 @@ def main(
     *,
     root: Path = ROOT,
     load_atheris: Callable[[], AtherisModule] = _import_atheris,
+    run_target: TargetRunner = run_in_own_process,
 ) -> int:
     """Parses the arguments, then lists, fuzzes or replays targets.
 
@@ -240,26 +297,33 @@ def main(
         argv: The arguments after the script name, sys.argv[1:] when None.
         root: The repository root that STORAGE_GLOB is read from.
         load_atheris: Returns the atheris module; fails on a host without it.
+        run_target: Fuzzes one target in its own process when no --target is given.
 
     Returns:
         exit_code: 0 on success, non-zero on a refusal or a replayed crash.
     """
     parser = _parser()
     args = parser.parse_args(argv)
-    if args.list == (args.target is not None):
-        parser.error("give --list, or --target with optional --seconds or --replay")
+    target: str | None = args.target
+    replay: Path | None = args.replay
+    if args.list and target is not None:
+        parser.error("give --list, --target ID, or neither to fuzz every target")
     try:
         if args.list:
             print(json.dumps(list(discover_targets(root))))
             return 0
-        if args.replay is not None:
-            return replay_target(root, args.target, args.replay)
+        if replay is not None:
+            if target is None:
+                parser.error("--replay needs --target")
+            return replay_target(root, target, replay)
         try:
             atheris = load_atheris()
         except ImportError:
             print("E: atheris is not installed; it installs on Linux x86_64 only", file=sys.stderr)
             return FAILURE
-        return fuzz_target(atheris, root, args.target, args.seconds)
+        if target is None:
+            return fuzz_all(root, args.seconds, run_target)
+        return fuzz_target(atheris, root, target, args.seconds)
     except (NoTargetsError, OSError) as error:
         print(f"E: {error}", file=sys.stderr)
         return FAILURE
