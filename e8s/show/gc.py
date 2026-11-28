@@ -164,6 +164,39 @@ def _put_back_set_aside(scan: RepositoryScan) -> bool:
     return bool(found)
 
 
+def _removed_temps_and_rescan(
+    root: Path, scan: RepositoryScan, at: datetime, cutoff: datetime
+) -> tuple[RepositoryScan, list[Leftover]]:
+    """Removes the stale temp files a scan lists, then scans again when one had a second name.
+
+    A crash between a link and the removal of its temp leaves one file under two names: the temp
+    and a blob, record or second temp. Removing one name sets the file's change time, so the
+    other no longer matches its listing and would be kept until a second gc. The new scan lists
+    it as it now is; it is still removed only when old and unchanged since that listing.
+
+    Returns:
+        scan: The scan to go on with.
+        removed: The temp files removed by both passes.
+    """
+    removed = _removed_temps(scan.temps, cutoff)
+    if not any(item.info.st_nlink > 1 for item in removed):
+        return scan, removed
+    scan = scan_repository(root, None, at)
+    return scan, [*removed, *_removed_temps(scan.temps, cutoff)]
+
+
+def _sorted_shows(scan: RepositoryScan) -> tuple[list[ShowScan], list[tuple[Path, str]]]:
+    """Splits a scan's shows into those gc may clean and those it skips, with the reason."""
+    is_sound = not any(item.code == TORN_FILE for item in scan.findings)
+    healthy = [show for show in scan.shows if is_sound and not show.is_failing]
+    skipped = [
+        (show.folder, _why_skipped(show, is_sound=is_sound))
+        for show in scan.shows
+        if not is_sound or show.is_failing
+    ]
+    return healthy, skipped
+
+
 def _report(
     root: Path, leftovers: list[Leftover], skipped: list[tuple[Path, str]], *, dry_run: bool
 ) -> GcReport:
@@ -235,13 +268,10 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
         scan = scan_repository(root, None, at)
         if confirm and _put_back_set_aside(scan):
             scan = scan_repository(root, None, at)
-        is_sound = not any(item.code == TORN_FILE for item in scan.findings)
-        healthy = [show for show in scan.shows if is_sound and not show.is_failing]
-        skipped = [
-            (show.folder, _why_skipped(show, is_sound=is_sound))
-            for show in scan.shows
-            if not is_sound or show.is_failing
-        ]
+        removed: list[Leftover] = []
+        if confirm:
+            scan, removed = _removed_temps_and_rescan(root, scan, at, cutoff)
+        healthy, skipped = _sorted_shows(scan)
         candidates = {
             show.folder: [item for item in show.unreachable if _is_old(item, cutoff)]
             for show in healthy
@@ -249,7 +279,6 @@ def gc(root: Path, *, at: datetime, confirm: bool = False) -> GcReport:
         if not confirm:
             leftovers = [*scan.temps, *(item for items in candidates.values() for item in items)]
             return _report(root, leftovers, skipped, dry_run=True)
-        removed = _removed_temps(scan.temps, cutoff)
         for show in healthy:
             from_show, has_moved = _removed_unreached(show, candidates[show.folder], cutoff)
             removed.extend(from_show)
