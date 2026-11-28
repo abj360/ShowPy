@@ -26,6 +26,7 @@ use crate::errors::{guard, py_int, to_py_err};
 static REAL: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 static DECIMAL: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 static NUMPY_BOOL: PyOnceLock<Py<PyType>> = PyOnceLock::new();
+static NDARRAY: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 const ERRORS_MODULE: &str = "e8s.core.errors";
 
 /// A number read from a Python object: a float, or the text of a rejected value.
@@ -259,11 +260,20 @@ fn context_of<'py>(py: Python<'py>, err: &CoreError) -> PyResult<Bound<'py, PyDi
     Ok(context)
 }
 
-/// Tells whether a value that is not an int is a real number, as v0.4.0's comparisons took it.
-fn is_real(requested: &Bound<'_, PyAny>) -> PyResult<bool> {
-    Ok(requested.is_instance_of::<PyFloat>()
-        || requested.is_instance(REAL.import(requested.py(), "numbers", "Real")?.as_any())?
-        || is_decimal(requested)?)
+/// Tells whether a value is a numpy array of other than one item, which no comparison reads.
+fn is_not_one_item(requested: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let py = requested.py();
+    if !requested.is_instance(NDARRAY.import(py, "numpy", "ndarray")?.as_any())? {
+        return Ok(false);
+    }
+    Ok(requested.getattr(intern!(py, "size"))?.extract::<u64>()? != 1)
+}
+
+/// Tells whether `0 <= requested <= cap`, comparing in v0.4.0's order, so a value that does not
+/// compare with numbers raises the TypeError v0.4.0 raised.
+fn compares_in_range(requested: &Bound<'_, PyAny>, cap: i64) -> PyResult<bool> {
+    let zero = 0_i64.into_pyobject(requested.py())?;
+    Ok(zero.le(requested)? && requested.le(cap)?)
 }
 
 fn is_decimal(requested: &Bound<'_, PyAny>) -> PyResult<bool> {
@@ -287,11 +297,13 @@ fn is_nan(requested: &Bound<'_, PyAny>) -> PyResult<bool> {
 /// Rejects a size that is not a 64-bit int.
 ///
 /// An int beyond 64 bits is over every cap or below zero, and a bool over the cap shows as
-/// `True`. A real number outside [0, cap], NaN included, gets the same error, as v0.4.0 compared
-/// it; a Decimal counts as real, and a Decimal NaN is over the cap as a float NaN is. A real
-/// number in range, such as 3.5, 3.0 or `Decimal(3)`, gets the same error class asking for a
-/// whole-number int: a size is a count. Any other value raises the TypeError v0.4.0's comparison
-/// raised.
+/// `True`. Any other value is compared as v0.4.0 compared it, `0 <= requested <= cap`: outside
+/// that range, NaN included, it gets v0.4.0's negative or over-cap error, and a Decimal NaN is
+/// over the cap as a float NaN is. In range, such as 3.5, 3.0, `Decimal(3)`, `Fraction(3)`, a
+/// one-item array or an object that only compares, it gets the same error class asking for a
+/// whole-number int: a size is a count. So does an array of other than one item, which v0.4.0's
+/// comparison refused with numpy's ValueError. A value that does not compare with numbers
+/// raises the TypeError v0.4.0's comparison raised.
 fn require_huge_size(
     requested: &Bound<'_, PyAny>,
     cap: i64,
@@ -300,18 +312,15 @@ fn require_huge_size(
 ) -> PyResult<()> {
     let py = requested.py();
     let is_int = requested.is_instance_of::<PyInt>();
-    if !is_int && !is_real(requested)? {
-        return Err(requested.extract::<i64>().err().unwrap_or_else(|| {
-            pyo3::exceptions::PyTypeError::new_err("requested must be an int")
-        }));
-    }
-    let shown = requested.str()?.to_string_lossy().into_owned();
     let nan = is_nan(requested)?;
-    let in_range = !is_int && !nan && requested.ge(0)? && requested.le(cap)?;
+    let in_range =
+        is_not_one_item(requested)? || (!is_int && !nan && compares_in_range(requested, cap)?);
+    let negative = !in_range && !nan && requested.lt(0)?;
+    let shown = requested.str()?.to_string_lossy().into_owned();
     let (message, hint) = if in_range {
         caps::whole_number_error(&shown, what)
     } else {
-        caps::size_error(&shown, &cap.to_string(), !nan && requested.lt(0)?, what)
+        caps::size_error(&shown, &cap.to_string(), negative, what)
     };
     let context = PyDict::new(py);
     context.set_item("what", what)?;

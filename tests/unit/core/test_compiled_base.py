@@ -34,6 +34,17 @@ Contains:
     test_regression_require_size_refuses_a_long_double_without_recursing: refuses a long double
         in range as a float in range, and one below 0 or over the cap with the size error and its
         repr in the context, where v0.4.0 hit the recursion limit
+    test_regression_require_size_refuses_in_range_values_v040_let_through: refuses a Fraction,
+        a half float, a one-item array and an object that only compares, in range, with the
+        whole-number error, never numpy's or pyo3's TypeError
+    test_regression_require_size_refuses_a_half_float_in_range: refuses np.float16(3) under a
+        cap float16 holds; a larger cap overflows in numpy's comparison, as in v0.4.0
+    test_regression_require_size_refuses_out_of_range_values_as_v040_did: gives v0.4.0's
+        negative and over-cap errors for the same kinds below 0 or over the cap
+    test_regression_require_size_refuses_an_array_of_other_than_one_item: refuses an empty or
+        many-item array with the whole-number error, where v0.4.0 raised numpy's ValueError
+    test_require_size_raises_the_comparison_type_error_for_text: raises the TypeError v0.4.0's
+        `0 <= requested` raised for a value that does not compare with numbers
 """
 
 import inspect
@@ -41,6 +52,7 @@ import math
 import unicodedata
 from decimal import Decimal
 from fractions import Fraction
+from functools import total_ordering
 from typing import cast
 
 import numpy as np
@@ -280,3 +292,89 @@ def test_regression_require_size_refuses_a_long_double_without_recursing(
         core.require_size(cast("int", requested), SIZE_CAP, what="points")
     assert caught.value.message == f"points would need {requested}, {tail}"
     assert caught.value.context == {"what": "points", "requested": repr(requested), "cap": SIZE_CAP}
+
+
+@total_ordering
+class _Compares:
+    """Stands for a size type that only defines comparisons, as v0.4.0's check took any."""
+
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, int | float) and self.value == other
+
+    def __lt__(self, other: float) -> bool:
+        return self.value < other
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __repr__(self) -> str:
+        return f"Compares({self.value})"
+
+
+@pytest.mark.parametrize(
+    ("requested", "shown"),
+    [
+        (Fraction(3), "3"),
+        (Fraction(7, 2), "7/2"),
+        (np.array(3.0), "3.0"),
+        (np.array([3]), "[3]"),
+        (np.array(np.True_), "True"),
+        (_Compares(3), "Compares(3)"),
+    ],
+)
+def test_regression_require_size_refuses_in_range_values_v040_let_through(
+    requested: object, shown: str
+) -> None:
+    with pytest.raises(SpacingError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points", error=SpacingError)
+    assert caught.value.message == f"points would need {shown}, which is not a whole-number count"
+    assert caught.value.hint == "pass the number of points as a whole-number int"
+
+
+HALF_FLOAT_CAP = 1_000
+
+
+def test_regression_require_size_refuses_a_half_float_in_range() -> None:
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(cast("int", np.float16(3)), HALF_FLOAT_CAP, what="points")
+    assert caught.value.message == "points would need 3.0, which is not a whole-number count"
+
+
+@pytest.mark.parametrize(
+    ("requested", "shown", "tail", "context"),
+    [
+        (Fraction(-1), "-1", "which is negative", "Fraction(-1, 1)"),
+        (np.float16(-2), "-2.0", "which is negative", -2.0),
+        (np.array(1e7), "10000000.0", f"over the cap of {SIZE_CAP}", 1e7),
+        (np.array([-1.5]), "[-1.5]", "which is negative", [-1.5]),
+        (_Compares(-1), "Compares(-1)", "which is negative", "Compares(-1)"),
+        (_Compares(SIZE_CAP + 1), "Compares(1000001)", f"over the cap of {SIZE_CAP}", None),
+    ],
+)
+def test_regression_require_size_refuses_out_of_range_values_as_v040_did(
+    requested: object, shown: str, tail: str, context: object
+) -> None:
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")
+    assert caught.value.message == f"points would need {shown}, {tail}"
+    assert caught.value.context["requested"] == (repr(requested) if context is None else context)
+
+
+@pytest.mark.parametrize("requested", [np.array([]), np.array([3, 4]), np.zeros((2, 2))])
+def test_regression_require_size_refuses_an_array_of_other_than_one_item(
+    requested: object,
+) -> None:
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")
+    assert caught.value.message == (
+        f"points would need {requested}, which is not a whole-number count"
+    )
+
+
+@pytest.mark.parametrize("requested", ["3", None, b"3", [3]])
+def test_require_size_raises_the_comparison_type_error_for_text(requested: object) -> None:
+    with pytest.raises(TypeError, match="'<=' not supported between instances of 'int' and"):
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")
