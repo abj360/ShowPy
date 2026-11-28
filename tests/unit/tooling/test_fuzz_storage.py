@@ -41,7 +41,8 @@ Contains:
     test_regression_storage_fuzz_workflow_runs_every_test_in_one_check_job: one check job runs
         the session with no target after a synced environment, then the report job
     test_storage_fuzz_workflow_caches_one_corpus: restore on every run, save from main
-    test_storage_fuzz_workflow_uploads_crashes_on_failure: one artifact for every target
+    test_regression_storage_fuzz_workflow_uploads_crashes_after_a_timeout: one artifact for
+        every target, uploaded after a failure, a success or a job timeout
     test_storage_fuzz_workflow_keeps_the_conventions: pins, permissions, no inline expressions,
         a timeout that covers every target's slot and grace
     test_docker_image_holds_every_path_the_storage_fuzz_tests_read: the image copies the workflow
@@ -88,6 +89,7 @@ FUZZ_RUN = "uv run nox -s storagefuzz"
 CORPUS_KEY = "storage-fuzz-corpus-${{ github.run_id }}"
 CORPUS_PREFIX = "storage-fuzz-corpus-"
 WITH_INDENT = 10
+ALWAYS = "${{ always() }}"
 NOT_A_TARGET = "not a fuzz target"
 HELPERS = """
 from hypothesis import given, strategies as st
@@ -662,10 +664,12 @@ def test_storage_fuzz_workflow_caches_one_corpus() -> None:
     assert order == sorted(order)
 
 
-def test_storage_fuzz_workflow_uploads_crashes_on_failure() -> None:
+def test_regression_storage_fuzz_workflow_uploads_crashes_after_a_timeout() -> None:
+    """A job timeout cancels the job, which skipped a `failure()` upload of the crash inputs."""
     steps = _fuzz_steps()
     upload = steps[_step_index(steps, "uses: actions/upload-artifact@")]
-    assert step_value(upload, "if") == "${{ failure() }}"
+    assert step_value(upload, "if") == ALWAYS
+    assert step_value(upload, "if-no-files-found", WITH_INDENT) == "ignore"
     assert step_value(upload, "name", WITH_INDENT) == "storage-fuzz-crashes"
     assert step_value(upload, "path", WITH_INDENT) == "fuzz-crashes/"
     assert _step_index(steps, "storagefuzz") < steps.index(upload)

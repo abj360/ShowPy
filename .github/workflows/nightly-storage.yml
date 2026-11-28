@@ -53,8 +53,9 @@ jobs:
         with:
           path: fuzz-corpus/
           key: storage-fuzz-corpus-${{ github.run_id }}
+      # A job timeout cancels the job, so only always() still uploads what libFuzzer saved.
       - name: Upload the crash inputs
-        if: ${{ failure() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: storage-fuzz-crashes
