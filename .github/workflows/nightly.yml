@@ -56,7 +56,7 @@ jobs:
     permissions:
       actions: read # lets the report list the jobs of this run
       issues: write # lets the report open, comment on and close the nightly failure issue
-    uses: $/.github/workflows/report-nightly.yml
+    uses: ./.github/workflows/report-nightly.yml
     with:
       workflow: ${{ github.workflow }}
       result: ${{ needs.nightly.result }}

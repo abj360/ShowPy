@@ -101,7 +101,7 @@ NIGHTLY_TRIGGERS = 'on:\n  schedule:\n    - cron: "17 4 * * *"\n  workflow_dispa
 NIGHTLY_PERMISSIONS = "permissions:\n  contents: read\n"
 NIGHTLY_JOB = "core"
 REPORT_JOB = "report"
-REPORT_CALL = "uses: $/.github/workflows/report-nightly.yml"
+REPORT_CALL = "uses: ./.github/workflows/report-nightly.yml"
 NIGHTLY_CONCURRENCY = (
     "concurrency:\n  group: nightly-core-${{ github.ref }}\n  cancel-in-progress: false\n"
 )

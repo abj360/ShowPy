@@ -60,7 +60,8 @@ NIGHTLY_JOB_NAME = "tests, slow, fuzz and large benchmarks"
 CHECK_JOBS = {NIGHTLY_WORKFLOW: NIGHTLY_JOB, NIGHTLY_CORE_WORKFLOW: "core"}
 REPORT_JOB = "report"
 REPORT_CONDITION = "${{ !cancelled() && github.ref == 'refs/heads/main' }}"
-REPORT_CALL = "$/.github/workflows/report-nightly.yml"
+LOCAL_CALL_PREFIX = "./.github/workflows/"
+REPORT_CALL = "./.github/workflows/report-nightly.yml"
 REPORT_INPUTS = {
     "workflow": "${{{{ github.workflow }}}}",
     "result": "${{{{ needs.{job}.result }}}}",
@@ -223,6 +224,15 @@ def job_permissions(job: str) -> dict[str, str]:
         scope, access = line.split("#", 1)[0].strip().split(": ", 1)
         permissions[scope] = access
     return permissions
+
+
+@pytest.mark.parametrize("path", CHECK_JOBS)
+def test_regression_report_call_is_a_local_workflow_path(path: Path) -> None:
+    """A called workflow in this repository is named from the root with `./`, not `$/`."""
+    report = ci_job(_read(path), REPORT_JOB)
+    call = job_value(report, "uses", JOB_KEY_INDENT)
+    assert call is not None
+    assert call.startswith(LOCAL_CALL_PREFIX)
 
 
 @pytest.mark.parametrize(("path", "check_job"), CHECK_JOBS.items())
