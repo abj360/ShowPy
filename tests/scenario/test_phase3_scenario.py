@@ -328,9 +328,16 @@ class ScenarioRun:
         members = _free_spots(show, TEXT_SET, set())[:TEXT_SPOTS]
         fonts = [self.font_uri, registry.resolve(FALLBACK_FONT)]
         form = text_form(
-            TEXT_FORM, members, "I", fonts=fonts, height=TEXT_HEIGHT_M, at=TEXT_AT,
-            n=TEXT_SPOTS, set_id=TEXT_SET, font_registry=registry,
-        )  # fmt: skip
+            TEXT_FORM,
+            members,
+            "I",
+            fonts=fonts,
+            height=TEXT_HEIGHT_M,
+            at=TEXT_AT,
+            n=TEXT_SPOTS,
+            set_id=TEXT_SET,
+            font_registry=registry,
+        )
         with unchanged(show, form):
             with_form = apply_change(show, [FormOp(form=form)])
         assert TEXT_FORM in with_form.set(TEXT_SET).forms
