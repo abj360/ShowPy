@@ -16,7 +16,6 @@ Contains:
 
 import threading
 from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import cast
 
@@ -86,28 +85,40 @@ def _history(backend: RepositoryBackend, show_id: str, count: int) -> list[Commi
 
 
 def _race(backend: RepositoryBackend, parent: Commit) -> list[Commit]:
-    """Starts RIVALS commits on one parent at once and returns the ones that landed."""
+    """Starts RIVALS commits on one parent at once and returns the ones that landed.
+
+    A writer still running after WRITER_TIMEOUT_S fails the check. Writers run on daemon
+    threads, so one stuck in a broken backend never keeps the interpreter from exiting.
+    """
     rivals = [
         next_commit(parent.revision.id, parent.tree, {A_PATH: f"rival {n}".encode()})
         for n in range(RIVALS)
     ]
     start = threading.Barrier(RIVALS)
+    outcomes: dict[int, bool | Exception] = {}
 
-    def write(rival: Commit) -> bool:
-        start.wait(WRITER_TIMEOUT_S)
+    def write(position: int) -> None:
         try:
-            land(backend, SHOW_ID, rival)
+            start.wait(WRITER_TIMEOUT_S)
+            land(backend, SHOW_ID, rivals[position])
         except ConflictError:
-            return False
-        return True
+            outcomes[position] = False
+        except Exception as error:
+            outcomes[position] = error
+        else:
+            outcomes[position] = True
 
-    pool = ThreadPoolExecutor(max_workers=RIVALS)
-    try:
-        futures = [pool.submit(write, rival) for rival in rivals]
-        outcomes = [future.result(WRITER_TIMEOUT_S) for future in futures]
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
-    return [rival for rival, has_landed in zip(rivals, outcomes, strict=True) if has_landed]
+    writers = [threading.Thread(target=write, args=(n,), daemon=True) for n in range(RIVALS)]
+    for writer in writers:
+        writer.start()
+    for writer in writers:
+        writer.join(WRITER_TIMEOUT_S)
+    stuck = sum(writer.is_alive() for writer in writers)
+    require(f"{stuck} racing writers still run after {WRITER_TIMEOUT_S} s", holds=not stuck)
+    errors = [outcome for outcome in outcomes.values() if isinstance(outcome, Exception)]
+    if errors:
+        raise errors[0]
+    return [rival for position, rival in enumerate(rivals) if outcomes[position] is True]
 
 
 def one_winner_per_parent(backend: RepositoryBackend) -> None:

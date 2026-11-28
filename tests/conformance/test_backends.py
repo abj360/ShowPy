@@ -12,6 +12,8 @@ Contains:
         racing writers all pass a head check made before they write
     test_each_broken_rule_fails_its_check: fails the check of each rule an adapter breaks
     test_a_check_that_raises_fails_alone: reports the exception and still runs every check
+    test_regression_a_hung_writer_fails_the_race_without_blocking_exit: fails
+        one_winner_per_parent within the writer timeout, leaving only daemon threads behind
     test_regression_a_backend_refusing_ids_outside_the_show_id_rule_conforms: passes every check
         when show IDs outside SHOW_ID_PATTERN are refused with StorageError
 """
@@ -19,6 +21,7 @@ Contains:
 import errno
 import itertools
 import os
+import threading
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -27,6 +30,7 @@ import pytest
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, StorageError
+from e8s.show import conformance_checks
 from e8s.show.backend import RepositoryBackend, conflict_error
 from e8s.show.conformance import CHECK_NAMES, check_backend
 from e8s.show.document_repository import SHOW_ID_PATTERN
@@ -37,6 +41,8 @@ from e8s.show.storage import ROOT_REVISION
 from e8s.show.storage_models import ConformanceReport
 
 RACE_WINDOW_S = 0.05
+HUNG_WRITER_TIMEOUT_S = 0.2
+RELEASE_TIMEOUT_S = 10.0
 
 
 def _fresh_roots(tmp_path: Path) -> Callable[[], RepositoryBackend]:
@@ -266,6 +272,37 @@ def test_a_check_that_raises_fails_alone() -> None:
     assert failed["read_your_writes"] == "raised RuntimeError: backend crashed"
     assert "one_winner_per_parent" in report.passed
     assert len(report.passed) + len(failed) == len(CHECK_NAMES)
+
+
+class _HangsInRaces(_Adapter):
+    """Blocks every racing commit until the test releases it."""
+
+    def __init__(self, release: threading.Event) -> None:
+        super().__init__()
+        self.release = release
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        if any(data.startswith(b"rival") for data in blobs.values()):
+            self.release.wait(RELEASE_TIMEOUT_S)
+        super().commit(show_id, revision, tree, blobs)
+
+
+def test_regression_a_hung_writer_fails_the_race_without_blocking_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(conformance_checks, "WRITER_TIMEOUT_S", HUNG_WRITER_TIMEOUT_S)
+    release = threading.Event()
+    before = set(threading.enumerate())
+    try:
+        failed = dict(check_backend(lambda: _HangsInRaces(release)).failed)
+        stuck = [thread for thread in threading.enumerate() if thread not in before]
+        assert "one_winner_per_parent" in failed
+        assert stuck
+        assert all(thread.daemon for thread in stuck)
+    finally:
+        release.set()
 
 
 class _StrictShowIds(_Adapter):
