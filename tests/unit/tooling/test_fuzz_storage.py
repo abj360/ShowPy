@@ -186,18 +186,19 @@ FUZZ_INPUT = b"\x00" * 8
 SYNC_BUDGET_SECONDS = 600
 CRASH_NAME = "crash-0"
 SECONDS = 7
+CRASH_EXIT = 77
 NO_ATHERIS = "E: atheris is not installed"
 TRAVERSAL_FOLDER = "storage-fuzz-traversal-probe"
 # Importing e8s and Hypothesis under instrumentation takes seconds; this bounds it generously.
 STARTUP_MARGIN_SECONDS = 20
 TOO_LONG_INPUT_TIMEOUT = 100
-FAKE_ATHERIS_MODULE = """
+FAKE_ATHERIS_MODULE = f"""
 import os
 import time
 from contextlib import nullcontext
 from pathlib import Path
 
-FUZZ_INPUT = b"\\x00" * 8
+FUZZ_INPUT = {FUZZ_INPUT!r}
 included = []
 argv = []
 _tests = []
@@ -223,10 +224,9 @@ def Fuzz():
         prefix = next(arg for arg in argv if arg.startswith("-artifact_prefix="))
         crashes = Path(prefix.split("=", 1)[1])
         crashes.mkdir(parents=True, exist_ok=True)
-        (crashes / "crash-0").write_bytes(FUZZ_INPUT)
-        raise SystemExit(77) from None
+        (crashes / {CRASH_NAME!r}).write_bytes(FUZZ_INPUT)
+        raise SystemExit({CRASH_EXIT}) from None
 """
-CRASH_EXIT = 77
 
 
 def fake_atheris() -> ModuleType:
