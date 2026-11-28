@@ -17,6 +17,11 @@ Contains:
     RECORD_PREFIX: starts the name of every record entry
     RECORD_SUFFIX: ends the name of every record entry
     OBJECT_PREFIX: starts the name of every blob entry
+    MANIFEST_KEYS: names the keys a manifest holds, all of them and no other
+    SLOT_ENTRY: matches the name of a slot entry
+    RECORD_ENTRY: matches the name of a record entry
+    OBJECT_ENTRY: matches the name of a blob entry
+    ENTRY_NAMES: describes the entry names an archive may hold, for errors
     EXPORT_DAMAGE_HINT: tells the caller how to find the damage an export found in a repository
     LEGACY_ID_HINT: tells the caller why a history whose IDs do not recompute has no archive
     slot_entry(): names the entry of a slot

@@ -216,8 +216,13 @@ def import_archive(repo: DocumentRepository, data: bytes | bytearray | memoryvie
 
     Every entry is checked before anything is written: the ZIP form, sizes and CRCs, the
     manifest, each slot, record and blob as a repository read and fsck check them, and that no
-    entry is left over. A refusal raises StorageError naming the entry and writes nothing.
-    Revisions keep their IDs, parents and times.
+    entry is left over. A refusal raises StorageError naming the entry and writes nothing; an
+    archive of a newer format version raises VersionError. Revisions keep their IDs, parents
+    and times.
+
+    The checks prove an archive consistent, not authentic: anyone can build a history whose IDs,
+    trees and blobs agree, and no digest covers the show ID the manifest names. Import an
+    archive only from a source the caller trusts with the show.
 
     The import is resumable and idempotent. A show the repository does not hold gets the whole
     history. A show whose head is the archive's revision in slot `k`, as an import that stopped

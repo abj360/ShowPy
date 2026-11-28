@@ -10,6 +10,7 @@ by the caller's time, so a commit with nothing to remove writes nothing extra.
 
 Contains:
     EARLIEST: holds the earliest moment a time-zone-aware time can hold
+    EPOCH: holds the moment epoch seconds count from
     stale_temp_cutoff(): returns the moment before which a commit removes a temp file
     remove_stale_temps_before(): removes temp files left more than STALE_TEMP_AGE before both
         the commit's time and the file system's clock

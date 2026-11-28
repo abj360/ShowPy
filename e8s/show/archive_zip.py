@@ -13,7 +13,23 @@ than a ZIP without its ZIP64 extension can address, so no ZIP64 record is ever n
 Contains:
     MAX_ARCHIVE_BYTES: caps the size of an archive below where ZIP offsets need ZIP64
     MAX_ARCHIVE_ENTRIES: caps the entries of an archive below the ZIP64 entry-count sentinel
+    MAX_NAME_BYTES: caps the length of an entry name
     ARCHIVE_HINT: tells the caller how to get an archive this reader accepts
+    LOCAL_SIGNATURE: starts every local header
+    CENTRAL_SIGNATURE: starts every central directory header
+    END_SIGNATURE: starts the end record
+    LOCAL_HEADER: lays out a local header's fields
+    CENTRAL_HEADER: lays out a central directory header's fields
+    END_RECORD: lays out the end record's fields
+    STORED: names the compression method of an entry stored as it is
+    VERSION_NEEDED: names the ZIP version a reader needs for a stored entry
+    UNIX_HOST: names the host system the entries' attributes follow
+    VERSION_MADE_BY: names the host and ZIP version that wrote the entries
+    EPOCH_TIME: holds the ZIP time of every entry, midnight
+    EPOCH_DATE: holds the ZIP date of every entry, 1980-01-01
+    EXTERNAL_ATTRIBUTES: gives every entry the attributes of a regular file, mode 0644
+    ENCRYPTED_FLAG: marks an encrypted entry, which is refused
+    CENTRAL_FIXED: holds the central header fields every entry has, in header order
     archive_error(): builds the CORRUPT StorageError for an archive that fails a check
     ZipEntry: holds one entry's name and a view of its bytes
     ArchiveWriter: writes entries, in ascending name order, into a canonical stored ZIP

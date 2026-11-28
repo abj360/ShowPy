@@ -9,6 +9,9 @@ revision's changes, every blob a tree names is present and hashes to its name, a
 left that no slot reaches. A failed check names the entry, never its bytes.
 
 Contains:
+    NO_LEGACY_PREFIX: gives the record check a legacy prefix past every slot
+    REPOSITORY_PREFIX: starts the message of a repository check's CORRUPT error
+    FORM_REASON: says why an entry that parses is refused for its bytes
     VerifiedArchive: holds a verified archive's show, revisions, records and blobs
     verified_archive(): checks every entry of an archive and returns its history
     archive_record(): checks the record entry of one slot and returns the record
