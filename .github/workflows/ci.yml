@@ -426,6 +426,21 @@ jobs:
           name: parity-digests-${{ runner.os }}-py${{ matrix.python }}
           path: parity-digests/
           if-no-files-found: error
+      # Diagnostic: every record of the two JSON cases whose digests differ between cells, for
+      # the core and the oracle, to compare the cells line by line.
+      - name: Dump the JSON cases' records
+        if: env.RUN_PARITY_JOB == 'true' && !cancelled()
+        shell: bash
+        env:
+          PYTHONHASHSEED: "0"
+          RECORDS: parity-records/${{ runner.os }}-py${{ matrix.python }}
+        run: uv run --locked python scripts/dump_core_records.py "$RECORDS"
+      - if: env.RUN_PARITY_JOB == 'true' && !cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parity-records-${{ runner.os }}-py${{ matrix.python }}
+          path: parity-records/
+          if-no-files-found: error
       - if: >-
           env.RUN_PARITY_JOB == 'true' && github.ref == 'refs/heads/main' &&
           steps.restore-oracle.outputs.cache-hit != 'true'
