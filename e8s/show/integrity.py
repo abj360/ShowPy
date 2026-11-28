@@ -161,7 +161,7 @@ def require_known_path(path: str, *, is_write: bool = True) -> None:
         )
 
 
-def blob_digest(data: bytes) -> str:
+def blob_digest(data: bytes | memoryview) -> str:
     """Returns the SHA-256 hex digest blobs and assets are addressed by."""
     return hashlib.sha256(data).hexdigest()
 
