@@ -28,12 +28,19 @@ TORN_READ_PAUSES_S = (0.001, 0.01, 0.1, 0.5, 1.0, 2.0)
 TORN_READ_RETRIES = len(TORN_READ_PAUSES_S)
 
 
-def read_settled(read: Callable[[], bytes], is_torn: Callable[[bytes], bool]) -> bytes:
+def read_settled(
+    read: Callable[[], bytes], is_torn: Callable[[bytes], bool], *, may_be_unfinished: bool = True
+) -> bytes:
     r"""Reads a file, then reads it again after each pause for as long as it looks torn.
+
+    A file no writer can still be filling, such as a slot with a later slot after it, is read
+    once: waiting would only delay the report of damage.
 
     Args:
         read: Reads the file's bytes.
         is_torn: Tells whether bytes read look like a file whose writer has not finished it.
+        may_be_unfinished: Whether a writer may still be filling the file, so a torn read is
+            reread after each pause.
 
     Returns:
         data: The last bytes read, which still look torn only when every reread found them so.
@@ -43,7 +50,7 @@ def read_settled(read: Callable[[], bytes], is_torn: Callable[[bytes], bool]) ->
     b'{}\n'
     """
     data = read()
-    for pause in TORN_READ_PAUSES_S:
+    for pause in TORN_READ_PAUSES_S if may_be_unfinished else ():
         if not is_torn(data):
             break
         time.sleep(pause)

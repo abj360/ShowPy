@@ -200,10 +200,15 @@ class _SlotReadRecorder:
         real = FileBackend._read_slot
 
         def recorded(
-            backend: FileBackend, show_id: str, seq: int, budget: ReadBudget | None = None
+            backend: FileBackend,
+            show_id: str,
+            seq: int,
+            budget: ReadBudget | None = None,
+            *,
+            is_last: bool = True,
         ) -> Revision:
             self.seqs.append(seq)
-            return real(backend, show_id, seq, budget)
+            return real(backend, show_id, seq, budget, is_last=is_last)
 
         monkeypatch.setattr(FileBackend, "_read_slot", recorded)
 

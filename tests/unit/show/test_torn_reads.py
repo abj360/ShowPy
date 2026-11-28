@@ -19,6 +19,10 @@ Contains:
         and a record another writer finishes during the first pause, and reads them whole
     test_file_that_grows_while_read_is_reread: rereads a slot that grows during the read instead
         of refusing it
+    test_regression_fsck_rereads_only_the_last_slot: reports torn slots before the last without a
+        pause, and pauses through every reread only for a torn last slot
+    test_regression_log_rereads_no_slot_before_the_last: reports a torn slot before the last
+        without a pause, as no writer can still be filling it
 """
 
 import os
@@ -35,6 +39,7 @@ from e8s.show.backend import digest
 from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
+from e8s.show.fsck import fsck
 from e8s.show.history_models import Revision
 from e8s.show.layout import read_layout
 from e8s.show.show_folders import show_folder
@@ -294,3 +299,34 @@ def test_file_that_grows_while_read_is_reread(
     pauses = _record_pauses(monkeypatch, lambda: None)
     assert FileBackend(tmp_path).log(SHOW_ID) == landed
     assert len(pauses) == 1
+
+
+DAMAGED_SLOTS = 6
+
+
+def test_regression_fsck_rereads_only_the_last_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _landed(FileBackend(tmp_path), DAMAGED_SLOTS)
+    for seq in range(2, DAMAGED_SLOTS):
+        _slot(tmp_path, seq).write_bytes(b"")
+    pauses = _record_pauses(monkeypatch, lambda: None)
+    report = fsck(tmp_path)
+    torn = [finding for finding in report.findings if finding.code == "TORN_SLOT"]
+    assert len(torn) == DAMAGED_SLOTS - 2
+    assert pauses == []
+    _slot(tmp_path, DAMAGED_SLOTS).write_bytes(b"")
+    fsck(tmp_path)
+    assert pauses == PAUSES_S
+
+
+def test_regression_log_rereads_no_slot_before_the_last(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _landed(FileBackend(tmp_path), 3)
+    _slot(tmp_path, 2).write_bytes(b"")
+    pauses = _record_pauses(monkeypatch, lambda: None)
+    with pytest.raises(StorageError) as caught:
+        FileBackend(tmp_path).log(SHOW_ID)
+    assert caught.value.code == "TORN_SLOT"
+    assert pauses == []
