@@ -30,6 +30,7 @@ import numpy as np
 from pydantic import JsonValue
 
 from tests.parity.cases import Case, Output
+from tests.parity.draws import uniform
 
 SEED = 20261127
 PAIRS = 20_000
@@ -144,7 +145,7 @@ def _short(outcome: JsonValue) -> JsonValue:
 @cache
 def _float_pairs(e8s: ModuleType, count: int) -> tuple[np.ndarray, np.ndarray]:
     rng = e8s.seeded_rng(SEED)
-    left = rng.uniform(-1e3, 1e3, size=count) * rng.choice([1.0, 1e-6, 1e6], size=count)
+    left = uniform(rng, -1e3, 1e3, size=count) * rng.choice([1.0, 1e-6, 1e6], size=count)
     noise = rng.choice(np.array(NOISE), size=count) * rng.choice([-1.0, 1.0], size=count)
     return left, left + noise
 
@@ -152,9 +153,9 @@ def _float_pairs(e8s: ModuleType, count: int) -> tuple[np.ndarray, np.ndarray]:
 @cache
 def _noise_floats(e8s: ModuleType, count: int) -> np.ndarray:
     rng = e8s.seeded_rng(SEED + 1)
-    uniform = rng.uniform(-1e4, 1e4, size=count) / 10.0 ** rng.integers(0, 12, size=count)
+    spread = uniform(rng, -1e4, 1e4, size=count) / 10.0 ** rng.integers(0, 12, size=count)
     dyadic = (2 * rng.integers(-(2**20), 2**20, size=count) + 1) / DYADIC_DENOMINATOR
-    return np.concatenate([np.array(SPECIALS), uniform, dyadic])
+    return np.concatenate([np.array(SPECIALS), spread, dyadic])
 
 
 def _comparisons(e8s: ModuleType) -> list[JsonValue]:
@@ -208,7 +209,7 @@ def _odd_comparisons(e8s: ModuleType) -> list[JsonValue]:
 
 def _chunks(e8s: ModuleType) -> tuple[list[float], list[JsonValue]]:
     rng = e8s.seeded_rng(SEED + 2)
-    totals = rng.uniform(-1e6, 1e6, size=2_000) * rng.choice([1.0, 1e-9, 1e300], size=2_000)
+    totals = uniform(rng, -1e6, 1e6, size=2_000) * rng.choice([1.0, 1e-9, 1e300], size=2_000)
     parts = rng.integers(1, 200, size=2_000)
     values = [
         piece
