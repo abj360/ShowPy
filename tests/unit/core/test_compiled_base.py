@@ -31,6 +31,9 @@ Contains:
         error, not decimal.InvalidOperation
     test_regression_require_size_takes_bools_as_v040_did: accepts numpy bools as v0.4.0 did, and
         shows a bool over the cap as `True`
+    test_regression_require_size_refuses_a_long_double_without_recursing: refuses a long double
+        in range as a float in range, and one below 0 or over the cap with the size error and its
+        repr in the context, where v0.4.0 hit the recursion limit
 """
 
 import inspect
@@ -260,3 +263,20 @@ def test_regression_require_size_takes_bools_as_v040_did(requested: bool) -> Non
         core.require_size(requested, 0, what="points")
     assert caught.value.message == "points would need True, over the cap of 0"
     assert caught.value.context == {"what": "points", "requested": True, "cap": 0}
+
+
+@pytest.mark.parametrize(
+    ("requested", "tail"),
+    [
+        (np.longdouble(3), "which is not a whole-number count"),
+        (np.longdouble(-1), "which is negative"),
+        (np.longdouble(SIZE_CAP + 1), f"over the cap of {SIZE_CAP}"),
+    ],
+)
+def test_regression_require_size_refuses_a_long_double_without_recursing(
+    requested: np.longdouble, tail: str
+) -> None:
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")
+    assert caught.value.message == f"points would need {requested}, {tail}"
+    assert caught.value.context == {"what": "points", "requested": repr(requested), "cap": SIZE_CAP}

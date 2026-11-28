@@ -10,7 +10,7 @@ Contains:
     csv_cells_on_seeded_text(): neutralize_cell on formula-like and plain cells, timed
     util_inputs_v040_mishandled(): records the answers that changed on purpose: lone surrogates
         in error text, totals and part counts of other number types, non-text names, and float
-        and Decimal sizes in range or NaN
+        and Decimal sizes in range or NaN, and long double sizes
     TEXT_CASES: the cases above
 """
 
@@ -35,6 +35,8 @@ LONG_NAME = 230
 CAP = 1_000_000
 IN_RANGE_SIZES = (3.0, 3.5, -0.0, 1e6, np.float64(3.0))
 CHANGED_DECIMAL_SIZES = ("3", "3.5", "-0", "1000000", "NaN", "sNaN")
+# v0.4.0 accepted the first and hit the recursion limit bounding the others' context.
+LONG_DOUBLE_SIZES = (np.longdouble(3), np.longdouble(-1), np.longdouble(1_000_001))
 CELL_COUNT = 20_000
 CELL_ALPHABET = list("=+-@\t\r0123456789.eE xy\u0663\u2212")
 HOSTILE_CELLS = (
@@ -167,7 +169,8 @@ def util_inputs_v040_mishandled(e8s: ModuleType) -> Mapping[str, Output]:
     close_matches takes text only. require_size refuses a float or a Decimal in range with its
     own error class, asking for a whole-number int, where v0.4.0 let it through without
     truncating it, and refuses a Decimal NaN as over the cap, where v0.4.0 raised
-    decimal.InvalidOperation.
+    decimal.InvalidOperation. A long double size is refused like a float, where v0.4.0 accepted
+    one in range and hit the recursion limit on the others.
 
     Args:
         e8s: The e8s module under test.
@@ -191,7 +194,11 @@ def util_inputs_v040_mishandled(e8s: ModuleType) -> Mapping[str, Output]:
         ],
         "require_size": [
             _answer(lambda size: e8s.require_size(size, CAP, what="points"), size)
-            for size in (*IN_RANGE_SIZES, *(Decimal(text) for text in CHANGED_DECIMAL_SIZES))
+            for size in (
+                *IN_RANGE_SIZES,
+                *(Decimal(text) for text in CHANGED_DECIMAL_SIZES),
+                *LONG_DOUBLE_SIZES,
+            )
         ],
         "close_matches": [
             _answer(e8s.close_matches, ("T", "1"), [("T", "1")]),
