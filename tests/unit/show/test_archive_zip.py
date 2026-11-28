@@ -31,6 +31,8 @@ Contains:
     test_garbage_and_framed_bytes_are_refused: refuses bytes that are not a ZIP, and an archive
         with bytes before or after it or a comment
     test_regression_a_name_outside_ascii_is_refused: refuses a name byte above 127
+    test_regression_a_name_over_the_name_cap_is_refused: refuses a name longer than the cap
+        before reading it
     test_the_size_caps_bound_writing_and_reading: refuses to write or read past the entry and
         byte caps
 """
@@ -232,6 +234,14 @@ def test_regression_a_name_outside_ascii_is_refused() -> None:
     error = _refused(data)
     assert error.code == ErrorCode.CORRUPT
     assert "ASCII" in error.message
+
+
+def test_regression_a_name_over_the_name_cap_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = _archive()
+    monkeypatch.setattr(archive_zip, "MAX_NAME_BYTES", len("a.txt") - 1)
+    error = _refused(data)
+    assert error.code == ErrorCode.CORRUPT
+    assert "longer than" in error.message
 
 
 def test_the_size_caps_bound_writing_and_reading(monkeypatch: pytest.MonkeyPatch) -> None:

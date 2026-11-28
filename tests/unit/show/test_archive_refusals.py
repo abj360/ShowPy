@@ -30,6 +30,10 @@ Contains:
     test_regression_a_changed_path_outside_the_document_paths_is_refused: refuses a revision
         that changes a path with a `..` segment, though everything else agrees
     test_regression_an_archive_without_slots_is_refused: refuses a manifest with no history
+    test_regression_a_history_over_the_log_read_budget_is_refused: refuses slots and records
+        larger together than one log read takes, which a repository could not read back
+    test_regression_an_archive_without_a_manifest_first_is_refused: refuses an empty archive and
+        one whose first entry is not archive.json, naming the missing manifest
     test_regression_a_history_over_the_revision_cap_is_refused: refuses more slots than a show
         may hold
 """
@@ -335,3 +339,23 @@ def test_regression_an_archive_without_slots_is_refused(
     error = _refused(tmp_path, rebuilt({"archive.json": entries["archive.json"]}))
     assert error.code == ErrorCode.CORRUPT
     assert "no slot" in error.message
+
+
+def test_regression_a_history_over_the_log_read_budget_is_refused(
+    tmp_path: Path, entries: dict[str, bytes], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    history = sum(len(v) for k, v in entries.items() if k.startswith(("log/", "records/")))
+    monkeypatch.setattr(archive_checks, "LOG_READ_MAX_BYTES", history - 1)
+    error = _refused(tmp_path, rebuilt(entries))
+    assert error.code == ErrorCode.TOO_LARGE
+    assert error.context["cap"] == history - 1
+
+
+def test_regression_an_archive_without_a_manifest_first_is_refused(
+    tmp_path: Path, entries: dict[str, bytes]
+) -> None:
+    unnamed = {name: data for name, data in entries.items() if name != "archive.json"}
+    for name, damaged in (("empty", {}), ("unnamed", unnamed)):
+        error = _refused(tmp_path / name, rebuilt(damaged))
+        assert error.code == ErrorCode.CORRUPT
+        assert "holds no archive.json" in error.message
