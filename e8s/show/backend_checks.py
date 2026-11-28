@@ -18,12 +18,16 @@ Contains:
     Record: holds a revision record's slot number, revision and tree
     parsed_record(): checks a parsed revision record against its name and returns it
     require_slot_record(): raises CORRUPT unless a slot's record holds its number and revision
+    applied_tree(): returns the previous tree with a revision's changes applied, as the next
+        tree must read
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
     last_present(): gallops from a slot known present and bisects back to the last present one
     refuse_redirect(): refuses a folder that is a symlink or a junction
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
     require_readable_sizes(): refuses a commit holding a blob larger than reads accept
+    require_sent_blob_digests(): refuses a commit that sends a blob under a digest its bytes lack
+    unstored_blobs(): builds the StorageError for a tree naming blobs neither sent nor stored
 """
 
 from collections.abc import Callable, Mapping
@@ -39,7 +43,7 @@ from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_reads
-from e8s.show.backend import REVISION_ID_PATTERN
+from e8s.show.backend import REVISION_ID_PATTERN, SHORT_ID
 from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.layout1 import BLOB_MAX_BYTES
@@ -188,7 +192,7 @@ def parsed_slot(show_id: str, path: Path, raw: bytes) -> Revision:
     return stored_revision(show_id, path, stored)
 
 
-def require_blob_digest(show_id: str, path: Path, data: bytes) -> None:
+def require_blob_digest(show_id: str, path: Path, data: bytes | memoryview) -> None:
     """Raises CORRUPT unless a stored blob's bytes hash to its file name."""
     if blob_digest(data) != path.name:
         raise corrupt(show_id, path, "blob bytes do not match their digest")
@@ -283,6 +287,32 @@ def require_slot_record(
         raise corrupt(show_id, path, "slot differs from the revision in its record")
 
 
+def applied_tree(
+    previous: Mapping[str, str], revision: Revision, tree: Mapping[str, str]
+) -> dict[str, str]:
+    """Returns the previous tree with each changed path set as the new tree has it.
+
+    A revision's tree must equal this: every path it did not change keeps its previous digest.
+
+    Args:
+        previous: Path to blob digest at the revision before; empty before the first.
+        revision: The revision, whose `changed` paths may differ.
+        tree: Path to blob digest the revision's record holds.
+
+    Returns:
+        applied: The tree the revision's record must hold.
+
+    >>> from datetime import UTC, datetime
+    >>> at = datetime(2026, 11, 27, tzinfo=UTC)
+    >>> revision = Revision(id="a" * 64, parent="", at=at, changed=("/b",))
+    >>> applied_tree({"/a": "1", "/b": "2"}, revision, {"/a": "9", "/b": "3"})
+    {'/a': '1', '/b': '3'}
+    """
+    applied = {path: digest for path, digest in previous.items() if path not in revision.changed}
+    applied.update({path: tree[path] for path in revision.changed if path in tree})
+    return applied
+
+
 class ReadBudget:
     """Counts the bytes one log() call has read and refuses to pass its limit."""
 
@@ -323,6 +353,31 @@ def require_caller_ids(
         _caller_id(show_id, revision.parent, "parent id")
     for digest in [*blobs, *tree.values()]:
         _caller_id(show_id, digest, "blob digest")
+
+
+def require_sent_blob_digests(show_id: str, blobs: Mapping[str, bytes]) -> None:
+    """Refuses a commit that sends a blob whose bytes do not hash to the digest it is sent under."""
+    for digest, data in blobs.items():
+        if blob_digest(data) != digest:
+            raise StorageError(
+                f"blob bytes sent for {show_id} do not match digest {digest[:SHORT_ID]}",
+                hint="send each blob under the SHA-256 hex digest of its bytes, as "
+                "DocumentRepository.transaction does",
+                context={"show": show_id, "digest": digest},
+                code=ErrorCode.CORRUPT,
+            )
+
+
+def unstored_blobs(show_id: str, digests: list[str]) -> StorageError:
+    """Builds the StorageError for a commit whose tree names blobs neither sent nor stored."""
+    return StorageError(
+        f"tree of {show_id} names blobs neither sent nor stored: "
+        f"{', '.join(d[:SHORT_ID] for d in digests[:3])}",
+        hint="send the bytes of each blob the show does not store yet; if fsck(root) lists a "
+        "set-aside .gc- copy of one, gc(root, at=datetime.now(UTC), confirm=True) puts it back",
+        context={"show": show_id, "digests": digests},
+        code=ErrorCode.CORRUPT,
+    )
 
 
 def refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:
