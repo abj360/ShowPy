@@ -5,6 +5,7 @@ Contains:
     SHOW_ID_PATTERN: matches the show IDs a repository can store
     REVISION_HASH_DOMAIN: names the hash domain every stored revision ID is computed under
     revision_id(): computes a revision's ID from its parent, time and changed digests
+    require_new_show_id(): refuses an ID no new show may take
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
     encode_cache_of(): returns the encode cache a repository shares across its saves
 """
@@ -115,6 +116,25 @@ def _id_rule_refusal(show_id: str) -> StorageError | None:
         context={"show": show_id},
         code=ErrorCode.BAD_PATH,
     )
+
+
+def require_new_show_id(show_id: str) -> None:
+    """Refuses an ID no new show may take: a Windows device name, outside the ID rule, or not NFC.
+
+    Args:
+        show_id: ID of a show that is not stored yet.
+
+    >>> require_new_show_id("show_1")
+    >>> try:
+    ...     require_new_show_id("show-1")
+    ... except StorageError as error:
+    ...     print(error.code)
+    BAD_PATH
+    """
+    _require_not_device_name(show_id)
+    refusal = _id_rule_refusal(show_id)
+    if refusal is not None:
+        raise refusal
 
 
 class DocumentRepository:
@@ -272,6 +292,8 @@ class DocumentRepository:
         >>> repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision=rev.id, at=at) == rev
         True
         """
+        # A copy, so a caller editing a bytearray afterwards cannot change what was stored.
+        changes = {path: None if raw is None else bytes(raw) for path, raw in changes.items()}
         for path, data in changes.items():
             split_path(path)
             require_known_path(path, is_write=data is not None)
