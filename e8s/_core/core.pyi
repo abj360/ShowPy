@@ -5,6 +5,7 @@ Contains:
     _finite_probe(): returns a finite number and raises SchemaError for NaN or an infinity
     _cache_probe(): caches a converted Box2 and returns the cached value's address
     _cache_stats(): returns the probe cache's hits, misses and live entries
+    _pcg64_draws(): draws integers, floats and a sample from the seeded PCG64 generator
     format_number(): writes a float in plain decimal notation, never in exponent form
     normalize_angle(): wraps an angle into [0, 360) and rejects NaN and infinity
     angle_diff(): returns the signed shortest turn from a to b
@@ -43,6 +44,9 @@ Contains:
 """
 
 from collections.abc import Iterable
+
+import numpy as np
+import numpy.typing as npt
 
 from e8s.core.errors import E8sError
 from e8s.core.json_types import JsonValue
@@ -146,6 +150,9 @@ SURROGATE_HINT: str
 def _finite_probe(value: float) -> float: ...
 def _cache_probe(part: Box2) -> int: ...
 def _cache_stats() -> dict[str, int]: ...
+def _pcg64_draws(
+    seed: int, high: int, n: int, count: int
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64], npt.NDArray[np.int64]]: ...
 def format_number(value: float, *, max_decimals: int = 6) -> str: ...
 def normalize_angle(deg: float) -> float: ...
 def angle_diff(a: Degrees, b: Degrees) -> Degrees: ...

@@ -4,6 +4,7 @@
 //!     canonical: binds canonical values, canonical JSON bytes and content hashes
 //!     host: gives non-ASCII text the answers of Python's own Unicode tables
 //!     numeric: binds number text, angle wrapping, rounding and the size caps
+//!     rng: binds the seeded PCG64 generator for its tests
 //!     identifiers: binds the ID checks, references and transition IDs
 //!     strict: binds the strict JSON reader and the nesting count
 //!     walk: walks Python values into the canonical JSON model
@@ -13,6 +14,7 @@ mod canonical;
 mod host;
 mod identifiers;
 mod numeric;
+mod rng;
 mod strict;
 mod walk;
 
@@ -30,6 +32,7 @@ pub fn add_all(module: &Bound<'_, PyModule>) -> PyResult<()> {
     identifiers::add_functions(module)?;
     canonical::add_functions(module)?;
     strict::add_functions(module)?;
+    rng::add_hooks(module)?;
     add_constants(module)
 }
 
