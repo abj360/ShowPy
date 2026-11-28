@@ -14,12 +14,15 @@ Contains:
         a 32-bit draw left, as numpy's bit generator does
     test_core_pcg64_refuses_an_empty_range_and_an_oversized_sample: raises SchemaError where
         numpy raises ValueError
+    test_regression_pcg64_refuses_draws_too_many_to_allocate: raises SchemaError for more than
+        MAX_POINTS draws or samples instead of allocating them
 """
 
 import numpy as np
 import pytest
 
 from e8s._core import core
+from e8s.core.caps import MAX_POINTS
 from e8s.core.errors import SchemaError
 
 SEEDS = 10_000
@@ -81,3 +84,10 @@ def test_core_pcg64_refuses_an_empty_range_and_an_oversized_sample(
 ) -> None:
     with pytest.raises(SchemaError):
         core._pcg64_draws(1, high, population, size)
+
+
+@pytest.mark.parametrize("count", [MAX_POINTS + 1, 2**40])
+def test_regression_pcg64_refuses_draws_too_many_to_allocate(count: int) -> None:
+    with pytest.raises(SchemaError) as caught:
+        core._pcg64_draws(1, 7, 2**40, count)
+    assert caught.value.context["requested"] == count

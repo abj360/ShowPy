@@ -5,7 +5,9 @@
 //!     add_hooks(): adds the private hook `_pcg64_draws` to a module
 
 use e8s_core::base::CoreResult;
+use e8s_core::base::caps::require_size;
 use e8s_core::rng::Pcg64;
+use e8s_core::rng::sample::MAX_SAMPLE;
 use numpy::PyArray1;
 use pyo3::prelude::*;
 
@@ -23,6 +25,11 @@ fn draw(
     n: usize,
     count: usize,
 ) -> CoreResult<(Vec<i64>, Vec<f64>, Vec<i64>)> {
+    require_size(
+        i64::try_from(count).unwrap_or(i64::MAX),
+        MAX_SAMPLE,
+        "draws",
+    )?;
     let mut generator = Pcg64::from_seed(seed);
     let integers = (0..count)
         .map(|_| generator.integers(high).map(|value| value as i64))
@@ -39,7 +46,8 @@ fn draw(
 /// Seeds one generator and draws, in order, `count` integers in [0, high), `count` floats in
 /// [0, 1) and a sample of `count` distinct integers in [0, n), as numpy's
 /// `Generator(PCG64(seed))` does with `integers(high, size=count)`, `random(count)` and
-/// `choice(n, size=count, replace=False)`.
+/// `choice(n, size=count, replace=False)`. More than MAX_SAMPLE draws raise SchemaError before
+/// anything is allocated.
 #[pyfunction(name = "_pcg64_draws")]
 fn pcg64_draws(
     py: Python<'_>,

@@ -6,10 +6,16 @@
 //! a shuffle of the sample.
 //!
 //! Contains:
+//!     MAX_SAMPLE: bounds the values one call samples
 //!     Pcg64::choice_without_replacement(): samples distinct integers in [0, n) as numpy does
 
 use super::pcg64::Pcg64;
+use crate::base::caps::{MAX_POINTS, require_size};
 use crate::base::{CoreError, CoreResult, ErrorCode, ErrorKind};
+
+/// Bounds the values one call samples, checked before anything is allocated. The tail shuffle
+/// holds a population under 50 times the sample, so it stays bounded too.
+pub const MAX_SAMPLE: i64 = MAX_POINTS;
 
 /// Populations up to this size always use Floyd's algorithm.
 const TAIL_SHUFFLE_MIN_POPULATION: usize = 10_000;
@@ -47,8 +53,14 @@ impl Pcg64 {
     ///
     /// # Errors
     ///
-    /// Returns a SchemaError when `size` exceeds `n`, where numpy raises ValueError.
+    /// Returns a SchemaError when `size` exceeds `n`, where numpy raises ValueError, and when it
+    /// exceeds MAX_SAMPLE.
     pub fn choice_without_replacement(&mut self, n: usize, size: usize) -> CoreResult<Vec<usize>> {
+        require_size(
+            i64::try_from(size).unwrap_or(i64::MAX),
+            MAX_SAMPLE,
+            "samples",
+        )?;
         if size > n {
             return Err(oversized(n, size));
         }
@@ -130,6 +142,24 @@ mod tests {
             Pcg64::from_seed(1)
                 .choice_without_replacement(3, 4)
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn a_sample_over_max_sample_is_refused_before_allocating() {
+        let mut generator = Pcg64::from_seed(1);
+        let over = usize::try_from(MAX_SAMPLE).unwrap_or(usize::MAX) + 1;
+        assert!(generator.choice_without_replacement(over, over).is_err());
+        assert!(
+            generator
+                .choice_without_replacement(1 << 40, 1 << 40)
+                .is_err()
+        );
+        assert_eq!(
+            generator
+                .choice_without_replacement(1 << 40, 3)
+                .map(|s| s.len()),
+            Ok(3)
         );
     }
 }
