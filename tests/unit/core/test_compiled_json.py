@@ -56,7 +56,7 @@ DOC = "d.json"
 GIL_FREE_BYTES = 2048
 LARGE_PAYLOAD = 4 * 2**20
 SWITCH_INTERVAL_S = 30.0
-HASHING_BUDGET_S = 1.0
+HASHING_BUDGET_S = 5.0
 COUNTER_NAP_S = 0.0001
 WAIT_STEP_S = 0.001
 SMALL_DIGIT_LIMIT = 640
@@ -239,9 +239,9 @@ def _hashes_while_counting(data: bytes) -> int:
             time.sleep(COUNTER_NAP_S)
 
     interval = sys.getswitchinterval()
-    sys.setswitchinterval(SWITCH_INTERVAL_S)
     thread = threading.Thread(target=counting)
     try:
+        sys.setswitchinterval(SWITCH_INTERVAL_S)
         thread.start()
         while count[0] == 0:
             time.sleep(WAIT_STEP_S)
@@ -251,9 +251,10 @@ def _hashes_while_counting(data: bytes) -> int:
             content_hash(data)
         during = count[0] - before
     finally:
-        stop.set()
-        thread.join()
         sys.setswitchinterval(interval)
+        stop.set()
+        if thread.is_alive():
+            thread.join()
     return during
 
 
