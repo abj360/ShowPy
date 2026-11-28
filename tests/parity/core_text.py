@@ -190,7 +190,8 @@ class ComparesOnly:
 def _changed_sizes() -> tuple[object, ...]:
     """Lists the sizes, other than floats and Decimals, whose answer changed on purpose."""
     arrays = (np.array(3.0), np.array([3]), np.array(np.True_), np.array([3, 4]), np.array([]))
-    return (Fraction(3), Fraction(7, 2), *arrays, ComparesOnly(3))
+    complexes = (np.complex128(3), np.complex64(3), np.complex128(3 + 1j), np.clongdouble(3))
+    return (Fraction(3), Fraction(7, 2), *arrays, ComparesOnly(3), *complexes)
 
 
 def util_inputs_v040_mishandled(e8s: ModuleType) -> Mapping[str, Output]:
@@ -203,10 +204,10 @@ def util_inputs_v040_mishandled(e8s: ModuleType) -> Mapping[str, Output]:
     own error class, asking for a whole-number int, where v0.4.0 let it through without
     truncating it, and refuses a Decimal NaN as over the cap, where v0.4.0 raised
     decimal.InvalidOperation. A long double size is refused like a float, where v0.4.0 accepted
-    one in range and hit the recursion limit on the others. A Fraction, a half float, a one-item
-    array or an object that only compares is refused in range as a float is, where v0.4.0 let it
-    through; an array of other than one item is refused the same way, where v0.4.0 raised
-    numpy's ValueError.
+    one in range and hit the recursion limit on the others. A Fraction, a half float, a numpy
+    complex, a one-item array or an object that only compares is refused in range as a float is,
+    where v0.4.0 let it through; an array of other than one item is refused the same way, where
+    v0.4.0 raised numpy's ValueError, or UFuncTypeError or TypeError for a non-numeric one.
 
     Args:
         e8s: The e8s module under test.

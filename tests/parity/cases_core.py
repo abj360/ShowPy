@@ -302,7 +302,8 @@ def odd_inputs(e8s: ModuleType) -> list[JsonValue]:
     out += [describe(e8s.vector_facing, v) for v in zero_vectors]
     decimals = tuple(Decimal(text) for text in OUT_OF_RANGE_DECIMALS)
     ints = (0, 5, 1_000_000, 1_000_001, -1, -(10**30), 10**30)
-    others = (Fraction(-1), Fraction(10**7), ComparesOnly(-1), ComparesOnly(1_000_001))
+    complexes = (np.complex128(-1 + 1j), np.complex128(10**7), np.complex128(complex("nan")), 3j)
+    others = (Fraction(-1), Fraction(10**7), ComparesOnly(-1), ComparesOnly(1_000_001), *complexes)
     sizes: tuple[object, ...] = (*ints, *OUT_OF_RANGE_SIZES, *decimals, *NUMPY_SIZES)
     sizes += (*OUT_OF_RANGE_ARRAYS, *others, "3", None)
     out += [describe(e8s.require_size, r, 1_000_000, what="points") for r in sizes]

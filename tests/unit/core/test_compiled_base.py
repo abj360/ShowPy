@@ -45,6 +45,10 @@ Contains:
         many-item array with the whole-number error, where v0.4.0 raised numpy's ValueError
     test_require_size_raises_the_comparison_type_error_for_text: raises the TypeError v0.4.0's
         `0 <= requested` raised for a value that does not compare with numbers
+    test_regression_require_size_refuses_numpy_complex_sizes_in_range: refuses a numpy complex
+        in range with the whole-number error, where v0.4.0 returned None
+    test_regression_require_size_refuses_out_of_range_complex_sizes_as_v040_did: gives v0.4.0's
+        negative and over-cap errors for numpy complex sizes, which numpy orders by real part
 """
 
 import inspect
@@ -374,7 +378,44 @@ def test_regression_require_size_refuses_an_array_of_other_than_one_item(
     )
 
 
-@pytest.mark.parametrize("requested", ["3", None, b"3", [3]])
+@pytest.mark.parametrize("requested", ["3", None, b"3", [3], complex(3)])
 def test_require_size_raises_the_comparison_type_error_for_text(requested: object) -> None:
     with pytest.raises(TypeError, match="'<=' not supported between instances of 'int' and"):
         core.require_size(cast("int", requested), SIZE_CAP, what="points")
+
+
+@pytest.mark.parametrize(
+    ("requested", "shown", "context"),
+    [
+        (np.complex128(3), "(3+0j)", "(3+0j)"),
+        (np.complex64(3), "(3+0j)", "(3+0j)"),
+        (np.complex128(3 + 1j), "(3+1j)", "(3+1j)"),
+        (np.clongdouble(3), "(3+0j)", repr(np.clongdouble(3))),
+    ],
+)
+def test_regression_require_size_refuses_numpy_complex_sizes_in_range(
+    requested: object, shown: str, context: str
+) -> None:
+    with pytest.raises(SpacingError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points", error=SpacingError)
+    assert caught.value.message == f"points would need {shown}, which is not a whole-number count"
+    assert caught.value.hint == "pass the number of points as a whole-number int"
+    assert caught.value.context["requested"] == context
+
+
+@pytest.mark.parametrize(
+    ("requested", "shown", "tail"),
+    [
+        (np.complex128(-1), "(-1+0j)", "which is negative"),
+        (np.complex128(-1 + 1j), "(-1+1j)", "which is negative"),
+        (np.complex128(SIZE_CAP + 1), "(1000001+0j)", f"over the cap of {SIZE_CAP}"),
+        (np.complex128(complex("nan")), "(nan+0j)", f"over the cap of {SIZE_CAP}"),
+    ],
+)
+def test_regression_require_size_refuses_out_of_range_complex_sizes_as_v040_did(
+    requested: object, shown: str, tail: str
+) -> None:
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")
+    assert caught.value.message == f"points would need {shown}, {tail}"
+    assert caught.value.context["requested"] == shown
