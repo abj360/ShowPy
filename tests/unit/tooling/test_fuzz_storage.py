@@ -7,7 +7,15 @@ Contains:
     FAKE_ATHERIS_MODULE: a fake atheris that feeds one fixed input and saves a crash like
         libFuzzer; in-process tests and child processes run the same code
     fake_atheris(): builds a fresh in-process module from FAKE_ATHERIS_MODULE
+    fake_atheris_env(): writes FAKE_ATHERIS_MODULE as a module and returns an environment that
+        makes child processes import it
+    runner(): imports the runner script, restoring sys.path and sys.modules afterwards
+    make_package(): writes fake tests/property files and their shared helper module
+    package(): a fake package with two storage test files and one file outside the glob
+    fuzz(): runs the runner's main with a fake atheris and returns its exit code
+    exit_code(): the same, also when the run leaves through SystemExit
     RecordingRunner: stands in for the per-process runner, recording calls and failing some
+    fuzz_all(): runs the runner's main with no --target and a RecordingRunner
     test_discovery_finds_given_tests_and_state_machines: sorted target IDs of a fake package
     test_discovery_skips_imported_and_plain_names: only names defined in the module count
     test_regression_storage_fuzz_refuses_an_empty_glob: no matching file exits non-zero
