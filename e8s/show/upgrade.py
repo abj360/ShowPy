@@ -63,8 +63,9 @@ WRITER_HINT = (
     "writer may run on the source while it is upgraded"
 )
 TARGET_HINT = (
-    "pass a folder that does not exist yet, or an empty one, outside the source; a folder an "
-    f"interrupted upgrade left has no {LAYOUT_FILE}: delete it and run upgrade_repository again"
+    "pass a folder that does not exist yet, or an empty one, outside the source; if an upgrade "
+    "into it stopped and nothing was committed in it since, delete it and run upgrade_repository "
+    "again"
 )
 
 DOTS_HINT = (

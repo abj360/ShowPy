@@ -8,6 +8,8 @@ Contains:
     LAYOUT_MAX_BYTES: caps the size of the layout file read
     LAYOUT_BYTES: holds the content of `layout.json` for the layout this release writes
     RESTORE_LAYOUT_HINT: tells the caller how to replace a damaged layout file
+    UPGRADE_RERUN_HINT: tells the caller when deleting an upgrade's target and upgrading again
+        loses nothing
     TORN_LAYOUT_HINT: tells the caller how to clear a layout file a stopped commit or upgrade left
         torn
     HOUSEKEEPING_NAMES: lists the entries operating systems add to a folder, which a root skips
@@ -44,11 +46,14 @@ LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
 RESTORE_LAYOUT_HINT = (
     f"restore {LAYOUT_FILE} from a backup, or move the folder away to start a new one"
 )
+UPGRADE_RERUN_HINT = (
+    "if an upgrade stopped and nothing was committed in its target since, delete the target and "
+    "run upgrade_repository again"
+)
 TORN_LAYOUT_HINT = (
-    "a first commit or an upgrade that stopped while writing it can leave it so; after a first "
-    f"commit, while the root holds no show folder, {FSCK_REPAIR_CALL} removes it once it is "
-    "a day old; in the target of an upgrade_repository, delete the target and run the upgrade "
-    f"again; otherwise {RESTORE_LAYOUT_HINT}"
+    "a stopped first commit or upgrade can leave it so: while the root holds no show folder, "
+    f"{FSCK_REPAIR_CALL} removes it once it is a day old; {UPGRADE_RERUN_HINT}; otherwise "
+    f"restore {LAYOUT_FILE} from a backup"
 )
 TEMP_DIR = "tmp"
 ASSET_DIR = "assets"

@@ -26,7 +26,10 @@ Contains:
         file of a root with a show folder and a torn manifest of a show with a slot, as the hint
         says, pointing at a backup instead
     test_regression_layout_torn_by_a_stopped_upgrade_hint_names_the_upgrade_again: names
-        deleting the target and upgrading again, which then lands the upgrade
+        deleting the target and upgrading again, on a read and on a second upgrade into it,
+        which then lands the upgrade
+    test_regression_damaged_layout_of_an_upgraded_root_offers_no_unconditional_delete: offers
+        deleting an upgrade's target only while nothing was committed in it
     test_damaged_layout_or_manifest_keeps_the_restore_hint: keeps the backup hint for a layout
         file or manifest that is no shorter start of what a commit writes
     test_every_library_text_saying_a_day_matches_the_stale_temp_age: ties the "a day" every hint
@@ -89,6 +92,10 @@ TORN_PREFIX_BYTES = 5
 BACKUP = "restore the show folder from a backup"
 STOPPED_CAUSE = "can leave it so"
 TORN_FILE_NAMED = "the file at the error's path"
+NOTHING_COMMITTED = "nothing was committed"
+UPGRADE_AGAIN = "run upgrade_repository again"
+# A cut far enough into layout.json that it is still a shorter start of what a writer writes.
+LAYOUT_CUT_BYTES = 10
 # A call a hint spells: fsck or gc on the root, whose arguments may hold one call of their own.
 HINT_CALL = re.compile(r"\b(?:fsck|gc)\(root(?:[^()]|\([^()]*\))*\)")
 LIBRARY = Path(e8s.__file__).parent
@@ -180,6 +187,12 @@ def _torn_path(root: Path, kind: str, change: Change) -> Path:
 def _first_file_path(root: Path, name: str) -> Path:
     """Names the layout file or the manifest a show's first commit writes."""
     return root / LAYOUT_FILE if name == LAYOUT_FILE else show_path(root) / MANIFEST_FILE
+
+
+def _deletes_only_if_nothing_was_committed(hint: str) -> bool:
+    """Tells whether a hint offers a delete, and only in a clause conditioned on no commits."""
+    deleting = [clause for clause in hint.split(";") if "delete" in clause]
+    return bool(deleting) and all(NOTHING_COMMITTED in clause for clause in deleting)
 
 
 def _refused_read(root: Path) -> StorageError:
@@ -310,13 +323,32 @@ def test_regression_layout_torn_by_a_stopped_upgrade_hint_names_the_upgrade_agai
 
     _stopped_writing(upgrade, lambda path: path == target / LAYOUT_FILE, share)
     hint = _refused_read(target).hint
-    assert "upgrade_repository" in hint
-    assert "delete the target" in hint
+    assert UPGRADE_AGAIN in hint
+    assert _deletes_only_if_nothing_was_committed(hint)
     age_by(target / LAYOUT_FILE, 2 * DAY)
     assert _repaired(hint, target) == ()
+    with pytest.raises(StorageError) as again:
+        upgrade_repository(source, target)
+    assert UPGRADE_AGAIN in again.value.hint
+    assert _deletes_only_if_nothing_was_committed(again.value.hint)
     shutil.rmtree(target)
     upgrade_repository(source, target)
     assert FileRepository(target).head(SHOW_ID) == revision
+
+
+def test_regression_damaged_layout_of_an_upgraded_root_offers_no_unconditional_delete(
+    tmp_path: Path,
+) -> None:
+    source, target = tmp_path / "old", tmp_path / "new"
+    revision = _layout_1_root(source)
+    upgrade_repository(source, target)
+    changes = {"/renders/after-upgrade.txt": b"kept"}
+    FileRepository(target).transaction(SHOW_ID, changes, expected_revision=revision, at=AT)
+    layout = target / LAYOUT_FILE
+    layout.write_bytes(layout.read_bytes()[:LAYOUT_CUT_BYTES])
+    hint = _refused_read(target).hint
+    assert _deletes_only_if_nothing_was_committed(hint)
+    assert "restore layout.json from a backup" in hint
 
 
 @pytest.mark.parametrize("name", FIRST_FILES)
