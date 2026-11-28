@@ -124,7 +124,7 @@ banned-module-level-imports = ["tests"]
 "tests/**" = ["D", "EXE001", "FBT001", "FBT002", "TID251", "TID253"]
 "scripts/**" = ["EXE001"]
 # Atheris names its functions Setup and Fuzz; the runner, its stub and its fake mirror them.
-"{scripts/fuzz_storage.py,typings/atheris.pyi,tests/unit/tooling/test_fuzz_storage.py}" = ["N802"]
+"{scripts/fuzz_storage.py,typings/atheris.pyi}" = ["N802"]
 # The fixture script runs in a released checkout and takes its seeded show from the test helpers.
 "scripts/make_{legacy,bench}_fixture.py" = ["TID251", "TID253"]
 # Test motions implement MotionFn, whose parameter names are part of the protocol.

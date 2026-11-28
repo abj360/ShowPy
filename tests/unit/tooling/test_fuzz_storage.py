@@ -4,7 +4,9 @@
 test_fuzz_storage.py --- checks the Atheris runner of the storage tests, its session and workflow
 
 Contains:
-    FakeAtheris: stands in for atheris, feeding one fixed input and saving a crash like libFuzzer
+    FAKE_ATHERIS_MODULE: a fake atheris that feeds one fixed input and saves a crash like
+        libFuzzer; in-process tests and child processes run the same code
+    fake_atheris(): builds a fresh in-process module from FAKE_ATHERIS_MODULE
     RecordingRunner: stands in for the per-process runner, recording calls and failing some
     test_discovery_finds_given_tests_and_state_machines: sorted target IDs of a fake package
     test_discovery_skips_imported_and_plain_names: only names defined in the module count
@@ -19,6 +21,8 @@ Contains:
     test_fuzz_runs_a_target_under_libfuzzer: argv, corpus, artifact prefix and instrumentation
     test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_it: libFuzzer's
         per-input timeout is below the runner's grace, so a hang is saved as a crash input
+    test_fuzz_runs_the_state_machine_target: a RuleBasedStateMachine target fuzzes cleanly
+    test_fuzz_default_slot_is_the_named_constant: without --seconds libFuzzer gets 300 s
     test_fuzz_passing_target_exits_zero: a clean run returns 0 and leaves no crash
     test_regression_storage_fuzz_crash_exits_non_zero_and_keeps_the_input: a raising target
     test_replay_reproduces_a_raising_input: one saved input run once
@@ -43,8 +47,11 @@ Contains:
     test_storage_fuzz_workflow_caches_one_corpus: restore on every run, save from main
     test_regression_storage_fuzz_workflow_uploads_crashes_after_a_timeout: one artifact for
         every target, uploaded after a failure, a success or a job timeout
+    run_scripts(): returns each step's run script, one-line or literal block
+    test_run_scripts_reads_one_line_and_literal_block_runs: proves the script reader can fail
     test_storage_fuzz_workflow_keeps_the_conventions: pins, permissions, no inline expressions,
         a timeout that covers every target's slot and grace
+    test_nightly_job_keeps_its_steps: the nightly job still ends with tests, slow, fuzz and bench
     test_docker_image_holds_every_path_the_storage_fuzz_tests_read: the image copies the workflow
 """
 
@@ -54,8 +61,7 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Callable, Iterator, Sequence
-from contextlib import AbstractContextManager, contextmanager
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from types import ModuleType
 
@@ -63,7 +69,13 @@ import pytest
 from hypothesis import settings
 
 from tests.unit.tooling.test_dockerfile import DOCKERFILE, DOCKERIGNORE, missing_image_paths
-from tests.unit.tooling.test_nightly_failures import REPORT_CALL, REPORT_JOB, SYNC_STEP, SYNCED
+from tests.unit.tooling.test_nightly_failures import (
+    REPORT_CALL,
+    REPORT_JOB,
+    SYNC_STEP,
+    SYNCED,
+    step_script,
+)
 from tests.unit.tooling.test_noxfile import (
     NOXFILE,
     ROOT,
@@ -180,73 +192,49 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
-_STATE = {}
+FUZZ_INPUT = b"\\x00" * 8
+included = []
+argv = []
+_tests = []
 
 
 def instrument_imports(include=None, exclude=None):
+    assert exclude is None
+    included[:] = list(include or [])
     return nullcontext()
 
 
 def Setup(args, test_one_input):
-    _STATE["argv"] = list(args)
-    _STATE["test"] = test_one_input
+    argv[:] = list(args)
+    _tests[:] = [test_one_input]
     return list(args)
 
 
 def Fuzz():
     time.sleep(float(os.environ.get("FAKE_FUZZ_SLEEP", "0")))
     try:
-        _STATE["test"](b"\\x00" * 8)
+        _tests[0](FUZZ_INPUT)
     except Exception:
-        prefix = next(arg for arg in _STATE["argv"] if arg.startswith("-artifact_prefix="))
+        prefix = next(arg for arg in argv if arg.startswith("-artifact_prefix="))
         crashes = Path(prefix.split("=", 1)[1])
         crashes.mkdir(parents=True, exist_ok=True)
-        (crashes / "crash-0").write_bytes(b"\\x00" * 8)
+        (crashes / "crash-0").write_bytes(FUZZ_INPUT)
         raise SystemExit(77) from None
 """
 CRASH_EXIT = 77
 
 
-class FakeAtheris:
-    """Stands in for atheris: feeds one fixed input and saves a crash like libFuzzer does.
+def fake_atheris() -> ModuleType:
+    """Builds a fresh fake atheris from FAKE_ATHERIS_MODULE, the code the child processes import.
 
-    Attributes:
-        included: The package names given to instrument_imports.
-        argv: The libFuzzer arguments given to Setup.
+    Returns:
+        atheris: A module that feeds one fixed input, saves a crash like libFuzzer does, and
+            records the packages given to instrument_imports (`included`) and the libFuzzer
+            arguments given to Setup (`argv`).
     """
-
-    def __init__(self) -> None:
-        self.included: list[str] = []
-        self.argv: list[str] = []
-        self._test: Callable[[bytes], None] | None = None
-
-    def instrument_imports(
-        self, include: Sequence[str] | None = None, exclude: Sequence[str] | None = None
-    ) -> AbstractContextManager[None]:
-        assert exclude is None
-        self.included = list(include or [])
-        return _quiet()
-
-    def Setup(self, args: Sequence[str], test_one_input: Callable[[bytes], None]) -> list[str]:
-        self.argv = list(args)
-        self._test = test_one_input
-        return list(args)
-
-    def Fuzz(self) -> None:
-        assert self._test is not None
-        try:
-            self._test(FUZZ_INPUT)
-        except Exception:
-            prefix = next(arg for arg in self.argv if arg.startswith("-artifact_prefix="))
-            crashes = Path(prefix.split("=", 1)[1])
-            crashes.mkdir(parents=True, exist_ok=True)
-            (crashes / CRASH_NAME).write_bytes(FUZZ_INPUT)
-            raise SystemExit(77) from None
-
-
-@contextmanager
-def _quiet() -> Iterator[None]:
-    yield
+    module = ModuleType("atheris")
+    exec(compile(FAKE_ATHERIS_MODULE, "fake_atheris.py", "exec"), module.__dict__)
+    return module
 
 
 @pytest.fixture
@@ -285,9 +273,9 @@ def package(tmp_path: Path) -> Path:
     )
 
 
-def fuzz(runner: ModuleType, root: Path, *args: str, atheris: FakeAtheris | None = None) -> int:
+def fuzz(runner: ModuleType, root: Path, *args: str, atheris: ModuleType | None = None) -> int:
     """Runs the runner's main with a fake atheris and returns its exit code."""
-    fake = atheris or FakeAtheris()
+    fake = atheris or fake_atheris()
     return int(runner.main(list(args), root=root, load_atheris=lambda: fake))
 
 
@@ -338,7 +326,7 @@ def test_list_prints_the_ids_as_one_json_line(
 
 
 def test_fuzz_runs_a_target_under_libfuzzer(runner: ModuleType, package: Path) -> None:
-    fake = FakeAtheris()
+    fake = fake_atheris()
     target = ALPHA_IDS[1]
     assert fuzz(runner, package, "--target", target, "--seconds", str(SECONDS), atheris=fake) == 0
     safe = "test_storage_alpha__test_roundtrip"
@@ -393,7 +381,7 @@ def test_fuzz_runs_the_state_machine_target(runner: ModuleType, package: Path) -
 
 
 def test_fuzz_default_slot_is_the_named_constant(runner: ModuleType, package: Path) -> None:
-    fake = FakeAtheris()
+    fake = fake_atheris()
     assert fuzz(runner, package, "--target", ALPHA_IDS[1], atheris=fake) == 0
     assert runner.FUZZ_SECONDS_PER_TEST == 300
     assert "-max_total_time=300" in fake.argv
@@ -403,7 +391,7 @@ def test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_i
     runner: ModuleType, package: Path
 ) -> None:
     """Without a per-input limit below the grace, a hang was killed with nothing to replay."""
-    fake = FakeAtheris()
+    fake = fake_atheris()
     assert fuzz(runner, package, "--target", ALPHA_IDS[1], atheris=fake) == 0
     assert f"-timeout={runner.INPUT_TIMEOUT_SECONDS}" in fake.argv
     assert 0 < runner.INPUT_TIMEOUT_SECONDS < runner.TARGET_GRACE_SECONDS
@@ -507,7 +495,7 @@ class RecordingRunner:
 
 def fuzz_all(runner: ModuleType, root: Path, run: RecordingRunner, *args: str) -> int:
     """Runs the runner's main with no --target, a fake atheris and a recording runner."""
-    fake = FakeAtheris()
+    fake = fake_atheris()
     return int(runner.main(list(args), root=root, load_atheris=lambda: fake, run_target=run))
 
 
@@ -620,12 +608,12 @@ def test_atheris_is_a_linux_x86_64_dev_dependency() -> None:
     assert text.index(pin) > text.index("[dependency-groups]")
 
 
-def _nightly() -> str:
+def _nightly_storage() -> str:
     return NIGHTLY_STORAGE.read_text(encoding="utf-8")
 
 
 def _fuzz_steps() -> list[str]:
-    return job_steps(ci_job(_nightly(), FUZZ_JOB))
+    return job_steps(ci_job(_nightly_storage(), FUZZ_JOB))
 
 
 def _step_index(steps: list[str], text: str) -> int:
@@ -634,7 +622,7 @@ def _step_index(steps: list[str], text: str) -> int:
 
 def test_regression_storage_fuzz_workflow_runs_every_test_in_one_check_job() -> None:
     """A per-test matrix job could never report a storage fuzz failure through the report job."""
-    workflow = _nightly()
+    workflow = _nightly_storage()
     assert ci_job_names(workflow) == [FUZZ_JOB, REPORT_JOB]
     assert "matrix" not in workflow
     job = ci_job(workflow, FUZZ_JOB)
@@ -675,15 +663,30 @@ def test_regression_storage_fuzz_workflow_uploads_crashes_after_a_timeout() -> N
     assert _step_index(steps, "storagefuzz") < steps.index(upload)
 
 
+def run_scripts(job: str) -> list[str]:
+    """Returns each step's script: its `run: |` literal block, else its one-line run, else ""."""
+    return [step_script(step) or step_value(step, "run") for step in job_steps(job)]
+
+
+def test_run_scripts_reads_one_line_and_literal_block_runs() -> None:
+    job = (
+        "  a:\n    steps:\n      - uses: actions/cache@x # v1\n"
+        "      - run: echo one\n"
+        "      - name: two\n        run: |\n          echo ${{ github.ref }}\n          echo 3\n"
+    )
+    assert run_scripts(job) == ["", "echo one", "echo ${{ github.ref }}\necho 3\n"]
+
+
 def test_storage_fuzz_workflow_keeps_the_conventions(runner: ModuleType) -> None:
-    workflow = _nightly()
+    workflow = _nightly_storage()
     assert unpinned_actions(workflow) == [f"uses: {REPORT_CALL}"]
     assert workflow_section(workflow, "permissions") == "permissions:\n  contents: read\n"
     assert workflow.count("uses: actions/checkout@") == workflow.count("persist-credentials: false")
     assert FUZZ_JOB not in unprepared_rust_jobs(workflow)
     job = ci_job(workflow, FUZZ_JOB)
-    for run in re.findall(r"run: (.*)", job):
-        assert "${{" not in run
+    scripts = run_scripts(job)
+    assert any(scripts)
+    assert not any("${{" in script for script in scripts)
     limit = re.search(r"^    timeout-minutes: (\d+)$", job, re.MULTILINE)
     assert limit is not None
     targets = runner.discover_targets(ROOT)
