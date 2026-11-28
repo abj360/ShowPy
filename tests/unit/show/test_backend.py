@@ -21,6 +21,8 @@ Contains:
     test_regression_memory_repository_keeps_a_copy_of_written_bytes: ignores a later change
     test_regression_memory_backend_keeps_each_shows_blobs_apart: refuses another show's blob
     test_regression_memory_commit_stores_the_bytes_it_verified: reads each blob once
+    test_regression_repository_hands_its_backend_a_copy_of_written_bytes: keeps a stored blob
+        when the caller changes its bytearray, even over a backend that copies nothing
     test_tree_of_an_unknown_revision_is_unknown_ref: raises UnknownRefError in both adapters
     test_repository_reads_and_writes_at_the_head_touch_a_constant_number_of_revisions:
         reads O(1) entries
@@ -334,6 +336,31 @@ def test_regression_memory_commit_stores_the_bytes_it_verified() -> None:
     revision = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
     backend.commit(SHOW_ID, revision, {"/a": digest}, _ShiftingBlobs(b"claimed", b"swapped"))
     assert backend.blob(SHOW_ID, digest) == b"claimed"
+
+
+class _KeepsReferences(_MemoryBackend):
+    """Serves blobs from the objects its callers handed in, as a backend that copies nothing."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.handed: dict[str, bytes] = {}
+
+    def blob(self, show_id: str, digest: str) -> bytes:
+        return self.handed.get(digest) or super().blob(show_id, digest)
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        super().commit(show_id, revision, tree, blobs)
+        self.handed.update(blobs)
+
+
+def test_regression_repository_hands_its_backend_a_copy_of_written_bytes() -> None:
+    repo = DocumentRepository(_KeepsReferences())
+    buffer = bytearray(b"kept")
+    repo.transaction(SHOW_ID, {"/renders/a.txt": cast(bytes, buffer)}, expected_revision="", at=AT)
+    buffer[:] = b"lost"
+    assert repo.read(SHOW_ID, "/renders/a.txt") == b"kept"
 
 
 def test_tree_of_an_unknown_revision_is_unknown_ref(backend_factory: BackendFactory) -> None:
