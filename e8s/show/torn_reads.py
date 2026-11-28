@@ -20,9 +20,11 @@ from collections.abc import Callable
 from e8s.core.errors import SchemaError
 from e8s.core.strict_json import parse_strict_json
 
-# A writer creates the file and fills it with its next call, so the first pause covers a writer
-# that is scheduled at once and the last one a writer paused by a busy machine.
-TORN_READ_PAUSES_S = (0.001, 0.01, 0.1)
+# A writer creates the file and fills it with its next call. The first pause covers a writer that
+# is scheduled at once; the later ones cover a writer a loaded machine holds back between the two
+# calls, which took longer than 0.1 s on a CI runner and failed a concurrent commit. A file still
+# torn after every pause, 3.611 s in all, is reported, so one a stopped writer left fails closed.
+TORN_READ_PAUSES_S = (0.001, 0.01, 0.1, 0.5, 1.0, 2.0)
 TORN_READ_RETRIES = len(TORN_READ_PAUSES_S)
 
 

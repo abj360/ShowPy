@@ -6,8 +6,8 @@ test_torn_reads.py --- tests how the file backend reads a slot another writer ma
 Contains:
     test_regression_torn_slot_is_reported_with_the_repair_command: raises TORN_SLOT for an empty
         slot, with a hint that names the fsck repair call
-    test_torn_slot_is_reread_three_times_then_reported: rereads an empty, cut-short or unfinished
-        slot three times, pausing before each, then raises TORN_SLOT
+    test_torn_slot_is_reread_after_each_pause_then_reported: rereads an empty, cut-short or
+        unfinished slot six times, pausing before each, then raises TORN_SLOT
     test_slot_finished_between_rereads_reads_as_landed: reads a slot whose writer finishes it
         during the first pause
     test_finished_line_that_fails_a_check_is_corrupt_at_once: reports a complete but wrong slot
@@ -42,8 +42,8 @@ from e8s.show.show_folders import show_folder
 AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 SHOW_ID = "torn"
 RENDER = "/renders/a.txt"
-REREADS = 3
-PAUSES_S = [0.001, 0.01, 0.1]
+REREADS = 6
+PAUSES_S = [0.001, 0.01, 0.1, 0.5, 1.0, 2.0]
 REPAIR_CALL = "fsck(root, repair=True, confirm=True, at=datetime.now(UTC))"
 # A capped read checks the descriptor's type with one fstat, then takes its size with the next.
 SIZE_FSTAT = 2
@@ -121,7 +121,7 @@ TORN_FORMS: dict[str, Callable[[bytes], bytes]] = {
 
 
 @pytest.mark.parametrize("form", sorted(TORN_FORMS))
-def test_torn_slot_is_reread_three_times_then_reported(
+def test_torn_slot_is_reread_after_each_pause_then_reported(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, form: str
 ) -> None:
     _landed(FileBackend(tmp_path), 2)
