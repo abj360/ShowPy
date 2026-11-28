@@ -20,7 +20,7 @@ expect = { facing_vector = [
 
 [[case]]
 name = "core.util_inputs_v040_mishandled"
-reason = "lone surrogates show as U+FFFD in errors; other number types split as floats; other part types, non-text names and float sizes in range raise TypeError"
+reason = "lone surrogates show as U+FFFD in errors; other number types split as floats; other part types and non-text names raise TypeError; float sizes in range raise SchemaError"
 expect = { surrogate_errors = [
   { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': \"number in 'T\\ufffd99999999999999999999999999999999999999999999999999999999999999'... has 65 digits\", 'hint': 'IDs hold at most 64 characters, so no number is longer', 'context': {'digits': 65, 'max': 64}}" },
   { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': \"bad range '\\ufffd-'\", 'hint': 'write ranges as T1-T8', 'context': {'text': '\\ufffd-'}}" },
@@ -32,10 +32,10 @@ expect = { surrogate_errors = [
   { types = ["float", "float", "float"], values = "[2.6666666666666665, 2.6666666666666665, 2.666666666666667]" },
   { error = "TypeError", detail = "" },
 ], require_size = [
-  { error = "TypeError", detail = "" },
-  { error = "TypeError", detail = "" },
-  { error = "TypeError", detail = "" },
-  { error = "TypeError", detail = "" },
+  { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': 'points would need 3.0, which is not a whole-number count', 'hint': 'pass the number of points as a whole-number int', 'context': {'what': 'points', 'requested': 3.0, 'cap': 1000000}}" },
+  { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': 'points would need 3.5, which is not a whole-number count', 'hint': 'pass the number of points as a whole-number int', 'context': {'what': 'points', 'requested': 3.5, 'cap': 1000000}}" },
+  { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': 'points would need -0.0, which is not a whole-number count', 'hint': 'pass the number of points as a whole-number int', 'context': {'what': 'points', 'requested': -0.0, 'cap': 1000000}}" },
+  { error = "SchemaError", detail = "{'type': 'SchemaError', 'code': 'SCHEMA', 'message': 'points would need 1000000.0, which is not a whole-number count', 'hint': 'pass the number of points as a whole-number int', 'context': {'what': 'points', 'requested': 1000000.0, 'cap': 1000000}}" },
 ], close_matches = [
   { error = "TypeError", detail = "" },
   { error = "TypeError", detail = "" },

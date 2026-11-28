@@ -17,6 +17,7 @@
 //!     size_error(): builds the error for a size that is negative or over its cap
 //!     require_size(): rejects a requested size that is negative or over its cap
 //!     size_beyond_i64(): builds the error for a size written as digits beyond 64 bits
+//!     whole_number_error(): builds the message and hint for a size that is not a whole number
 
 use super::error::{ContextValue, CoreError, CoreResult};
 use super::error_codes::{ErrorCode, ErrorKind};
@@ -67,6 +68,16 @@ pub fn size_error(requested: &str, cap: &str, is_negative: bool, what: &str) -> 
     (
         format!("{what} would need {requested}, over the cap of {cap}"),
         format!("ask for fewer {what} or use a coarser setting"),
+    )
+}
+
+/// Builds the message and hint for a size in range that is not a whole-number int, such as 3.5
+/// or 3.0: a size is a count.
+#[must_use]
+pub fn whole_number_error(requested: &str, what: &str) -> (String, String) {
+    (
+        format!("{what} would need {requested}, which is not a whole-number count"),
+        format!("pass the number of {what} as a whole-number int"),
     )
 }
 

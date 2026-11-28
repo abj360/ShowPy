@@ -249,17 +249,18 @@ fn context_of<'py>(py: Python<'py>, err: &CoreError) -> PyResult<Bound<'py, PyDi
     Ok(context)
 }
 
-/// Tells whether a real number that is not an int lies outside [0, cap], so v0.4.0's
-/// comparisons rejected it with the size error; NaN compares false and is rejected too.
-fn is_rejected_real(requested: &Bound<'_, PyAny>, cap: i64) -> PyResult<bool> {
-    let is_real = requested.is_instance_of::<PyFloat>()
-        || requested.is_instance(REAL.import(requested.py(), "numbers", "Real")?.as_any())?;
-    Ok(is_real && !(requested.ge(0)? && requested.le(cap)?))
+/// Tells whether a value that is not an int is a real number, as v0.4.0's comparisons took it.
+fn is_real(requested: &Bound<'_, PyAny>) -> PyResult<bool> {
+    Ok(requested.is_instance_of::<PyFloat>()
+        || requested.is_instance(REAL.import(requested.py(), "numbers", "Real")?.as_any())?)
 }
 
-/// Rejects a size that is not a 64-bit int: an int beyond 64 bits is over every cap or below
-/// zero, and a real number outside [0, cap] gets the same error, as v0.4.0 compared it. Any other
-/// value, a float in range included, raises TypeError: a size is a count.
+/// Rejects a size that is not a 64-bit int.
+///
+/// An int beyond 64 bits is over every cap or below zero. A real number outside [0, cap], NaN
+/// included, gets the same error, as v0.4.0 compared it. A real number in range, such as 3.5 or
+/// 3.0, gets the same error class asking for a whole-number int: a size is a count. Any other
+/// value raises the TypeError v0.4.0's comparison raised.
 fn require_huge_size(
     requested: &Bound<'_, PyAny>,
     cap: i64,
@@ -267,14 +268,19 @@ fn require_huge_size(
     error: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let py = requested.py();
-    if !requested.is_instance_of::<PyInt>() && !is_rejected_real(requested, cap)? {
+    let is_int = requested.is_instance_of::<PyInt>();
+    if !is_int && !is_real(requested)? {
         return Err(requested.extract::<i64>().err().unwrap_or_else(|| {
             pyo3::exceptions::PyTypeError::new_err("requested must be an int")
         }));
     }
-    let is_negative = requested.lt(0)?;
     let shown = requested.str()?.to_string_lossy().into_owned();
-    let (message, hint) = caps::size_error(&shown, &cap.to_string(), is_negative, what);
+    let in_range = !is_int && requested.ge(0)? && requested.le(cap)?;
+    let (message, hint) = if in_range {
+        caps::whole_number_error(&shown, what)
+    } else {
+        caps::size_error(&shown, &cap.to_string(), requested.lt(0)?, what)
+    };
     let context = PyDict::new(py);
     context.set_item("what", what)?;
     context.set_item("requested", requested)?;

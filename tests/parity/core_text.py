@@ -162,8 +162,8 @@ def util_inputs_v040_mishandled(e8s: ModuleType) -> Mapping[str, Output]:
     A lone surrogate in an ID shows as U+FFFD in error text, as in the ID checks. A total that
     is neither a float nor an int splits as a float, and the parts are floats. A part count
     that is neither an int nor a float is refused with TypeError before the total is read.
-    close_matches takes text only. require_size refuses a float in range with TypeError, where
-    v0.4.0 let it through without truncating it.
+    close_matches takes text only. require_size refuses a float in range with its own error
+    class, asking for a whole-number int, where v0.4.0 let it through without truncating it.
 
     Args:
         e8s: The e8s module under test.
