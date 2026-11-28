@@ -8,6 +8,10 @@ Contains:
         after an import stopped at a slot, in a file and a memory repository
     test_regression_a_second_import_of_a_completed_archive_writes_nothing: returns the show ID
         and changes nothing when the show holds the whole history already
+    test_regression_a_show_that_diverged_after_a_shared_prefix_is_refused: refuses a show
+        holding the archive's first two revisions and another third, writing nothing
+    test_regression_a_show_longer_than_the_archive_is_refused: refuses a show that holds the
+        whole archive and more, writing nothing
     test_regression_an_archive_tampered_after_the_stored_head_is_refused_before_any_write:
         verifies the whole archive before resuming, so damage past the stored head writes nothing
 """
@@ -18,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import StorageError
+from e8s.core.errors import ConflictError, StorageError
 from e8s.show.archive import export_archive, import_archive
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_repository import FileRepository
@@ -98,3 +102,34 @@ def test_regression_an_archive_tampered_after_the_stored_head_is_refused_before_
     assert caught.value.code == ErrorCode.CORRUPT
     assert listing(tmp_path) == before
     assert len(files.revisions(SHOW_ID)) == STOP_AT - 1
+
+
+def _refused_unchanged(root: Path, repo: DocumentRepository, archive: bytes) -> ConflictError:
+    """Imports into a show with another history; the import refuses and writes nothing."""
+    before = listing(root)
+    with pytest.raises(ConflictError) as caught:
+        import_archive(repo, archive)
+    assert listing(root) == before
+    assert "another history" in caught.value.message
+    return caught.value
+
+
+def test_regression_a_show_that_diverged_after_a_shared_prefix_is_refused(tmp_path: Path) -> None:
+    source = InMemoryRepository()
+    landed = with_history(source, REVISIONS)
+    files = FileRepository(tmp_path)
+    shared = with_history(files, 2)
+    assert shared == landed[:2]
+    other = {"/renders/diverged.txt": b"diverged"}
+    files.transaction(SHOW_ID, other, expected_revision=shared[-1].id, at=landed[2].at)
+    _refused_unchanged(tmp_path, files, export_archive(source, SHOW_ID))
+    assert len(files.revisions(SHOW_ID)) == len(shared) + 1
+
+
+def test_regression_a_show_longer_than_the_archive_is_refused(tmp_path: Path) -> None:
+    source = InMemoryRepository()
+    with_history(source, 3)
+    files = FileRepository(tmp_path)
+    with_history(files, REVISIONS)
+    _refused_unchanged(tmp_path, files, export_archive(source, SHOW_ID))
+    assert len(files.revisions(SHOW_ID)) == REVISIONS
