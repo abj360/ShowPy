@@ -673,8 +673,10 @@ def test_run_scripts_reads_one_line_and_literal_block_runs() -> None:
         "  a:\n    steps:\n      - uses: actions/cache@x # v1\n"
         "      - run: echo one\n"
         "      - name: two\n        run: |\n          echo ${{ github.ref }}\n          echo 3\n"
+        "      - run: |-\n          echo ${{ github.sha }}\n"
     )
-    assert run_scripts(job) == ["", "echo one", "echo ${{ github.ref }}\necho 3\n"]
+    scripts = ["", "echo one", "echo ${{ github.ref }}\necho 3\n", "echo ${{ github.sha }}\n"]
+    assert run_scripts(job) == scripts
 
 
 def test_storage_fuzz_workflow_keeps_the_conventions(runner: ModuleType) -> None:
