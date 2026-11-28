@@ -19,8 +19,10 @@ Contains:
     test_regression_command_line_loads_the_nightly_profile_before_discovery: the script run as
         __main__ discovers targets under the nightly profile
     test_fuzz_runs_a_target_under_libfuzzer: argv, corpus, artifact prefix and instrumentation
-    test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_it: libFuzzer's
-        per-input timeout is below the runner's grace, so a hang is saved as a crash input
+    hang_caught_within(): bounds how long after an input starts libFuzzer saves it as a hang
+    fits_the_grace(): tells whether that bound plus start-up stays inside the runner's grace
+    test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_it: libFuzzer
+        catches a hang in the slot's last input before the runner's grace runs out
     test_fuzz_runs_the_state_machine_target: a RuleBasedStateMachine target fuzzes cleanly
     test_fuzz_default_slot_is_the_named_constant: without --seconds libFuzzer gets 300 s
     test_fuzz_passing_target_exits_zero: a clean run returns 0 and leaves no crash
@@ -186,6 +188,9 @@ CRASH_NAME = "crash-0"
 SECONDS = 7
 NO_ATHERIS = "E: atheris is not installed"
 TRAVERSAL_FOLDER = "storage-fuzz-traversal-probe"
+# Importing e8s and Hypothesis under instrumentation takes seconds; this bounds it generously.
+STARTUP_MARGIN_SECONDS = 20
+TOO_LONG_INPUT_TIMEOUT = 100
 FAKE_ATHERIS_MODULE = """
 import os
 import time
@@ -387,6 +392,23 @@ def test_fuzz_default_slot_is_the_named_constant(runner: ModuleType, package: Pa
     assert "-max_total_time=300" in fake.argv
 
 
+def hang_caught_within(timeout: int) -> int:
+    """Returns how long after an input starts libFuzzer has saved it as a hang, at the latest.
+
+    libFuzzer's alarm fires every timeout // 2 + 1 s and reports an input running past timeout,
+    so a hang that starts just after one alarm is caught by the first alarm past timeout.
+    """
+    return timeout + timeout // 2 + 1
+
+
+def fits_the_grace(timeout: int, grace: int) -> bool:
+    """Tells whether a hang in the slot's last input is saved before the runner stops the process.
+
+    The child's own start-up (imports and instrumentation) also counts against the grace.
+    """
+    return STARTUP_MARGIN_SECONDS + hang_caught_within(timeout) < grace
+
+
 def test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_it(
     runner: ModuleType, package: Path
 ) -> None:
@@ -394,7 +416,8 @@ def test_regression_storage_fuzz_saves_a_hanging_input_before_the_runner_stops_i
     fake = fake_atheris()
     assert fuzz(runner, package, "--target", ALPHA_IDS[1], atheris=fake) == 0
     assert f"-timeout={runner.INPUT_TIMEOUT_SECONDS}" in fake.argv
-    assert 0 < runner.INPUT_TIMEOUT_SECONDS < runner.TARGET_GRACE_SECONDS
+    assert fits_the_grace(runner.INPUT_TIMEOUT_SECONDS, runner.TARGET_GRACE_SECONDS)
+    assert not fits_the_grace(TOO_LONG_INPUT_TIMEOUT, runner.TARGET_GRACE_SECONDS)
 
 
 def test_fuzz_passing_target_exits_zero(runner: ModuleType, package: Path) -> None:

@@ -44,8 +44,10 @@ STORAGE_GLOB = "tests/property/test_storage_*.py"
 FUZZ_SECONDS_PER_TEST = 300
 # libFuzzer checks its time limit only between inputs, and each process imports e8s first.
 TARGET_GRACE_SECONDS = 120
-# libFuzzer saves an input that runs past this as a crash (exit 70); below the grace, it fires
-# before the runner stops the process, so a hang leaves an input to replay.
+# libFuzzer saves an input that runs past this as a crash (exit 70). Its alarm fires every
+# half of this plus 1 s, so a hang is caught within 1.5 times this plus 1 s of the input's
+# start; with the child's start-up, that stays inside the grace, so a hang leaves an input to
+# replay instead of being stopped by the runner.
 INPUT_TIMEOUT_SECONDS = TARGET_GRACE_SECONDS // 2
 PROFILE_ENV = "HYPOTHESIS_PROFILE"
 NIGHTLY_PROFILE = "nightly"
