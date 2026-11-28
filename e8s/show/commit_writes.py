@@ -10,6 +10,7 @@ Contains:
     flush_directories(): flushes each folder so the names placed in it survive power loss
     place_file(): writes bytes to a temp file and links it under a name that never gets replaced
     PROBE_SUFFIX: ends the name the hard-link probe links its temp file under
+    TORN_IN_PLACE_HINT: tells the caller how to clear a blob or record a stopped commit left torn
     links_work(): probes once whether the file system under the temp folder can hard-link
     FilePlacer: places files by hard link, or by exclusive create where links do not work
     PLACE_ATTEMPTS: caps how often a name freed by another writer's failed write is placed again
@@ -29,8 +30,9 @@ from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
 from e8s.show import durable_io, durable_reads
-from e8s.show.backend_checks import corrupt, require_blob_digest
+from e8s.show.backend_checks import GC_CALL, corrupt, require_blob_digest
 from e8s.show.document_dump import dump_json
+from e8s.show.fsck_findings import UNREACHABLE
 from e8s.show.history_models import Revision
 from e8s.show.layout import (
     CURRENT_LAYOUT,
@@ -46,6 +48,10 @@ from e8s.show.torn_reads import is_short_of, read_settled
 STALE_TEMP_AGE = timedelta(hours=24)
 LAYOUT_BYTES = dump_json({"format": LAYOUT_FORMAT, "layout": CURRENT_LAYOUT})
 PROBE_SUFFIX = ".link-probe"
+TORN_IN_PLACE_HINT = (
+    "a commit that stopped while writing this file leaves it so; run fsck(root), and if it lists "
+    f"the file as {UNREACHABLE}, {GC_CALL} removes it once it is a day old; then commit again"
+)
 # A writer that takes a name and fails its write frees the name again. Placing it again covers
 # that; a name freed on every attempt means writers keep failing, and the commit stops.
 PLACE_ATTEMPTS = 3
@@ -201,10 +207,23 @@ def place_or_check(
 
 
 def _read_stored(show_id: str, target: Path, kind: str, cap: int, data: bytes) -> bytes:
-    """Reads a stored file, rereading it while it is a shorter start of `data`."""
+    """Reads a stored file, rereading it while it is a shorter start of `data`.
+
+    A blob's or record's bytes are fixed by its name, so one still a shorter start of `data`
+    after every reread was left by a writer that stopped, and only a clean-up removes it: a name
+    is never written over.
+
+    Raises:
+        StorageError: CORRUPT, with the hint that clears it, when the file is still a shorter
+            start of `data`.
+    """
     fail = partial(corrupt, show_id)
     read = partial(durable_reads.read_capped, target, kind, cap, fail, allows_growth=True)
-    return read_settled(read, is_short_of(data))
+    stored = read_settled(read, is_short_of(data))
+    if is_short_of(data)(stored):
+        reason = f"{kind} is empty or cut short after every reread"
+        raise corrupt(show_id, target, reason, hint=TORN_IN_PLACE_HINT)
+    return stored
 
 
 def _keep_fresh(show_id: str, target: Path) -> None:

@@ -3,6 +3,7 @@ backend_checks.py --- the corruption error and the read checks the layout-2 file
 
 Contains:
     CORRUPT_HINT: tells the caller how to repair a damaged show folder
+    GC_CALL: spells the gc call a hint tells the caller to run
     FIRST_SEQ: numbers the first slot of every show
     corrupt(): builds the StorageError for a stored file that fails a check
     MISSING_FILE_HINT: tells the caller how to find and put back a blob or record that is missing
@@ -51,13 +52,13 @@ from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_line
 
 CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
+GC_CALL = "gc(root, at=datetime.now(UTC), confirm=True)"
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 FIRST_SEQ = 1
 MISSING_FILE_HINT = (
-    "run fsck(root); if it lists a set-aside .gc- copy of this file, "
-    "gc(root, at=datetime.now(UTC), confirm=True) puts it back, otherwise restore the show "
-    "folder from a backup"
+    f"run fsck(root); if it lists a set-aside .gc- copy of this file, {GC_CALL} puts it back, "
+    "otherwise restore the show folder from a backup"
 )
 TORN_SLOT_HINT = (
     "read again later; if the slot stays torn, its writer stopped before writing it: run "
@@ -66,20 +67,21 @@ TORN_SLOT_HINT = (
 )
 
 
-def corrupt(show_id: str, path: Path, reason: str) -> StorageError:
+def corrupt(show_id: str, path: Path, reason: str, *, hint: str = CORRUPT_HINT) -> StorageError:
     """Builds the CORRUPT StorageError for a stored file that fails a check.
 
     Args:
         show_id: Show the file belongs to; empty when it is not known yet, which leaves it out.
         path: The damaged file.
         reason: What check it failed.
+        hint: How to repair it; restoring a backup unless the damage has a known repair.
     """
     context: dict[str, JsonValue] = {"path": str(path), "file": path.name}
     if show_id:
         context["show"] = show_id
     return StorageError(
         f"repository{' of ' + show_id if show_id else ''} is corrupt: {reason}",
-        hint=CORRUPT_HINT,
+        hint=hint,
         context=context,
         code=ErrorCode.CORRUPT,
     )
