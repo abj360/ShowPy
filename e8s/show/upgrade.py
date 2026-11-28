@@ -305,6 +305,7 @@ def _upgrade_show(reader: Layout1Reader, target: _Target, listed: SourceShow) ->
         ids.append(revision.id)
         if fields := reader.dropped_fields(show_id, revision.id):
             dropped.append((revision.id, fields))
+        # Copies are written with the reader's aware time, so they are judged by that time.
         if not recomputes(revision, tree):
             legacy = seq
         for digest in sorted(set(tree.values()) - blobs):
