@@ -23,11 +23,20 @@ Contains:
     test_regression_require_size_refuses_floats_v040_let_through: raises the size check's own
         error class, asking for a whole-number int, for a float in range, which v0.4.0 accepted
         without truncating
+    test_regression_require_size_refuses_decimals_v040_let_through: refuses a Decimal in range
+        as it refuses a float in range
+    test_regression_require_size_refuses_out_of_range_decimals_as_v040_did: raises v0.4.0's
+        negative and over-cap errors for a Decimal below 0, over the cap or infinite
+    test_regression_require_size_refuses_a_decimal_nan_as_a_float_nan: raises the size check's
+        error, not decimal.InvalidOperation
+    test_regression_require_size_takes_bools_as_v040_did: accepts numpy bools as v0.4.0 did, and
+        shows a bool over the cap as `True`
 """
 
 import inspect
 import math
 import unicodedata
+from decimal import Decimal
 from fractions import Fraction
 from typing import cast
 
@@ -191,3 +200,63 @@ def test_regression_require_size_refuses_floats_v040_let_through(
     with pytest.raises(SpacingError) as spacing:
         core.require_size(cast("int", requested), SIZE_CAP, what="spots", error=SpacingError)
     assert spacing.value.hint == "pass the number of spots as a whole-number int"
+
+
+@pytest.mark.parametrize(
+    "requested", [Decimal(3), Decimal("3.5"), Decimal("-0"), Decimal(SIZE_CAP)]
+)
+def test_regression_require_size_refuses_decimals_v040_let_through(requested: Decimal) -> None:
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")
+    assert caught.value.code == ErrorCode.SCHEMA
+    assert (
+        caught.value.message == f"points would need {requested}, which is not a whole-number count"
+    )
+    assert caught.value.hint == "pass the number of points as a whole-number int"
+    assert caught.value.context["requested"] == repr(requested)
+    with pytest.raises(SpacingError) as spacing:
+        core.require_size(cast("int", requested), SIZE_CAP, what="spots", error=SpacingError)
+    assert spacing.value.code == ErrorCode.SPACING
+    assert spacing.value.hint == "pass the number of spots as a whole-number int"
+
+
+@pytest.mark.parametrize(
+    ("requested", "is_negative"),
+    [
+        (Decimal(-1), True),
+        (Decimal("-0.5"), True),
+        (Decimal("-Infinity"), True),
+        (Decimal(SIZE_CAP + 1), False),
+        (Decimal("1000000.5"), False),
+        (Decimal("Infinity"), False),
+        (Decimal("1E+1000"), False),
+    ],
+)
+def test_regression_require_size_refuses_out_of_range_decimals_as_v040_did(
+    requested: Decimal, is_negative: bool
+) -> None:
+    with pytest.raises(SpacingError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points", error=SpacingError)
+    tail = "which is negative" if is_negative else f"over the cap of {SIZE_CAP}"
+    assert caught.value.message == f"points would need {requested}, {tail}"
+    assert caught.value.context == {"what": "points", "requested": repr(requested), "cap": SIZE_CAP}
+
+
+@pytest.mark.parametrize("requested", [Decimal("NaN"), Decimal("-NaN"), Decimal("sNaN")])
+def test_regression_require_size_refuses_a_decimal_nan_as_a_float_nan(requested: Decimal) -> None:
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")
+    assert caught.value.message == f"points would need {requested}, over the cap of {SIZE_CAP}"
+    assert caught.value.hint == "ask for fewer points or use a coarser setting"
+
+
+@pytest.mark.parametrize("requested", [True, False, np.True_, np.False_])
+def test_regression_require_size_takes_bools_as_v040_did(requested: bool) -> None:
+    core.require_size(requested, 1, what="points")
+    if not requested:
+        core.require_size(requested, 0, what="points")
+        return
+    with pytest.raises(SchemaError) as caught:
+        core.require_size(requested, 0, what="points")
+    assert caught.value.message == "points would need True, over the cap of 0"
+    assert caught.value.context == {"what": "points", "requested": True, "cap": 0}

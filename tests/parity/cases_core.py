@@ -58,8 +58,11 @@ TIE_MAX_SHIFT = 40
 TIE_MIN_DIGITS = 16
 TINY_STEP = 1e-300
 DIGIT_TIES = ((165.035919189453125, 2e-14), (-649435869553220.25, 0.2))
-# Float sizes v0.4.0 refused with the size error; floats in range are in core_text.
+# Sizes v0.4.0 answered as the core does: real numbers it refused with the size error, numpy
+# ints and bools it took. Floats and Decimals in range, and Decimal NaNs, are in core_text.
 OUT_OF_RANGE_SIZES = (math.nan, math.inf, -math.inf, 2e6, 1_000_000.5, -1.5)
+OUT_OF_RANGE_DECIMALS = ("-1", "-0.5", "-Infinity", "1000001", "1000000.5", "Infinity", "1E+1000")
+NUMPY_SIZES = (np.True_, np.False_, np.int64(3), np.int64(-1), np.int64(1_000_001), np.uint8(3))
 SPECIAL_FLOATS = (0.0, -0.0, 1e308, -1e308, 1.7976931348623157e308, 5e-324, -5e-324, 1e-308)
 STEPS = (0.01, 0.25, 0.5, 1.0, 5.0, 1e-3, 0.0625, 3.0, 0.1, 1e-7, 2.54, 1e5, 0.3, 7.0)
 UNIT_SCALES = (1.0, 10.0, 360.0, 1e4, 1e8)
@@ -295,9 +298,13 @@ def odd_inputs(e8s: ModuleType) -> list[JsonValue]:
     out += [describe(e8s.angle_diff, math.nan, 1.0), describe(e8s.angle_diff, 1e308, -1e308)]
     zero_vectors = ((0.0, 0.0), (1e-13, 0.0), (1e-11, 0.0), (math.nan, 1.0), (math.inf, 0.0))
     out += [describe(e8s.vector_facing, v) for v in zero_vectors]
-    sizes = (0, 5, 1_000_000, 1_000_001, -1, -(10**30), 10**30, *OUT_OF_RANGE_SIZES)
+    decimals = tuple(Decimal(text) for text in OUT_OF_RANGE_DECIMALS)
+    ints = (0, 5, 1_000_000, 1_000_001, -1, -(10**30), 10**30)
+    sizes: tuple[object, ...] = (*ints, *OUT_OF_RANGE_SIZES, *decimals, *NUMPY_SIZES)
     out += [describe(e8s.require_size, r, 1_000_000, what="points") for r in sizes]
     out += [describe(e8s.require_size, 5, 1, what="ids", error=e8s.SpacingError)]
+    flags = (True, False, np.True_, np.False_)
+    out += [describe(e8s.require_size, flag, 0, what="ids") for flag in flags]
     return out
 
 
