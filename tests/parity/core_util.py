@@ -30,7 +30,7 @@ import numpy as np
 from pydantic import JsonValue
 
 from tests.parity.cases import Case, Output
-from tests.parity.draws import uniform
+from tests.parity.draws import powers_of_ten, uniform
 
 SEED = 20261127
 PAIRS = 20_000
@@ -153,7 +153,7 @@ def _float_pairs(e8s: ModuleType, count: int) -> tuple[np.ndarray, np.ndarray]:
 @cache
 def _noise_floats(e8s: ModuleType, count: int) -> np.ndarray:
     rng = e8s.seeded_rng(SEED + 1)
-    spread = uniform(rng, -1e4, 1e4, size=count) / 10.0 ** rng.integers(0, 12, size=count)
+    spread = uniform(rng, -1e4, 1e4, size=count) / powers_of_ten(rng.integers(0, 12, size=count))
     dyadic = (2 * rng.integers(-(2**20), 2**20, size=count) + 1) / DYADIC_DENOMINATOR
     return np.concatenate([np.array(SPECIALS), spread, dyadic])
 
