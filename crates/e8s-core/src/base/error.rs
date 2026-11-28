@@ -18,6 +18,8 @@ pub enum ContextValue {
     Bool(bool),
     /// A JSON integer.
     Int(i64),
+    /// A JSON integer beyond 64 bits, as its decimal digits after an optional `-`.
+    Integer(String),
     /// A JSON number; the binding shows a non-finite one as text, as Python's context does.
     Float(f64),
     /// A JSON string.

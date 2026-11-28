@@ -5,6 +5,7 @@ Contains:
     _finite_probe(): returns a finite number and raises SchemaError for NaN or an infinity
     _cache_probe(): caches a converted Box2 and returns the cached value's address
     _cache_stats(): returns the probe cache's hits, misses and live entries
+    _pcg64_draws(): draws integers, floats and a sample from the seeded PCG64 generator
     format_number(): writes a float in plain decimal notation, never in exponent form
     normalize_angle(): wraps an angle into [0, 360) and rejects NaN and infinity
     angle_diff(): returns the signed shortest turn from a to b
@@ -28,6 +29,16 @@ Contains:
     require_nesting(): refuses JSON bytes nested deeper than MAX_NESTING levels
     parse_strict_json(): parses UTF-8 JSON bytes strictly
     strict_json_copy(): copies an already parsed JSON value through the strict parser
+    noise_rank(): rounds a float that decides an order so 1-ulp noise ties
+    approx_equal(): compares floats or arrays within absolute and relative tolerances
+    chunk_counts(): splits counts into equal parts that sum exactly
+    natural_key(): returns the sort key that puts T2 before T10
+    natural_sort(): sorts IDs so T2 comes before T10
+    split_id(): splits an ID into its prefix and trailing number
+    parse_range(): expands `T1-T8` into IDs
+    format_ranges(): compacts IDs into `T1-T4, T7`
+    close_matches(): suggests known names close to a misspelled one
+    neutralize_cell(): prefixes a formula-looking cell with a quote
     MAX_POINTS, MAX_TABLE, MAX_GRID_CELLS, MAX_RANGE, MAX_DEPTH, MAX_TEXT_CHARS,
         MIN_LAYOUT_HEIGHT_M, MAX_COORD_M, MAX_COUNTS, MAX_EXTENSION_BYTES, MIN_TEMPO, MAX_SPOTS,
         MAX_SETS: the resource-safety caps of e8s.core.caps
@@ -40,9 +51,15 @@ Contains:
         constants of the canonical form
     HASH_PREFIX, ASSET_PREFIX: the frozen hash header tag and the asset URI scheme
     UTF8_BOM, STRICT_HINT, SURROGATE_HINT: the strict JSON reader's refused mark and hints
+    FORMULA_TRIGGERS, FORMULA_GUARD, PLAIN_DECIMAL: the CSV formula triggers, the guard prefix
+        and the plain decimal pattern
 """
 
+import re
 from collections.abc import Iterable
+
+import numpy as np
+import numpy.typing as npt
 
 from e8s.core.errors import E8sError
 from e8s.core.json_types import JsonValue
@@ -53,6 +70,8 @@ __all__ = [
     "CONTEXT_TEXT_CHARS",
     "DEFAULT_DECIMALS",
     "DEFAULT_STEP",
+    "FORMULA_GUARD",
+    "FORMULA_TRIGGERS",
     "HASH_PREFIX",
     "ID_MAX_LENGTH",
     "ID_PATTERN_SOURCE",
@@ -74,6 +93,7 @@ __all__ = [
     "MAX_TEXT_CHARS",
     "MIN_LAYOUT_HEIGHT_M",
     "MIN_TEMPO",
+    "PLAIN_DECIMAL",
     "RESERVED_IDS",
     "SHEET_ID_PATTERN_SOURCE",
     "STRICT_HINT",
@@ -84,25 +104,35 @@ __all__ = [
     "VERSION_PATTERN_SOURCE",
     "ZERO_VECTOR_TOL",
     "angle_diff",
+    "approx_equal",
     "asset_uri",
     "canonical_value",
     "check_id",
     "check_sheet_id",
+    "chunk_counts",
+    "close_matches",
     "content_hash",
     "facing_vector",
     "find_case_clashes",
     "format_number",
+    "format_ranges",
     "format_ref",
     "format_tid",
     "is_device_name",
     "jcs",
     "json_nesting",
+    "natural_key",
+    "natural_sort",
+    "neutralize_cell",
+    "noise_rank",
     "normalize_angle",
+    "parse_range",
     "parse_ref",
     "parse_strict_json",
     "require_nesting",
     "require_size",
     "round_to",
+    "split_id",
     "split_tid",
     "strict_json_copy",
     "vector_facing",
@@ -142,10 +172,16 @@ ASSET_PREFIX: str
 UTF8_BOM: bytes
 STRICT_HINT: str
 SURROGATE_HINT: str
+FORMULA_TRIGGERS: tuple[str, ...]
+FORMULA_GUARD: str
+PLAIN_DECIMAL: re.Pattern[str]
 
 def _finite_probe(value: float) -> float: ...
 def _cache_probe(part: Box2) -> int: ...
 def _cache_stats() -> dict[str, int]: ...
+def _pcg64_draws(
+    seed: int, high: int, n: int, count: int
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64], npt.NDArray[np.int64]]: ...
 def format_number(value: float, *, max_decimals: int = 6) -> str: ...
 def normalize_angle(deg: float) -> float: ...
 def angle_diff(a: Degrees, b: Degrees) -> Degrees: ...
@@ -169,3 +205,15 @@ def json_nesting(raw: bytes) -> int: ...
 def require_nesting(raw: bytes, *, document: str) -> None: ...
 def parse_strict_json(raw: bytes, *, document: str) -> JsonValue: ...
 def strict_json_copy(value: object, *, document: str) -> JsonValue: ...
+def noise_rank(value: float) -> float: ...
+def approx_equal(
+    a: npt.ArrayLike, b: npt.ArrayLike, *, abs_tol: float = 1e-6, rel_tol: float = 0.0
+) -> bool: ...
+def chunk_counts(total: float, parts: int) -> list[float]: ...
+def natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]: ...
+def natural_sort[T: str](ids: Iterable[T]) -> list[T]: ...
+def split_id(text: str) -> tuple[str, int | None]: ...
+def parse_range(text: str) -> list[str]: ...
+def format_ranges(ids: Iterable[str]) -> str: ...
+def close_matches(name: str, candidates: Iterable[str]) -> list[str]: ...
+def neutralize_cell(cell: str) -> str: ...

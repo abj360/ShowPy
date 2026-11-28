@@ -20,7 +20,8 @@ Contains:
     reference_and_transition_corpus_timed(): the timed share of the parsers, on mostly valid text
     reference_and_transition_corpus_malformed_timed(): the timed share of the parsers' error path
     non_finite_inputs_raise_e8s_errors(): records the error class of inputs v0.4.0 mishandled
-    CASES: the core area's cases, with the canonical JSON and strict JSON cases of core_json
+    CASES: the core area's cases, with the canonical JSON and strict JSON cases of core_json and
+        the utility cases of core_util and core_text
 """
 
 import hashlib
@@ -36,6 +37,8 @@ from pydantic import JsonValue
 
 from tests.parity.cases import Case, Output
 from tests.parity.core_json import JSON_CASES
+from tests.parity.core_text import TEXT_CASES
+from tests.parity.core_util import UTIL_CASES
 
 SEED = 20261124
 MILLION = 1_000_000
@@ -54,6 +57,8 @@ TIE_MAX_SHIFT = 40
 TIE_MIN_DIGITS = 16
 TINY_STEP = 1e-300
 DIGIT_TIES = ((165.035919189453125, 2e-14), (-649435869553220.25, 0.2))
+# Float sizes v0.4.0 refused with the size error; floats in range are in core_text.
+OUT_OF_RANGE_SIZES = (math.nan, math.inf, -math.inf, 2e6, 1_000_000.5, -1.5)
 SPECIAL_FLOATS = (0.0, -0.0, 1e308, -1e308, 1.7976931348623157e308, 5e-324, -5e-324, 1e-308)
 STEPS = (0.01, 0.25, 0.5, 1.0, 5.0, 1e-3, 0.0625, 3.0, 0.1, 1e-7, 2.54, 1e5, 0.3, 7.0)
 UNIT_SCALES = (1.0, 10.0, 360.0, 1e4, 1e8)
@@ -289,7 +294,7 @@ def odd_inputs(e8s: ModuleType) -> list[JsonValue]:
     out += [describe(e8s.angle_diff, math.nan, 1.0), describe(e8s.angle_diff, 1e308, -1e308)]
     zero_vectors = ((0.0, 0.0), (1e-13, 0.0), (1e-11, 0.0), (math.nan, 1.0), (math.inf, 0.0))
     out += [describe(e8s.vector_facing, v) for v in zero_vectors]
-    sizes = (0, 5, 1_000_000, 1_000_001, -1, -(10**30), 10**30)
+    sizes = (0, 5, 1_000_000, 1_000_001, -1, -(10**30), 10**30, *OUT_OF_RANGE_SIZES)
     out += [describe(e8s.require_size, r, 1_000_000, what="points") for r in sizes]
     out += [describe(e8s.require_size, 5, 1, what="ids", error=e8s.SpacingError)]
     return out
@@ -473,4 +478,6 @@ CASES = (
         run=non_finite_inputs_raise_e8s_errors,
     ),
     *JSON_CASES,
+    *UTIL_CASES,
+    *TEXT_CASES,
 )
