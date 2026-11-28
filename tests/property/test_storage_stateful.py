@@ -32,6 +32,7 @@ from hypothesis import event, settings
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, StorageError
 from e8s.show.backend import digest
 from e8s.show.document_repository import DocumentRepository, revision_id
@@ -233,8 +234,10 @@ class StorageRules:
         """Writes one edit at the head, as one revision or as nothing when nothing differs."""
         after, at = _applied(changes, self._documents()), self._next_at()
         if not self.log and not after:
-            with pytest.raises(StorageError, match="nothing to save"):
+            with pytest.raises(StorageError) as refused:
                 self.repo.transaction(SHOW_ID, changes, expected_revision=ROOT_REVISION, at=at)
+            assert type(refused.value) is StorageError
+            assert refused.value.code == ErrorCode.STORAGE
             return
         landed = self.repo.transaction(SHOW_ID, changes, expected_revision=self._head(), at=at)
         self._record(landed, after, at)
