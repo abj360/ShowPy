@@ -5,16 +5,18 @@ test_revalidate_properties.py --- checks incremental revalidation against a full
 
 Random edits run through the library's edit functions on a seeded show: placement moves, form
 references, field flags and pin flags, non-finite counts, far-off coordinates, set counts, pins,
-added sets, path rows, stored path counts, form members and locks, a set's form list, removed
-forms, inactive spots, facing overrides, the title and the sheet, and several placements and a
-form changed by one change. Further edits reach what facing overrides and rows resolve: overrides
-selecting by `form:`, `group:`, `tag:`, `sel:` and `T*` text, overrides and rows facing toward a
-known or unknown spot, rows of unknown spots, routes, group, selection and tag edits, override
-removal, pin reorder, `remove_set`, `join_sections` after `split_section`, and forced form edits
-under pins. Besides four 6-spot, 4-set shows, two 8-spot, 5-set shows start with one text
-override of each selector kind, and form removal there prefers a form an override selects. Some
-edits create issues and others clear them, and the show before the edit may already hold issues.
-Stray references that only a v1 migration can leave are not generated.
+added sets, path rows, stored path counts, form members and locks, a set's form list, removed forms,
+inactive spots, facing overrides, the title and the sheet, and several placements and a form changed
+by one change. Further edits reach what facing overrides and rows resolve: overrides selecting by
+`form:`, `group:`, `tag:`, `sel:` and `T*` text, overrides and rows facing toward a known or unknown
+spot, rows of unknown spots, routes, group, selection and tag edits, override removal, pin reorder,
+`remove_set`, `join_sections` after `split_section`, forced form edits under pins, and added forms.
+Besides four 6-spot, 4-set shows, eight 8-spot, 5-set shows start with one text override of each
+selector kind, one naming a form the show lacks. While overrides name forms, form removal prefers a
+form one selects, form addition uses a name one looks for, and two thirds of the other form edits
+add or remove a form instead. Some edits create issues and others clear them, and the show before
+the edit may already hold issues. Stray references that only a v1 migration can leave are not
+generated.
 
 Contains:
     test_revalidate_equals_validate_show_after_random_edits: gives exactly validate_show's
@@ -48,18 +50,26 @@ from tests.fixtures.generators import seeded_show
 SEEDED_SPOTS = 6
 SEEDED_SETS = 4
 PLAIN_SEEDS = 4
-SELECTING_SEEDS = 2
+SELECTING_SEEDS = 8
 SELECTING_SPOTS = 8
 SELECTING_SETS = 5
 FORM_WORD = "form:"
-EDIT_KINDS = 32
+EDIT_KINDS = 33
 FAR_OFF_M = 5_000.0
 LATE_COUNT = 1e5
 UNKNOWN_SPOT = SpotId("Z9")
 UNKNOWN_FORM = FormId("zz")
 PIN_TARGETS: tuple[PinTarget, ...] = ("entity", "set", "form", "transition")
 COUNTS = (0.0, 2.0, 8.0, 12.0)
-SELECTORS = ("form:{form}", "group:{group}", "tag:{tag}", "sel:{selection}", "{prefix}*")
+SELECTORS = (
+    "form:{form}",
+    "group:{group}",
+    "tag:{tag}",
+    "sel:{selection}",
+    "{prefix}*",
+    "form:{form}{added}",
+)
+ADDED_FORM_SUFFIX = "x"
 EXTRA_GROUP = Group(key="flags", label_prefix="F")
 TAGS = ("solo", "front")
 SELECTION = "pick"
@@ -90,15 +100,27 @@ def _base(seed: int) -> Show:
     return show
 
 
-def _selected_forms(show: Show) -> list[FormId]:
+def _form_words(show: Show) -> set[str]:
     words = (
         word
         for override in show.facing_overrides
         if isinstance(override.entities, str)
         for word in override.entities.split()
     )
-    named = {word.removeprefix(FORM_WORD) for word in words if word.startswith(FORM_WORD)}
-    return sorted(FormId(name) for name in named if name in show.forms)
+    return {word.removeprefix(FORM_WORD) for word in words if word.startswith(FORM_WORD)}
+
+
+def _selected_forms(show: Show) -> list[FormId]:
+    return sorted(FormId(name) for name in _form_words(show) if name in show.forms)
+
+
+def _added_form(show: Show, pick: int) -> Show:
+    if not show.forms:
+        return show
+    source = show.forms[_form_id(show, pick)]
+    wanted = sorted(name for name in _form_words(show) if name not in show.forms)
+    added = FormId(wanted[pick % len(wanted)] if wanted else f"{source.id}{ADDED_FORM_SUFFIX}")
+    return show._copied(update={"forms": {**show.forms, added: source.replace(id=added)}})
 
 
 def _replaced_set(show: Show, position: int, spot: str, patch: PlacementPatch) -> Show:
@@ -179,6 +201,10 @@ def _paths(show: Show, kind: int, pick: int, value: float) -> Show:
 def _forms(show: Show, kind: int, pick: int) -> Show:
     if not show.forms:
         return show
+    if kind == 15:
+        return _removed_form(show, pick)
+    if _form_words(show) and pick % 3:
+        return _added_form(show, pick) if pick % 2 else _removed_form(show, pick)
     form = show.forms[_form_id(show, pick)]
     if kind == 12:
         members = form.members[1:] if pick % 2 else (*form.members, UNKNOWN_SPOT)
@@ -191,8 +217,12 @@ def _forms(show: Show, kind: int, pick: int) -> Show:
         owner = show.set(form.set)
         sets = tuple(owner.replace(forms=()) if s is owner else s for s in show.sets)
         return show.replace(sets=sets)
+    return show
+
+
+def _removed_form(show: Show, pick: int) -> Show:
     selected = _selected_forms(show)
-    removed = selected[pick % len(selected)] if selected and pick % 2 else form.id
+    removed = selected[pick % len(selected)] if selected else _form_id(show, pick)
     return show.replace(forms={k: f for k, f in show.forms.items() if k != removed})
 
 
@@ -250,6 +280,7 @@ def _selector(show: Show, pick: int) -> str:
         tag=TAGS[pick // len(SELECTORS) % len(TAGS)],
         selection=SELECTION,
         prefix=show.cast.ids()[pick % len(show.cast.ids())][0],
+        added=ADDED_FORM_SUFFIX,
     )
 
 
@@ -381,6 +412,7 @@ def _resolved(show: Show, kind: int, pick: int, value: float) -> Show:
         27: lambda: _tags(show, pick),
         28: lambda: _reorder_pins(show, pick),
         31: lambda: _forced_form(show, pick),
+        32: lambda: _added_form(show, pick),
     }
     return edits[kind]() if kind in edits else _sections(show, kind, pick)
 
@@ -422,7 +454,8 @@ def _applied(show: Show, steps_taken: list[Step]) -> Show:
 # each: an override selecting a removed form; `tag:`, `sel:`, `group:` and `T*` overrides
 # under tag, selection, group and pin edits; overrides facing a known and an unknown spot;
 # override removal; rows of an unknown spot or facing one; routes; pin reorder; `remove_set`;
-# `join_sections` skipping a set; a forced edit of a pinned form.
+# `join_sections` skipping a set; a forced edit of a pinned form; a form added under the name
+# an override's `form:` word looks for.
 @example(seed=0, earlier=[], later=[(0, 7, 3.0)])
 @example(seed=3, earlier=[(11, 33, 7.5), (1, 21, 3.0)], later=[(17, 11, 3.0), (15, 21, 0.0)])
 @example(seed=2, earlier=[(15, 39, 7.5)], later=[(15, 58, 1.0)])
@@ -440,7 +473,7 @@ def _applied(show: Show, steps_taken: list[Step]) -> Show:
 @example(seed=0, earlier=[(20, 0, 0.0)], later=[(15, 0, 0.0)])
 @example(seed=0, earlier=[(20, 2, 0.0)], later=[(27, 0, 0.0)])
 @example(seed=1, earlier=[(20, 3, 0.0)], later=[(26, 1, 0.0)])
-@example(seed=2, earlier=[(25, 0, 0.0), (20, 6, 0.0)], later=[(25, 2, 0.0)])
+@example(seed=2, earlier=[(25, 0, 0.0), (20, 7, 0.0)], later=[(25, 2, 0.0)])
 @example(seed=3, earlier=[(20, 4, 0.0)], later=[(28, 0, 0.0)])
 @example(seed=0, earlier=[], later=[(21, 1, 3.0), (21, 0, 2.0)])
 @example(seed=1, earlier=[(21, 0, 3.0)], later=[(22, 0, 0.0)])
@@ -450,6 +483,7 @@ def _applied(show: Show, steps_taken: list[Step]) -> Show:
 @example(seed=1, earlier=[], later=[(29, 0, 0.0)])
 @example(seed=2, earlier=[], later=[(30, 1, 0.0)])
 @example(seed=0, earlier=[(6, 2, 0.0)], later=[(31, 1, 0.0)])
+@example(seed=4, earlier=[], later=[(32, 0, 0.0)])
 @given(seed=seeds, earlier=earlier_edits, later=edits)
 def test_revalidate_equals_validate_show_after_random_edits(
     seed: int, earlier: list[Step], later: list[Step]
