@@ -30,3 +30,5 @@ fuzz/corpus/
 mutants.out*/
 .mutmut/
 mutants-summary.json
+fuzz-corpus/
+fuzz-crashes/

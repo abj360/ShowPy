@@ -16,7 +16,10 @@ Contains:
     test_docker_image_holds_every_path_the_nightly_core_tests_read: the same for the fuzz crate
         and the nightly core workflow that tests/unit/tooling/test_nightly_core.py reads
     test_docker_image_holds_every_path_the_nightly_failure_tests_read: the same for the nightly,
-        nightly core and nightly report workflows that test_nightly_failures.py reads
+        nightly core, nightly storage and nightly report workflows that test_nightly_failures.py
+        reads
+    test_docker_image_holds_every_path_the_storage_fuzz_tests_read: the same for the storage fuzz
+        workflow and runner that tests/unit/tooling/test_fuzz_storage.py reads
     test_regression_missing_dockerfile_fails_in_a_source_checkout: a moved or renamed Dockerfile
         fails the check instead of skipping it
     test_docker_path_check_flags_a_missing_and_an_ignored_path: proves the check can fail
@@ -45,9 +48,11 @@ DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_noxfile.py"
 NIGHTLY_CORE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly_core.py"
 NIGHTLY_FAILURE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_nightly_failures.py"
+STORAGE_FUZZ_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_fuzz_storage.py"
 NIGHTLY_WORKFLOWS = {
     ".github/workflows/nightly.yml",
     ".github/workflows/nightly-core.yml",
+    ".github/workflows/nightly-storage.yml",
     ".github/workflows/report-nightly.yml",
 }
 RUNTIME_STAGE = "runtime"
@@ -232,6 +237,11 @@ def test_docker_image_holds_every_path_the_nightly_failure_tests_read() -> None:
     read = read_paths(NIGHTLY_FAILURE_TESTS.read_text(encoding="utf-8"))
     assert set(read) == NIGHTLY_WORKFLOWS
     missing = missing_image_paths(DOCKERFILE, DOCKERIGNORE, NIGHTLY_FAILURE_TESTS)
+    assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
+
+
+def test_docker_image_holds_every_path_the_storage_fuzz_tests_read() -> None:
+    missing = missing_image_paths(DOCKERFILE, DOCKERIGNORE, STORAGE_FUZZ_TESTS)
     assert missing == [], f"E: docker/Dockerfile does not copy {missing}"
 
 

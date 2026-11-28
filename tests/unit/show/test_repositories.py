@@ -439,7 +439,8 @@ def _stored_hyphenated_show() -> tuple[InMemoryRepository, Revision]:
     seed = _create(repo, "seed")
     tree = dict(repo.backend.tree("seed", seed))
     revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(tree)))
-    repo.backend.commit(STORED_HYPHENATED_ID, revision, tree, {})
+    blobs = {digest: repo.backend.blob("seed", digest) for digest in tree.values()}
+    repo.backend.commit(STORED_HYPHENATED_ID, revision, tree, blobs)
     return repo, revision
 
 
