@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 libm.workspace = true
+sha2.workspace = true

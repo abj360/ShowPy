@@ -20,6 +20,9 @@ Contains:
 
 from collections.abc import Callable
 
+from e8s import asset_uri, canonical_value, content_hash, jcs
+from e8s._core import core
+from e8s.core import strict_json
 from tests.parity.run import AreaRun
 
 PREFIX = "core."
@@ -57,6 +60,7 @@ def test_reference_and_transition_parsing_match_v040_on_the_fuzz_corpus(
 def test_content_hash_matches_v040_on_every_stored_fixture(
     parity_area: Callable[[str], AreaRun],
 ) -> None:
+    assert (content_hash, asset_uri) == (core.content_hash, core.asset_uri)
     run = parity_area("core")
     _passed(run, "content_hash_on_stored_fixtures")
     _passed(run, "content_hash_on_a_300_by_60_show")
@@ -65,11 +69,14 @@ def test_content_hash_matches_v040_on_every_stored_fixture(
 def test_canonical_bytes_match_v040_on_generated_json(
     parity_area: Callable[[str], AreaRun],
 ) -> None:
+    assert (canonical_value, jcs) == (core.canonical_value, core.jcs)
     run = parity_area("core")
     _passed(run, "canonical_bytes_on_generated_json")
 
 
 def test_strict_json_refuses_what_v040_refuses(parity_area: Callable[[str], AreaRun]) -> None:
+    assert strict_json.parse_strict_json is core.parse_strict_json
+    assert strict_json.strict_json_copy is core.strict_json_copy
     run = parity_area("core")
     _passed(run, "strict_json_on_hostile_text")
     _passed(run, "strict_json_on_a_300_by_60_show")

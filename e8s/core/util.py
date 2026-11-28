@@ -21,7 +21,6 @@ Contains:
 """
 
 import difflib
-import hashlib
 import itertools
 import logging
 import math
@@ -35,10 +34,13 @@ import numpy as np
 import numpy.typing as npt
 import shapely
 
-from e8s.core.canonical import canonical_value, jcs
+from e8s._core.core import ASSET_PREFIX as ASSET_PREFIX
+from e8s._core.core import HASH_PREFIX as HASH_PREFIX
+from e8s._core.core import asset_uri as asset_uri
+from e8s._core.core import content_hash as content_hash
 from e8s.core.caps import MAX_POINTS, MAX_RANGE, require_size
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import MAX_ECHOED_INPUT_CHARS, GeometryError, SchemaError
+from e8s.core.errors import GeometryError, SchemaError
 from e8s.core.ids import ID_MAX_LENGTH
 from e8s.core.types import Points
 
@@ -48,10 +50,6 @@ RANGE_PATTERN = re.compile(r"^(?=.*[0-9]$).*[0-9]-")
 RANGE_DASH = "-"
 MISMATCHED_RANGE_PATTERN = re.compile(r"^[A-Za-z_]+[0-9]+-[A-Za-z_]+[0-9]+$")
 LOGGER = logging.getLogger("e8s")
-HASH_PREFIX = "showpy-hash/1"
-# The domain is one line of the hash header, so it may not hold a newline or forge a kind line.
-HASH_DOMAIN_PATTERN = re.compile(r"[a-z0-9_.]+")
-ASSET_PREFIX = "asset:sha256:"
 CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
 DEFAULT_ABS_TOL = 1e-6
@@ -354,41 +352,6 @@ def _geometry_points(geometry: shapely.geometry.base.BaseGeometry) -> Points:
     return np.ascontiguousarray(shapely.get_coordinates(geometry), dtype=np.float64)
 
 
-def content_hash(obj: object, *, domain: str = "showpy.content") -> str:
-    """Hashes a value as SHA-256 over domain-tagged canonical JSON.
-
-    Bytes and text hash as themselves under their own kind tag, so the string `'{"a":1}'` and
-    the object `{"a": 1}` never collide. Everything else hashes as RFC 8785 JSON.
-
-    Args:
-        obj: Bytes, text or any value `canonical_value` accepts.
-        domain: Name of what the hash identifies, so equal content in two domains differs;
-            only lowercase ASCII letters, digits, `_` and `.`.
-
-    Returns:
-        digest: 64 lowercase hex characters.
-
-    >>> content_hash({"a": 1}) == content_hash({"a": 1.0})
-    True
-    >>> content_hash({"a": 1}) == content_hash({"a": 1}, domain="showpy.revision")
-    False
-    """
-    if HASH_DOMAIN_PATTERN.fullmatch(domain) is None:
-        raise SchemaError(
-            f"hash domain {domain[:MAX_ECHOED_INPUT_CHARS]!r} is not allowed",
-            hint="use lowercase ASCII letters, digits, _ and . only, as in showpy.revision",
-            context={"domain": domain[:MAX_ECHOED_INPUT_CHARS]},
-        )
-    if isinstance(obj, bytes):
-        kind, payload = "bytes", obj
-    elif isinstance(obj, str):
-        kind, payload = "str", str(canonical_value(obj)).encode()
-    else:
-        kind, payload = "json", jcs(obj)
-    head = f"{HASH_PREFIX}\n{domain}\n{kind}\n".encode()
-    return hashlib.sha256(head + payload).hexdigest()
-
-
 def chunk_counts(total: float, parts: int) -> list[float]:
     """Splits counts into equal parts that sum to `total`, each cut at an exact boundary.
 
@@ -411,22 +374,6 @@ def chunk_counts(total: float, parts: int) -> list[float]:
     require_size(parts, MAX_POINTS, what="chunks")
     bounds = [0.0, *(total / parts * index for index in range(1, parts)), total]
     return [stop - start for start, stop in itertools.pairwise(bounds)]
-
-
-def asset_uri(data: bytes) -> str:
-    """Names bytes by the `asset:sha256:<hex>` URI an asset store returns for them.
-
-    Args:
-        data: Exact bytes of the asset.
-
-    Returns:
-        uri: `asset:sha256:` followed by the SHA-256 hex digest of `data`.
-
-    Examples:
-        >>> asset_uri(b"")
-        'asset:sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
-    """
-    return f"{ASSET_PREFIX}{hashlib.sha256(data).hexdigest()}"
 
 
 def close_matches(name: str, candidates: Iterable[str]) -> list[str]:
