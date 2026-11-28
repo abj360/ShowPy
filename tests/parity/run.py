@@ -66,7 +66,7 @@ SPEED_LAUNCHES = 5
 # each platform's C math library (2026-11-24, controller ruling on PR #92: Windows and Linux
 # differed on time.clock_on_200_seeded_timelines/val:seconds and val:counts_back), so their
 # cross-cell differences are reported, not gated. A lane adds its area when its port lands.
-PORTED_AREAS: frozenset[str] = frozenset()
+PORTED_AREAS: frozenset[str] = frozenset({"core"})
 EVERY_AREA_SUFFIX = ".all"
 ORACLE_SIDE = "oracle"
 CORE_SIDE = "core"
@@ -88,11 +88,13 @@ class AreaRun:
         reports: Qualified case name to its parity report.
         speed: The timed cases' minima on both sides.
         core: Qualified case name to the working tree's outputs.
+        oracle: Qualified case name to the v0.4.0 oracle's outputs.
     """
 
     reports: Mapping[str, ParityReport]
     speed: SpeedReport
     core: Mapping[str, Mapping[str, Output]]
+    oracle: Mapping[str, Mapping[str, Output]]
 
 
 def runner_command(python: Path, area: str, out: Path, e8s_from: Path) -> list[str]:
@@ -248,7 +250,7 @@ def run_area(
         intended: The intended cases by qualified name.
 
     Returns:
-        run: Each case's report, the speed report and the core outputs.
+        run: Each case's report, the speed report, and the core and oracle outputs.
     """
     oracle_e8s, core_python = oracle_python.parents[1], Path(sys.executable)
     require_distinct_sides(oracle_python, oracle_e8s, core_python, CORE_E8S)
@@ -271,7 +273,8 @@ def run_area(
     }
     speed = compare_speed(oracle_timings, core_timings)
     named_core = {case.qualified_name: core[case.name] for case in cases}
-    return AreaRun(reports=reports, speed=speed, core=named_core)
+    named_oracle = {case.qualified_name: oracle[case.name] for case in cases}
+    return AreaRun(reports=reports, speed=speed, core=named_core, oracle=named_oracle)
 
 
 def write_digests(

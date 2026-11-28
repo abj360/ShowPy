@@ -108,6 +108,8 @@ NIGHTLY_CONCURRENCY = (
 CACHE_SAVE_STEP = "uses: actions/cache/save@"
 FUZZ_STEP = "run: uv run --locked nox -s rustfuzz -- --seconds 600"
 MUTANTS_STEP = "run: uv run --locked nox -s mutants"
+FREE_FUZZ_BUILDS = "rm -rf fuzz/target"
+RESOURCE_REPORTS = ("df -h /", "free -m")
 NOT_CANCELLED = "${{ !cancelled() }}"
 UPLOAD_STEP = "uses: actions/upload-artifact@"
 CRASH_INPUTS = "fuzz/artifacts/"
@@ -324,6 +326,16 @@ def test_nightly_core_runs_fuzz_and_mutants() -> None:
     assert all(step_value(step, "if") == NOT_CANCELLED for step in uploads)
     assert step_value(uploads[0], "path", WITH_INDENT) == CRASH_INPUTS
     assert SUMMARY_FILE in uploads[1]
+
+
+def test_regression_nightly_core_frees_the_fuzz_builds_before_mutants() -> None:
+    """The runner was shut down mid-mutants twice on 2026-11-28; report resources, free space."""
+    steps = job_steps(ci_job(_nightly(), NIGHTLY_JOB))
+    fuzz = next(index for index, step in enumerate(steps) if FUZZ_STEP in step)
+    scores = next(index for index, step in enumerate(steps) if MUTANTS_STEP in step)
+    between = "".join(steps[fuzz + 1 : scores])
+    assert FREE_FUZZ_BUILDS in between
+    assert all(report in between for report in RESOURCE_REPORTS)
 
 
 def test_nightly_core_keeps_the_workflow_conventions() -> None:

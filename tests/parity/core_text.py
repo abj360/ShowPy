@@ -8,17 +8,19 @@ Contains:
     close_matches_on_seeded_names(): close_matches on misspelled names, long names and unicode
     close_matches_timed(): the timed share of close_matches
     csv_cells_on_seeded_text(): neutralize_cell on formula-like and plain cells, timed
+    ComparesOnly: a size type that only defines comparisons, as v0.4.0's size check took any
     util_inputs_v040_mishandled(): records the answers that changed on purpose: lone surrogates
-        in error text, totals and part counts of other number types, non-text names and float
-        sizes in range
+        in error text, totals and part counts of other number types, non-text names, and sizes
+        in range that are not ints, Decimal NaNs, long doubles and arrays of other than one item
     TEXT_CASES: the cases above
 """
 
 import hashlib
 import importlib
 from collections.abc import Callable, Mapping
+from decimal import Decimal
 from fractions import Fraction
-from functools import cache
+from functools import cache, total_ordering
 from types import ModuleType
 
 import numpy as np
@@ -32,7 +34,12 @@ TIMED_NAMES = 300
 CANDIDATES = 60
 LONG_NAME = 230
 CAP = 1_000_000
-IN_RANGE_SIZES = (3.0, 3.5, -0.0, 1e6)
+IN_RANGE_SIZES = (3.0, 3.5, -0.0, 1e6, np.float64(3.0))
+CHANGED_DECIMAL_SIZES = ("3", "3.5", "-0", "1000000", "NaN", "sNaN")
+# v0.4.0 accepted the first and hit the recursion limit bounding the others' context.
+LONG_DOUBLE_SIZES = (np.longdouble(3), np.longdouble(-1), np.longdouble(1_000_001))
+# A cap float16 holds: a larger one overflows in numpy's comparison, as in v0.4.0.
+HALF_FLOAT_CAP = 1_000
 CELL_COUNT = 20_000
 CELL_ALPHABET = list("=+-@\t\r0123456789.eE xy\u0663\u2212")
 HOSTILE_CELLS = (
@@ -156,14 +163,51 @@ def _answer(function: Callable[..., object], *args: object) -> JsonValue:
     return {"types": [type(item).__name__ for item in items], "values": ascii(items)}
 
 
+@total_ordering
+class ComparesOnly:
+    """Stands for a size type that only defines comparisons, as v0.4.0's size check took any.
+
+    Attributes:
+        value: The number it compares as.
+    """
+
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, int | float) and self.value == other
+
+    def __lt__(self, other: float) -> bool:
+        return self.value < other
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __repr__(self) -> str:
+        return f"ComparesOnly({self.value})"
+
+
+def _changed_sizes() -> tuple[object, ...]:
+    """Lists the sizes, other than floats and Decimals, whose answer changed on purpose."""
+    arrays = (np.array(3.0), np.array([3]), np.array(np.True_), np.array([3, 4]), np.array([]))
+    complexes = (np.complex128(3), np.complex64(3), np.complex128(3 + 1j), np.clongdouble(3))
+    return (Fraction(3), Fraction(7, 2), *arrays, ComparesOnly(3), *complexes)
+
+
 def util_inputs_v040_mishandled(e8s: ModuleType) -> Mapping[str, Output]:
     """Records the answers that changed on purpose against v0.4.0.
 
     A lone surrogate in an ID shows as U+FFFD in error text, as in the ID checks. A total that
     is neither a float nor an int splits as a float, and the parts are floats. A part count
     that is neither an int nor a float is refused with TypeError before the total is read.
-    close_matches takes text only. require_size refuses a float in range with its own error
-    class, asking for a whole-number int, where v0.4.0 let it through without truncating it.
+    close_matches takes text only. require_size refuses a float or a Decimal in range with its
+    own error class, asking for a whole-number int, where v0.4.0 let it through without
+    truncating it, and refuses a Decimal NaN as over the cap, where v0.4.0 raised
+    decimal.InvalidOperation. A long double size is refused like a float, where v0.4.0 accepted
+    one in range and hit the recursion limit on the others. A Fraction, a half float, a numpy
+    complex, a one-item array or an object that only compares is refused in range as a float is,
+    where v0.4.0 let it through; an array of other than one item is refused the same way, where
+    v0.4.0 raised numpy's ValueError, or UFuncTypeError or TypeError for a non-numeric one.
 
     Args:
         e8s: The e8s module under test.
@@ -187,8 +231,14 @@ def util_inputs_v040_mishandled(e8s: ModuleType) -> Mapping[str, Output]:
         ],
         "require_size": [
             _answer(lambda size: e8s.require_size(size, CAP, what="points"), size)
-            for size in IN_RANGE_SIZES
-        ],
+            for size in (
+                *IN_RANGE_SIZES,
+                *(Decimal(text) for text in CHANGED_DECIMAL_SIZES),
+                *LONG_DOUBLE_SIZES,
+                *_changed_sizes(),
+            )
+        ]
+        + [_answer(lambda: e8s.require_size(np.float16(3), HALF_FLOAT_CAP, what="points"))],
         "close_matches": [
             _answer(e8s.close_matches, ("T", "1"), [("T", "1")]),
             _answer(e8s.close_matches, "T1", [("T", "1")]),

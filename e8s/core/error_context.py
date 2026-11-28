@@ -53,9 +53,10 @@ def bounded_context(context: Mapping[str, object]) -> dict[str, JsonValue]:
     name and bounded JSON text, so no hash seed changes the result. A set of over 1,000 items
     that is not ordered by value is not ranked: it becomes its type name and length and a
     `"(not shown: n unorderable items)"` marker. Numpy values become plain numbers or lists,
-    mapping keys become text, non-finite floats become text, and anything else, or anything
-    nested deeper than 8 levels, becomes its bounded repr, or its type name when the repr
-    raises. Bounding a bounded context changes nothing.
+    except a numpy scalar no Python number holds, such as a long double, which becomes its
+    bounded repr; mapping keys become text, non-finite floats become text, and anything else,
+    or anything nested deeper than 8 levels, becomes its bounded repr, or its type name when
+    the repr raises. Bounding a bounded context changes nothing.
 
     Cost is linear in the kept items, except for sets, whose iteration order can change with
     the hash seed: a set's item types are scanned once in full, and a set of at most 1,000
@@ -78,7 +79,9 @@ def _bounded_value(value: object, depth: int) -> JsonValue:
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, np.generic):
-        return _bounded_value(value.item(), depth)
+        plain = value.item()
+        # A long double's item() is a long double again: no Python type holds it without loss.
+        return _safe_repr(value) if isinstance(plain, np.generic) else _bounded_value(plain, depth)
     if isinstance(value, int):
         return value if abs(value) < ECHO_INT_LIMIT else bounded_repr(value)
     if isinstance(value, float):
@@ -130,7 +133,8 @@ def _is_capped_mapping[K](mapping: Mapping[K, object]) -> bool:
 def _bounded_array(array: np.ndarray, depth: int) -> JsonValue:
     """Converts only the first 20 rows of an array, counting the rest."""
     if array.ndim == 0:
-        return _bounded_value(array.item(), depth)
+        # An unwrap counts as a level: a 0-d object array can hold itself.
+        return _bounded_value(array.item(), depth + 1)
     kept: list[object] = array[:MAX_CONTEXT_ITEMS].tolist()
     return _listed(kept, len(array) - len(kept), depth)
 

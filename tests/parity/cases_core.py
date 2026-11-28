@@ -28,6 +28,7 @@ import hashlib
 import math
 from collections.abc import Callable, Mapping
 from decimal import Decimal
+from fractions import Fraction
 from functools import cache
 from types import ModuleType
 from typing import cast
@@ -37,8 +38,9 @@ from pydantic import JsonValue
 
 from tests.parity.cases import Case, Output
 from tests.parity.core_json import JSON_CASES
-from tests.parity.core_text import TEXT_CASES
+from tests.parity.core_text import TEXT_CASES, ComparesOnly
 from tests.parity.core_util import UTIL_CASES
+from tests.parity.draws import power_of_ten, powers_of_ten, uniform
 
 SEED = 20261124
 MILLION = 1_000_000
@@ -56,9 +58,15 @@ TIE_MAX_BITS = 54
 TIE_MAX_SHIFT = 40
 TIE_MIN_DIGITS = 16
 TINY_STEP = 1e-300
+# Powers of ten whose seeded multiples in [1, 10) reach from the subnormals to 1e-290.
+TINY_EXPONENTS = (-323, -290)
 DIGIT_TIES = ((165.035919189453125, 2e-14), (-649435869553220.25, 0.2))
-# Float sizes v0.4.0 refused with the size error; floats in range are in core_text.
+# Sizes v0.4.0 answered as the core does: values it refused with the size error, numpy ints and
+# bools it took, text it refused with TypeError. Sizes whose answer changed are in core_text.
 OUT_OF_RANGE_SIZES = (math.nan, math.inf, -math.inf, 2e6, 1_000_000.5, -1.5)
+OUT_OF_RANGE_DECIMALS = ("-1", "-0.5", "-Infinity", "1000001", "1000000.5", "Infinity", "1E+1000")
+NUMPY_SIZES = (np.True_, np.False_, np.int64(3), np.int64(-1), np.int64(1_000_001), np.uint8(3))
+OUT_OF_RANGE_ARRAYS = (np.array(1e7), np.array([-1.5]), np.array(-1), np.array(3))
 SPECIAL_FLOATS = (0.0, -0.0, 1e308, -1e308, 1.7976931348623157e308, 5e-324, -5e-324, 1e-308)
 STEPS = (0.01, 0.25, 0.5, 1.0, 5.0, 1e-3, 0.0625, 3.0, 0.1, 1e-7, 2.54, 1e5, 0.3, 7.0)
 UNIT_SCALES = (1.0, 10.0, 360.0, 1e4, 1e8)
@@ -132,14 +140,16 @@ def plain_decimal_floats(e8s: ModuleType, count: int) -> np.ndarray:
     rng = e8s.seeded_rng(SEED)
     share = count // 10
     bits = rng.integers(0, 2**64, size=share * 3, dtype=np.uint64).view(np.float64)
-    uniform = rng.uniform(-1e6, 1e6, size=share * 3)
+    spread = uniform(rng, -1e6, 1e6, size=share * 3)
     places = rng.integers(0, 9, size=share)
-    short = np.round(rng.uniform(-1e4, 1e4, size=share), 3) / 10.0**places
+    short = np.round(uniform(rng, -1e4, 1e4, size=share), 3) / powers_of_ten(places)
     ties = (rng.integers(-(2**20), 2**20, size=share) + 0.5) / 2.0 ** rng.integers(
         0, 12, size=share
     )
-    tiny = 10.0 ** rng.uniform(-324.0, -290.0, size=share)
-    pool = np.concatenate([bits, uniform, short, ties, tiny])
+    tiny = uniform(rng, 1.0, 10.0, size=share) * powers_of_ten(
+        rng.integers(*TINY_EXPONENTS, size=share)
+    )
+    pool = np.concatenate([bits, spread, short, ties, tiny])
     shuffled = rng.permutation(pool[np.isfinite(pool)])
     return np.concatenate([np.array(SPECIAL_FLOATS), shuffled])
 
@@ -172,7 +182,7 @@ def plain_decimal_text_on_a_million_floats(e8s: ModuleType) -> Mapping[str, Outp
 
 @cache
 def _timed_floats(e8s: ModuleType) -> list[float]:
-    meters = e8s.seeded_rng(SEED + 6).uniform(-500.0, 500.0, size=TIMED_FLOATS)
+    meters = uniform(e8s.seeded_rng(SEED + 6), -500.0, 500.0, size=TIMED_FLOATS)
     half = TIMED_FLOATS // 2
     return [float(value) for value in meters[:half]] + [
         float(np.round(value, 3)) for value in meters[half:]
@@ -197,7 +207,7 @@ def _seeded_angles(e8s: ModuleType, count: int) -> np.ndarray:
     rng = e8s.seeded_rng(SEED + 2)
     scale = rng.choice(UNIT_SCALES, size=count)
     return np.concatenate(
-        [rng.uniform(-1.0, 1.0, size=count) * scale, np.array([0.0, -0.0, 360.0])]
+        [uniform(rng, -1.0, 1.0, size=count) * scale, np.array([0.0, -0.0, 360.0])]
     )
 
 
@@ -218,9 +228,9 @@ def unit_conversions_on_seeded_values(e8s: ModuleType) -> Mapping[str, Output]:
     angles = _seeded_angles(e8s, TIMED_VALUES)
     others = np.roll(angles, 7)
     rng = e8s.seeded_rng(SEED + 3)
-    values = rng.uniform(-1e4, 1e4, size=TIMED_VALUES) * rng.choice(UNIT_SCALES, size=TIMED_VALUES)
+    values = uniform(rng, -1e4, 1e4, size=TIMED_VALUES) * rng.choice(UNIT_SCALES, size=TIMED_VALUES)
     steps = rng.choice(np.array(STEPS), size=TIMED_VALUES)
-    vectors = rng.uniform(-3.0, 3.0, size=(TIMED_VALUES, 2))
+    vectors = uniform(rng, -3.0, 3.0, size=(TIMED_VALUES, 2))
     return {
         "normalized": np.array([e8s.normalize_angle(float(a)) for a in angles]),
         "diff": np.array(
@@ -263,8 +273,8 @@ def _digit_ties(e8s: ModuleType) -> list[tuple[float, float]]:
         shown = _significant(repr(value))
         if len(shown) < TIE_MIN_DIGITS or len(exact) != len(shown) + 1 or exact[-1] != "5":
             continue
-        place = math.floor(math.log10(value)) - len(shown) + 1
-        for step in (10.0**place, 2.0 * 10.0**place, 10.0 ** (place + 1)):
+        place = Decimal(value).adjusted() - len(shown) + 1
+        for step in (power_of_ten(place), 2.0 * power_of_ten(place), power_of_ten(place + 1)):
             ties += [(value, step), (-value, step)]
     return ties
 
@@ -294,9 +304,16 @@ def odd_inputs(e8s: ModuleType) -> list[JsonValue]:
     out += [describe(e8s.angle_diff, math.nan, 1.0), describe(e8s.angle_diff, 1e308, -1e308)]
     zero_vectors = ((0.0, 0.0), (1e-13, 0.0), (1e-11, 0.0), (math.nan, 1.0), (math.inf, 0.0))
     out += [describe(e8s.vector_facing, v) for v in zero_vectors]
-    sizes = (0, 5, 1_000_000, 1_000_001, -1, -(10**30), 10**30, *OUT_OF_RANGE_SIZES)
+    decimals = tuple(Decimal(text) for text in OUT_OF_RANGE_DECIMALS)
+    ints = (0, 5, 1_000_000, 1_000_001, -1, -(10**30), 10**30)
+    complexes = (np.complex128(-1 + 1j), np.complex128(10**7), np.complex128(complex("nan")), 3j)
+    others = (Fraction(-1), Fraction(10**7), ComparesOnly(-1), ComparesOnly(1_000_001), *complexes)
+    sizes: tuple[object, ...] = (*ints, *OUT_OF_RANGE_SIZES, *decimals, *NUMPY_SIZES)
+    sizes += (*OUT_OF_RANGE_ARRAYS, *others, "3", None)
     out += [describe(e8s.require_size, r, 1_000_000, what="points") for r in sizes]
     out += [describe(e8s.require_size, 5, 1, what="ids", error=e8s.SpacingError)]
+    flags = (True, False, np.True_, np.False_)
+    out += [describe(e8s.require_size, flag, 0, what="ids") for flag in flags]
     return out
 
 
