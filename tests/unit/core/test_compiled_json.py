@@ -18,15 +18,19 @@ Contains:
     test_asset_uri_hashes_any_buffer_as_hashlib_does: names bytearray and memoryview bytes
     test_regression_jcs_breaks_a_digit_tie_to_even_as_python_repr_does: writes the nearer of two
         shortest digit strings, and the even one when both are equally near
+    test_regression_canonical_value_refuses_endless_unwrapping: refuses a model whose dump is
+        itself and an array whose tolist is itself as nesting
 """
 
 import hashlib
 import json
 import sys
 from collections.abc import Iterator, Mapping
-from typing import cast
+from typing import Any, cast
 
+import numpy as np
 import pytest
+from pydantic import BaseModel
 
 from e8s._core.core import (
     asset_uri,
@@ -173,3 +177,26 @@ def test_regression_jcs_breaks_a_digit_tie_to_even_as_python_repr_does(
 ) -> None:
     assert repr(value).encode() == expected
     assert jcs(value) == expected
+
+
+class EndlessModel(BaseModel):
+    """Dumps to itself, so unwrapping it never reaches plain values."""
+
+    def model_dump(self, **_options: object) -> dict[str, object]:
+        return cast("dict[str, object]", self)
+
+
+class EndlessArray(np.ndarray):
+    """Lists to itself, so unwrapping it never reaches plain values."""
+
+    # Any: numpy declares tolist as returning Any, and an override must match it.
+    def tolist(self) -> Any:
+        return self
+
+
+@pytest.mark.parametrize("value", [EndlessModel(), np.zeros(2).view(EndlessArray)])
+def test_regression_canonical_value_refuses_endless_unwrapping(value: object) -> None:
+    with pytest.raises(SchemaError) as caught:
+        canonical_value(value)
+
+    assert caught.value.context["max_nesting"] == canonical.MAX_NESTING

@@ -99,14 +99,8 @@ impl<'py> Walker<'py> {
 
     /// Normalizes a value that is no exact builtin container, in canonical_value's order.
     fn other(&self, obj: &Bound<'py, PyAny>, depth: usize) -> PyResult<Json> {
-        if obj.is_instance(&self.base_model)? {
-            return self.walk(&self.dumped(obj)?, depth);
-        }
-        if obj.is_instance(&self.ndarray)? {
-            return self.walk(&obj.call_method0(intern!(self.py, "tolist"))?, depth);
-        }
-        if obj.is_instance(&self.numpy_generic)? {
-            return self.walk(&obj.call_method0(intern!(self.py, "item"))?, depth);
+        if let Some(plain) = self.unwrapped(obj)? {
+            return self.walk(&plain, depth);
         }
         if obj.is_instance(&self.mapping)? {
             let items = obj
@@ -131,6 +125,35 @@ impl<'py> Walker<'py> {
             &kind.name()?.to_string_lossy(),
             &kind.qualname()?.to_string_lossy(),
         )))
+    }
+
+    /// Dumps a model and turns a numpy value into plain Python values, again while the result
+    /// is one of them; `None` when `obj` is neither.
+    ///
+    /// An unwrap keeps the nesting depth, so a model whose dump returns a model, or an array
+    /// whose `tolist` returns an array, counts its unwraps instead: more than MAX_NESTING in a
+    /// row is refused as nesting.
+    fn unwrapped(&self, obj: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let mut current = obj.clone();
+        for unwraps in 0..=MAX_NESTING {
+            let method = if current.is_instance(&self.base_model)? {
+                None
+            } else if current.is_instance(&self.ndarray)? {
+                Some(intern!(self.py, "tolist"))
+            } else if current.is_instance(&self.numpy_generic)? {
+                Some(intern!(self.py, "item"))
+            } else {
+                return Ok((unwraps > 0).then_some(current));
+            };
+            if unwraps == MAX_NESTING {
+                break;
+            }
+            current = match method {
+                Some(name) => current.call_method0(name)?,
+                None => self.dumped(&current)?,
+            };
+        }
+        Err(raise(canon::nesting_error()))
     }
 
     fn sequence(&self, obj: &Bound<'py, PyAny>, depth: usize) -> PyResult<Json> {
