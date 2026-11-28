@@ -171,14 +171,14 @@ def fuzz_target(atheris: AtherisModule, root: Path, target_id: str, seconds: int
     Returns:
         exit_code: 0 when the time limit passes; a crash ends the process through libFuzzer.
     """
-    corpus = root / CORPUS_ROOT / _safe_name(target_id)
-    crashes = root / CRASH_ROOT / _safe_name(target_id)
-    corpus.mkdir(parents=True, exist_ok=True)
-    crashes.mkdir(parents=True, exist_ok=True)
     with atheris.instrument_imports(include=INSTRUMENTED_PACKAGES):
         targets = discover_targets(root)
     if target_id not in targets:
         raise NoTargetsError(f"unknown target {target_id}; known: {', '.join(targets)}")
+    corpus = root / CORPUS_ROOT / _safe_name(target_id)
+    crashes = root / CRASH_ROOT / _safe_name(target_id)
+    corpus.mkdir(parents=True, exist_ok=True)
+    crashes.mkdir(parents=True, exist_ok=True)
     argv = [
         sys.argv[0],
         str(corpus),

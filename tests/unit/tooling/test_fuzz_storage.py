@@ -22,6 +22,8 @@ Contains:
     test_replay_reproduces_a_raising_input: one saved input run once
     test_replay_of_a_passing_input_exits_zero: the same path stays green
     test_fuzz_refuses_unknown_targets_and_bad_seconds: bad arguments exit non-zero
+    test_regression_storage_fuzz_unknown_target_creates_no_folder: a traversal-shaped target is
+        refused with an E: line before any folder is made
     test_fuzz_without_atheris_fails_closed: a host without atheris exits with an E: line
     test_regression_storage_fuzz_runs_every_target_after_a_crash: with no --target every target
         runs, each failed one gets an E: line, and the run exits non-zero
@@ -166,6 +168,7 @@ SYNC_BUDGET_SECONDS = 600
 CRASH_NAME = "crash-0"
 SECONDS = 7
 NO_ATHERIS = "E: atheris is not installed"
+TRAVERSAL_FOLDER = "storage-fuzz-traversal-probe"
 FAKE_ATHERIS_MODULE = """
 import os
 import time
@@ -446,6 +449,18 @@ def test_fuzz_refuses_unknown_targets_and_bad_seconds(
     runner: ModuleType, package: Path, args: list[str]
 ) -> None:
     assert exit_code(runner, package, *args) != 0
+
+
+def test_regression_storage_fuzz_unknown_target_creates_no_folder(
+    runner: ModuleType, package: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A target such as ../../x named folders outside the root before it was refused."""
+    escape = package.parent / TRAVERSAL_FOLDER
+    assert fuzz(runner, package, "--target", f"../../{TRAVERSAL_FOLDER}") == 1
+    assert capsys.readouterr().err.startswith("E: unknown target ../../")
+    assert not escape.exists()
+    assert not (package / "fuzz-corpus").exists()
+    assert not (package / "fuzz-crashes").exists()
 
 
 def test_fuzz_without_atheris_fails_closed(
