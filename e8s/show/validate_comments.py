@@ -16,7 +16,7 @@ from e8s.core.json_types import JsonValue
 from e8s.core.validation import ValidationIssue
 from e8s.show.collab_models import Comment
 from e8s.show.models import Show
-from e8s.show.validate_refs import ERROR, make_issue
+from e8s.show.validate_issue import ERROR, make_issue
 
 REANCHOR_HINT = "re-anchor the comment to an item the show holds, or resolve and delete it"
 

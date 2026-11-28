@@ -8,6 +8,8 @@ Contains:
         the fix, and keeps one with any offset
     test_regression_stored_naive_revision_time_still_reads: reads a stored revision time with no
         timezone as UTC from layout-1 and layout-2 repositories, rewriting no file
+    test_regression_fsck_and_gc_accept_a_stored_naive_revision_time: finds nothing wrong with a
+        layout-2 repository whose revision time has no timezone, and removes nothing from it
     test_regression_stored_revision_with_a_malformed_at_fails_closed: reports a stored revision
         whose time is not a time as a corrupt file, never as a crash
 """
@@ -26,6 +28,8 @@ from e8s.show.backend_checks import stored_revision
 from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import FileBackend
 from e8s.show.file_repository import FileRepository
+from e8s.show.fsck import fsck
+from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 
 AWARE_AT = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
@@ -94,6 +98,19 @@ def test_regression_stored_naive_revision_time_still_reads(tmp_path: Path, layou
     assert revisions
     assert all(revision.at == AWARE_AT for revision in revisions)
     assert all(revision.at.utcoffset() == timedelta(0) for revision in revisions)
+    assert _file_bytes(root) == before
+
+
+def test_regression_fsck_and_gc_accept_a_stored_naive_revision_time(tmp_path: Path) -> None:
+    """Finds nothing wrong with a layout-2 repository holding a naive time, and keeps every file."""
+    root = tmp_path / "repo"
+    _layout2_with_a_naive_time(root)
+    before = _file_bytes(root)
+    checked = fsck(root, at=AWARE_AT)
+    assert (checked.findings, checked.ok) == ((), True)
+    collected = gc(root, at=AWARE_AT, confirm=True)
+    assert (collected.removed, collected.skipped) == ((), ())
+    assert fsck(root, at=AWARE_AT).ok
     assert _file_bytes(root) == before
 
 

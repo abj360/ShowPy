@@ -14,8 +14,9 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.validation import ValidationIssue
 from e8s.show.change_models import ItemKey, MergeConflict
 from e8s.show.models import Show
+from e8s.show.validate_issue import ERROR
 from e8s.show.validate_path_refs import path_spot_issues
-from e8s.show.validate_refs import ERROR, reference_issues
+from e8s.show.validate_refs import reference_issues
 
 type _IssueKey = tuple[str, str, str]
 
