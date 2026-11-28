@@ -110,7 +110,6 @@ def test_regression_power_of_ten_is_correctly_rounded() -> None:
     assert [k for k in exponents if power_of_ten(k) != exact[k]] == []
     assert all(type(power_of_ten(k)) is float for k in (-5, 0, 5))
     assert int(power_of_ten(TIE_EXPONENT)) == EVEN_NEIGHBOUR_OF_1E23
-    assert power_of_ten(TIE_EXPONENT) < math.nextafter(power_of_ten(TIE_EXPONENT), math.inf)
 
 
 def test_powers_of_ten_maps_each_exponent_keeping_the_shape() -> None:
