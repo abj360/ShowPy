@@ -4,11 +4,12 @@
 test_phase3_scenario.py --- proves the Phase 3 storage exit criteria over 1,000 revisions
 
 Copies the layout-1 repository v0.4.0 wrote and upgrades it with `upgrade_repository`, keeps
-saving the upgraded show, then saves its head as a new show (an upgraded show keeps revision IDs
-of the older scheme, which an archive refuses) and writes 1,000 revisions to it on the file
-backend. The revisions mix one-spot designer saves; three role agents editing one set (drill,
-facing and timing) whose edits `merge` combines with no conflict; proposals that are proposed,
-previewed and then accepted, rejected or withdrawn; a text form on a user font; and a `revert`.
+saving the upgraded show, then saves its head as a new show (an archive refuses the fixture's
+show ID `legacy-show`, whose hyphen a new show ID may not hold) and writes 1,000 revisions to it
+on the file backend. The revisions mix one-spot designer saves; three role agents editing one
+set (drill, facing and timing) whose edits `merge` combines with no conflict; proposals that are
+proposed, previewed and then accepted, rejected or withdrawn; a text form on a user font; and a
+`revert`.
 After every 100 revisions the head is read in under 1 ms (median of warm calls), `fsck` passes,
 `events_since` replays the last 100 revisions to the head show and `revalidate` chained from the
 last check equals `validate_show`; the log is one parent chain holding exactly one revision per
