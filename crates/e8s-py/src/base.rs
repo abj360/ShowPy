@@ -1,14 +1,20 @@
 //! base --- bindings of the base area: numbers, caps, angle helpers, IDs and references
 //!
 //! Contains:
+//!     canonical: binds canonical values, canonical JSON bytes and content hashes
 //!     host: gives non-ASCII text the answers of Python's own Unicode tables
 //!     numeric: binds number text, angle wrapping, rounding and the size caps
 //!     identifiers: binds the ID checks, references and transition IDs
+//!     strict: binds the strict JSON reader and the nesting count
+//!     walk: walks Python values into the canonical JSON model
 //!     add_all(): adds every public function and constant of the base area to a module
 
+mod canonical;
 mod host;
 mod identifiers;
 mod numeric;
+mod strict;
+mod walk;
 
 use e8s_core::base::{caps, ids, numbers, rounding, units};
 use pyo3::prelude::*;
@@ -22,6 +28,8 @@ use pyo3::types::PyFrozenSet;
 pub fn add_all(module: &Bound<'_, PyModule>) -> PyResult<()> {
     numeric::add_functions(module)?;
     identifiers::add_functions(module)?;
+    canonical::add_functions(module)?;
+    strict::add_functions(module)?;
     add_constants(module)
 }
 
