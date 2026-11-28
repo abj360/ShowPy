@@ -163,14 +163,39 @@ def _stopped(archive: VerifiedArchive, seq: int, error: E8sError) -> StorageErro
     """Builds the error of an import whose commit of slot `seq` failed after earlier ones landed."""
     landed, total = seq - 1, len(archive.revisions)
     last = archive.revisions[landed - 1].id
-    kind = ConflictError if isinstance(error, ConflictError) else StorageError
-    return kind(
+    return StorageError(
         f"import of show {archive.show_id} stopped after {landed} of {total} revisions: "
         f"{error.message}",
         hint=f"the show holds the archive's first {landed} revisions, each complete, ending at "
         f"{last[:SHORT_ID]}; import the same archive again to finish",
         context={"show": archive.show_id, "landed": landed, "total": total, "revision": last},
         code=error.code,
+    )
+
+
+def _raced(repo: DocumentRepository, archive: VerifiedArchive, seq: int) -> ConflictError:
+    """Builds the error of an import whose commit of slot `seq` another writer beat.
+
+    At slot 1 the show is read again: when its head is a revision of this archive, another
+    import of the same archive got there first. At a later slot more may land at any moment.
+    """
+    show_id, total = archive.show_id, len(archive.revisions)
+    if seq > FIRST_SEQ:
+        landed = seq - 1
+        return ConflictError(
+            f"import of show {show_id} stopped after {landed} of {total} revisions: another "
+            f"writer took slot {seq}",
+            hint="more may have landed since; import the same archive again, which finishes "
+            "this history or reports another one",
+            context={"show": show_id, "landed": landed, "total": total},
+        )
+    if repo.head(show_id) not in {revision.id for revision in archive.revisions}:
+        return _exists(show_id)
+    return ConflictError(
+        f"another import of this archive into show {show_id} is in progress or complete",
+        hint="import the same archive again: it returns the show ID once the history is whole, "
+        "or resumes it",
+        context={"show": show_id, "total": total},
     )
 
 
@@ -201,9 +226,7 @@ def _commit_history(repo: DocumentRepository, archive: VerifiedArchive, landed: 
         try:
             repo.backend.commit(archive.show_id, revision, tree, blobs)
         except ConflictError as error:
-            if seq == FIRST_SEQ:
-                raise _exists(archive.show_id) from error
-            raise _stopped(archive, seq, error) from error
+            raise _raced(repo, archive, seq) from error
         except E8sError as error:
             if seq == FIRST_SEQ:
                 raise

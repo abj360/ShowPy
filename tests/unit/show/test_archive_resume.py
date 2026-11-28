@@ -12,6 +12,11 @@ Contains:
         holding the archive's first two revisions and another third, writing nothing
     test_regression_a_show_longer_than_the_archive_is_refused: refuses a show that holds the
         whole archive and more, writing nothing
+    test_regression_a_loser_at_slot_one_to_the_same_archive_is_told_to_run_it_again: tells an
+        import that lost slot 1 to another import of the same archive that it is in progress or
+        complete
+    test_regression_a_loser_at_a_later_slot_is_told_more_may_have_landed: tells an import that
+        lost a later slot how many of its revisions had landed and that more may have since
     test_regression_an_archive_tampered_after_the_stored_head_is_refused_before_any_write:
         verifies the whole archive before resuming, so damage past the stored head writes nothing
 """
@@ -133,3 +138,35 @@ def test_regression_a_show_longer_than_the_archive_is_refused(tmp_path: Path) ->
     with_history(files, REVISIONS)
     _refused_unchanged(tmp_path, files, export_archive(source, SHOW_ID))
     assert len(files.revisions(SHOW_ID)) == REVISIONS
+
+
+def _raced(at_commit: int) -> tuple[ConflictError, InMemoryRepository, list[str]]:
+    """Runs two imports of one archive; the second completes before the first's commit `n`."""
+    source = InMemoryRepository()
+    landed = [r.id for r in with_history(source, REVISIONS)]
+    archive = export_archive(source, SHOW_ID)
+    target = InMemoryRepository()
+
+    def other_import() -> None:
+        import_archive(target, archive)
+
+    racing = DocumentRepository(Interrupted(target.backend, at_commit, other_import))
+    with pytest.raises(ConflictError) as caught:
+        import_archive(racing, archive)
+    return caught.value, target, landed
+
+
+def test_regression_a_loser_at_slot_one_to_the_same_archive_is_told_to_run_it_again() -> None:
+    error, target, landed = _raced(1)
+    assert "in progress or complete" in error.message
+    assert "another history" not in error.message
+    assert "import the same archive again" in error.hint
+    assert [r.id for r in target.revisions(SHOW_ID)] == landed
+
+
+def test_regression_a_loser_at_a_later_slot_is_told_more_may_have_landed() -> None:
+    error, target, landed = _raced(STOP_AT)
+    assert f"stopped after {STOP_AT - 1} of {REVISIONS}" in error.message
+    assert "more may have landed since" in error.hint
+    assert error.context["landed"] == STOP_AT - 1
+    assert [r.id for r in target.revisions(SHOW_ID)] == landed
