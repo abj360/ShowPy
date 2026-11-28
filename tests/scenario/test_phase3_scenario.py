@@ -8,8 +8,8 @@ saving the upgraded show, then saves its head as a new show (an archive refuses 
 show ID `legacy-show`, whose hyphen a new show ID may not hold) and writes 1,000 revisions to it
 on the file backend. The revisions mix one-spot designer saves; three role agents editing one
 set (drill, facing and timing) whose edits `merge` combines with no conflict; proposals that are
-proposed, previewed and then accepted, rejected or withdrawn; a text form on a user font; and a
-`revert`.
+proposed, previewed and then accepted (the head takes the move), rejected or withdrawn (the head
+show stays as it was); a text form on a user font; and a `revert`.
 After every 100 revisions the head is read in under 1 ms (median of warm calls), `fsck` passes,
 `events_since` replays the last 100 revisions to the head show and `revalidate` chained from the
 last check equals `validate_show`; the log is one parent chain holding exactly one revision per
@@ -305,22 +305,31 @@ class ScenarioRun:
         self.open_proposal = proposal_id
 
     def close(self, kind: str) -> None:
-        """Accepts, rejects or withdraws the open proposal."""
+        """Accepts, rejects or withdraws the open proposal and checks what the head holds."""
         proposal_id = self.open_proposal
         assert proposal_id is not None
+        ((set_id, spot),) = self.reserved
+        before = self._designer_head()
         if kind == "accept":
-            ((set_id, spot),) = self.reserved
-            placement = get_proposal(self.ws, proposal_id).change[0]
+            proposed = get_proposal(self.ws, proposal_id).change[0]
+            assert isinstance(proposed, PlacementOp)
             accept(self.ws, proposal_id, self.at())
-            assert isinstance(placement, PlacementOp)
-            assert load_show(self.ws).set(set_id).get(spot) == placement.placement
-        elif kind == "reject":
-            reject(self.ws, proposal_id, "not now", self.at())
+            assert load_show(self.ws).set(set_id).get(spot) == proposed.placement
         else:
-            withdraw(self.agent_ws, proposal_id, self.at())
+            self._decline(kind, proposal_id)
+            after = self._designer_head()
+            assert after.set(set_id).get(spot) == before.set(set_id).get(spot)
+            with unchanged(before, after):
+                assert encode_show(after) == encode_show(before)
         self.ws.refresh()
         assert get_proposal(self.ws, proposal_id).state == CLOSED_STATES[kind]
         self.reserved, self.open_proposal = set(), None
+
+    def _decline(self, kind: str, proposal_id: str) -> None:
+        if kind == "reject":
+            reject(self.ws, proposal_id, "not now", self.at())
+        else:
+            withdraw(self.agent_ws, proposal_id, self.at())
 
     def add_text_form(self) -> None:
         """Adds a text form on a user font to a hold set and lays its members on the slots."""
