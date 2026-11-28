@@ -10,6 +10,7 @@
 //!     add_functions(): adds the functions above to a module
 
 use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 
 use e8s_core::base::canonical::{self as canon, CONTEXT_TEXT_CHARS, Json, MAX_INT_DIGITS};
 use e8s_core::base::hashing::{self, DEFAULT_DOMAIN, HashKind};
@@ -24,6 +25,8 @@ use crate::errors::guard;
 
 static PYTHON_HASHLIB_SHA256: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 const DOMAIN_PATTERN: &str = "[a-z0-9_.]+";
+/// The payload size from which hashing lets other threads run, hashlib's own threshold.
+const GIL_FREE_BYTES: usize = 2048;
 
 /// Builds the plain Python value of a JSON model value.
 ///
@@ -153,10 +156,10 @@ fn content_hash(obj: &Bound<'_, PyAny>, domain: DomainArg<'_>) -> PyResult<Strin
         DomainArg::Given(given) => checked_domain(&given)?,
         DomainArg::Default => DEFAULT_DOMAIN.to_owned(),
     };
+    let py = obj.py();
     if let Ok(bytes) = obj.cast::<PyBytes>() {
-        let payload = bytes.as_bytes();
-        return guard("content_hash", || {
-            Ok(hashing::content_hash(&domain, HashKind::Bytes, payload))
+        return hashed(py, "content_hash", bytes.as_bytes(), |payload| {
+            hashing::content_hash(&domain, HashKind::Bytes, payload)
         });
     }
     let (kind, payload) = if let Ok(text) = obj.cast::<PyString>() {
@@ -168,9 +171,29 @@ fn content_hash(obj: &Bound<'_, PyAny>, domain: DomainArg<'_>) -> PyResult<Strin
             guard("content_hash", || Ok(canon::encoded(&value)))?,
         )
     };
-    guard("content_hash", || {
-        Ok(hashing::content_hash(&domain, kind, &payload))
+    hashed(py, "content_hash", &payload, |payload| {
+        hashing::content_hash(&domain, kind, payload)
     })
+}
+
+/// Hashes a payload under the error boundary, letting other Python threads run while a
+/// payload of GIL_FREE_BYTES or more is hashed, as hashlib does.
+fn hashed(
+    py: Python<'_>,
+    name: &'static str,
+    payload: &[u8],
+    hash: impl Fn(&[u8]) -> String + Sync,
+) -> PyResult<String> {
+    guard(
+        name,
+        AssertUnwindSafe(|| {
+            Ok(if payload.len() < GIL_FREE_BYTES {
+                hash(payload)
+            } else {
+                py.detach(|| hash(payload))
+            })
+        }),
+    )
 }
 
 /// The `domain` argument of content_hash: absent, or whatever object the caller passed, even
@@ -238,8 +261,7 @@ fn cut_chars() -> isize {
 #[pyfunction]
 fn asset_uri(data: &Bound<'_, PyAny>) -> PyResult<String> {
     if let Ok(bytes) = data.cast::<PyBytes>() {
-        let payload = bytes.as_bytes();
-        return guard("asset_uri", || Ok(hashing::asset_uri(payload)));
+        return hashed(data.py(), "asset_uri", bytes.as_bytes(), hashing::asset_uri);
     }
     let py = data.py();
     let sha256 = PYTHON_HASHLIB_SHA256.import(py, "hashlib", "sha256")?;

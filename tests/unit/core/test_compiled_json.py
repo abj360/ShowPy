@@ -17,6 +17,8 @@ Contains:
     test_content_hash_refuses_bad_keywords_and_non_text_domains: raises TypeError as v0.4.0 did
     test_asset_uri_hashes_any_buffer_as_hashlib_does: names bytearray and memoryview bytes
     test_content_hash_keeps_its_v040_signature: takes obj and a keyword-only domain
+    test_hashing_large_bytes_lets_other_threads_run: releases the GIL as hashlib does, with the
+        same digests on both sides of the size threshold
     test_regression_jcs_breaks_a_digit_tie_to_even_as_python_repr_does: writes the nearer of two
         shortest digit strings, and the even one when both are equally near
     test_regression_canonical_value_refuses_endless_unwrapping: refuses a model whose dump is
@@ -27,6 +29,8 @@ import hashlib
 import inspect
 import json
 import sys
+import threading
+import time
 from collections.abc import Iterator, Mapping
 from typing import Any, cast
 
@@ -49,6 +53,10 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError
 
 DOC = "d.json"
+GIL_FREE_BYTES = 2048
+LARGE_PAYLOAD = 4 * 2**20
+SWITCH_INTERVAL_S = 0.05
+WAIT_STEP_S = 0.001
 SMALL_DIGIT_LIMIT = 640
 DIGITS_PAST_SMALL_LIMIT = 641
 
@@ -209,3 +217,42 @@ def test_regression_canonical_value_refuses_endless_unwrapping(value: object) ->
         canonical_value(value)
 
     assert caught.value.context["max_nesting"] == canonical.MAX_NESTING
+
+
+def _hashes_while_counting(data: bytes) -> int:
+    """Hashes data while a second thread counts, returning how far it counted meanwhile.
+
+    The switch interval is long enough that the thread counts during the call only if the
+    hash lets go of the GIL.
+    """
+    count = [0]
+    stop = threading.Event()
+
+    def counting() -> None:
+        while not stop.is_set():
+            count[0] += 1
+
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(SWITCH_INTERVAL_S)
+    thread = threading.Thread(target=counting)
+    try:
+        thread.start()
+        while count[0] == 0:
+            time.sleep(WAIT_STEP_S)
+        before = count[0]
+        content_hash(data)
+        during = count[0] - before
+    finally:
+        stop.set()
+        thread.join()
+        sys.setswitchinterval(interval)
+    return during
+
+
+def test_hashing_large_bytes_lets_other_threads_run() -> None:
+    for size in (GIL_FREE_BYTES - 1, GIL_FREE_BYTES, LARGE_PAYLOAD):
+        data = bytes(range(256)) * (size // 256) + b"x" * (size % 256)
+        head = b"showpy-hash/1\nshowpy.content\nbytes\n"
+        assert content_hash(data) == hashlib.sha256(head + data).hexdigest()
+        assert asset_uri(data) == f"asset:sha256:{hashlib.sha256(data).hexdigest()}"
+    assert _hashes_while_counting(b"x" * LARGE_PAYLOAD) > 0
