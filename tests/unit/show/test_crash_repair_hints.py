@@ -4,7 +4,7 @@
 test_crash_repair_hints.py --- tests that a file a crashed writer left torn fails with a hint
 that names the repair, and that the repair works
 
-Without hard links a commit creates each file under its final name and then
+Without hard links a commit or an upgrade creates each file under its final name and then
 writes it, so one stopped in between leaves the file empty or cut short. Each test stops a real
 writer there, checks the CORRUPT error and its hint, then runs the call the hint spells, taken
 from the hint's own text.
@@ -25,6 +25,8 @@ Contains:
     test_torn_layout_or_manifest_hint_says_when_the_repair_does_not_apply: keeps a torn layout
         file of a root with a show folder and a torn manifest of a show with a slot, as the hint
         says, pointing at a backup instead
+    test_regression_layout_torn_by_a_stopped_upgrade_hint_names_the_upgrade_again: names
+        deleting the target and upgrading again, which then lands the upgrade
     test_damaged_layout_or_manifest_keeps_the_restore_hint: keeps the backup hint for a layout
         file or manifest that is no shorter start of what a commit writes
     test_every_library_text_saying_a_day_matches_the_stale_temp_age: ties the "a day" every hint
@@ -33,8 +35,10 @@ Contains:
 
 import ast
 import errno
+import json
 import os
 import re
+import shutil
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
@@ -47,6 +51,7 @@ from e8s.core.errors import StorageError
 from e8s.show import durable_io
 from e8s.show.backend_checks import CORRUPT_HINT
 from e8s.show.commit_writes import STALE_TEMP_AGE
+from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import MANIFEST_FILE, FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.fsck import fsck
@@ -55,6 +60,7 @@ from e8s.show.gc import gc
 from e8s.show.history_models import Revision
 from e8s.show.layout import LAYOUT_FILE
 from e8s.show.storage_models import FsckReport, GcReport
+from e8s.show.upgrade import upgrade_repository
 from tests.fixtures.fsck_repos import (
     AT,
     DAY,
@@ -275,6 +281,38 @@ def test_torn_layout_or_manifest_hint_says_when_the_repair_does_not_apply(
     assert backup in hint
     assert _repaired(hint, tmp_path) == ()
     assert torn.read_bytes() == cut
+
+
+def _layout_1_root(source: Path) -> str:
+    """Builds a layout-1 root holding one show with one empty revision."""
+    revision = revision_id("", AT, {})
+    stored = {"revision": {"id": revision, "parent": "", "at": AT.isoformat()}, "tree": {}}
+    for name in ("next", "trees"):
+        (source / SHOW_ID / name).mkdir(parents=True)
+    (source / SHOW_ID / "next" / "root").write_text(revision)
+    (source / SHOW_ID / "trees" / f"{revision}.json").write_text(json.dumps(stored))
+    return revision
+
+
+@pytest.mark.parametrize("share", WRITTEN_SHARES, ids=WRITTEN_IDS)
+def test_regression_layout_torn_by_a_stopped_upgrade_hint_names_the_upgrade_again(
+    tmp_path: Path, share: float
+) -> None:
+    source, target = tmp_path / "old", tmp_path / "new"
+    revision = _layout_1_root(source)
+
+    def upgrade() -> None:
+        upgrade_repository(source, target)
+
+    _stopped_writing(upgrade, lambda path: path == target / LAYOUT_FILE, share)
+    hint = _refused_read(target).hint
+    assert "upgrade_repository" in hint
+    assert "delete the target" in hint
+    age_by(target / LAYOUT_FILE, 2 * DAY)
+    assert _repaired(hint, target) == ()
+    shutil.rmtree(target)
+    upgrade_repository(source, target)
+    assert FileRepository(target).head(SHOW_ID) == revision
 
 
 @pytest.mark.parametrize("name", FIRST_FILES)
