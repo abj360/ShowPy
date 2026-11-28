@@ -19,6 +19,7 @@ Contains:
     test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs: accepts a valid tree
     test_regression_memory_commit_keeps_a_copy_of_its_blobs: ignores a later bytearray change
     test_regression_memory_repository_keeps_a_copy_of_written_bytes: ignores a later change
+    test_regression_memory_backend_keeps_each_shows_blobs_apart: refuses another show's blob
     test_tree_of_an_unknown_revision_is_unknown_ref: raises UnknownRefError in both adapters
     test_repository_reads_and_writes_at_the_head_touch_a_constant_number_of_revisions:
         reads O(1) entries
@@ -288,6 +289,25 @@ def test_regression_memory_repository_keeps_a_copy_of_written_bytes() -> None:
     buffer[:] = b"lost"
     assert repo.read(SHOW_ID, "/renders/a.txt") == b"kept"
     assert repo.documents(SHOW_ID)["/renders/a.txt"] == b"kept"
+
+
+def test_regression_memory_backend_keeps_each_shows_blobs_apart() -> None:
+    backend = _MemoryBackend()
+    data = b"only in show_1"
+    digest = blob_digest(data)
+    first = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
+    _commit(backend, first, tree={"/a": digest}, blobs={digest: data})
+    with pytest.raises(StorageError) as read:
+        backend.blob("show_2", digest)
+    assert read.value.code == ErrorCode.CORRUPT
+    borrowed = Revision(id=_revision_id(2), parent="", at=AT, changed=("/a",))
+    with pytest.raises(StorageError) as written:
+        backend.commit("show_2", borrowed, {"/a": digest}, {})
+    assert written.value.code == ErrorCode.CORRUPT
+    assert backend.shows() == [SHOW_ID]
+    assert backend.head("show_2") == ROOT_REVISION
+    backend.commit("show_2", borrowed, {"/a": digest}, {digest: data})
+    assert backend.blob("show_2", digest) == data
 
 
 def test_tree_of_an_unknown_revision_is_unknown_ref(backend_factory: BackendFactory) -> None:
