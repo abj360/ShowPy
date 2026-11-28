@@ -33,6 +33,8 @@ Contains:
         temp and the other name a crashed link gave its file, in one run
     test_gc_keeps_a_file_that_changed_after_its_rescan: keeps a crashed commit's blob a writer
         touched after the scan gc makes once it removed the blob's temp
+    test_gc_skips_a_show_whose_head_moved_after_its_rescan: removes only the temp when a slot
+        lands just after the scan gc makes once it removed a twin temp
     test_gc_refuses_layout_1_and_a_time_without_a_zone: raises VersionError and SchemaError
 """
 
@@ -41,7 +43,7 @@ import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -588,3 +590,28 @@ def test_gc_keeps_a_file_that_changed_after_its_rescan(
     assert _relative(tmp_path, blob) not in report.removed
     assert report.removed
     assert blob.exists()
+
+
+def test_gc_skips_a_show_whose_head_moved_after_its_rescan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, landed = _repository(tmp_path)
+    _crashed_commit(tmp_path, landed[-1], is_probe=False)
+    (blob,) = [tmp_path / item.path for item in fsck(tmp_path).findings if item.code == UNREACHABLE]
+    scan, scans = fsck_scan.scan_repository, list[object]()
+
+    def scan_then_commit(root: Path, show_id: str | None, at: datetime | None) -> object:
+        found = scan(root, show_id, at)
+        scans.append(found)
+        if len(scans) == 2:
+            later = two_set_show().replace(title="later")
+            landed.append(repo.put_show(SHOW_ID, later, expected_revision=landed[-1].id, at=AT))
+        return found
+
+    monkeypatch.setattr(gc_module, "scan_repository", scan_then_commit)
+    report = gc(tmp_path, at=AFTER_EVERY_FILE, confirm=True)
+    assert len(scans) == 2
+    assert report.skipped == ((_relative(tmp_path, _folder(tmp_path)), MOVED),)
+    assert [PurePosixPath(path).parent.name for path in report.removed] == ["tmp"]
+    assert blob.exists()
+    _every_revision_loads(tmp_path, landed, [*TITLES, "later"])
