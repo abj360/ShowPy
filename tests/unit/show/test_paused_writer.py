@@ -84,7 +84,7 @@ class _StalledWriter:
         created: Set once the writer has created the file and stopped.
         release: Lets the writer write the file.
         written: Set once the writer has written the file.
-        waited: Seconds each pause of the main thread stood for.
+        waited: Seconds each simulated pause of the main thread stood for, before the release.
         outcome: The writer's commit result: True when it landed, else the error it raised.
     """
 
@@ -125,7 +125,9 @@ def _stall(
 ) -> _StalledWriter:
     """Stops `writer` before it writes its stalled file and simulates the main thread's pauses.
 
-    Once the pauses add up to `stall_s`, the writer writes the file before the pause ends.
+    Once the pauses add up to `stall_s`, the writer writes the file before the pause ends. Every
+    later pause is real, so a reread of a file the released writer has not finished yet still
+    waits for it.
     """
     stalled = _StalledWriter()
     real_write_new, real_sleep = durable_io.write_new, time.sleep
@@ -140,7 +142,7 @@ def _stall(
             stalled.written.set()
 
     def sleep(seconds: float) -> None:
-        if threading.current_thread() is not threading.main_thread():
+        if threading.current_thread() is not threading.main_thread() or stalled.release.is_set():
             real_sleep(seconds)
             return
         stalled.waited.append(seconds)
