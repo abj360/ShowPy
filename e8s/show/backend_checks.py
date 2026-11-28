@@ -22,6 +22,7 @@ Contains:
     refuse_redirect(): refuses a folder that is a symlink or a junction
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
+    require_sent_blob_digests(): refuses a commit that sends a blob under a digest its bytes lack
 """
 
 from collections.abc import Mapping
@@ -328,6 +329,19 @@ def require_caller_ids(
         _caller_id(show_id, revision.parent, "parent id")
     for digest in [*blobs, *tree.values()]:
         _caller_id(show_id, digest, "blob digest")
+
+
+def require_sent_blob_digests(show_id: str, blobs: Mapping[str, bytes]) -> None:
+    """Refuses a commit that sends a blob whose bytes do not hash to the digest it is sent under."""
+    for digest, data in blobs.items():
+        if blob_digest(data) != digest:
+            raise StorageError(
+                f"blob bytes sent for {show_id} do not match digest {digest[:7]}",
+                hint="send each blob under the SHA-256 hex digest of its bytes, as "
+                "DocumentRepository.transaction does",
+                context={"show": show_id, "digest": digest},
+                code=ErrorCode.CORRUPT,
+            )
 
 
 def refuse_redirect(path: Path, mode: int, show_id: str = "") -> None:

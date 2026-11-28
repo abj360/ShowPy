@@ -37,6 +37,7 @@ from e8s.show.backend_checks import (
     require_blob_digest,
     require_caller_ids,
     require_plain_folders,
+    require_sent_blob_digests,
     require_slot_record,
 )
 from e8s.show.commit_writes import (
@@ -380,13 +381,15 @@ class FileBackend:
     ) -> None:
         """Writes the blobs and the record, then lands the revision by claiming its slot.
 
-        Raises ConflictError, listing what landed, when the parent is no longer the head.
+        Raises ConflictError, listing what landed, when the parent is no longer the head. A blob
+        whose bytes do not hash to its digest is refused with CORRUPT before anything is written.
         """
         with mapped_io(show_id, self._folder(show_id)):
             self._require_plain_folders(show_id)
             self._check_manifest(show_id)
             require_caller_ids(show_id, revision, tree, blobs)
             _require_readable_sizes(show_id, tree, blobs)
+            require_sent_blob_digests(show_id, blobs)
             seq = self._parent_seq(show_id, revision.parent) + 1
             self._prepare(show_id)
             remove_stale_temps(self.root / TEMP_DIR, revision.at - STALE_TEMP_AGE)
