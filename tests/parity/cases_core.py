@@ -40,7 +40,7 @@ from tests.parity.cases import Case, Output
 from tests.parity.core_json import JSON_CASES
 from tests.parity.core_text import TEXT_CASES, ComparesOnly
 from tests.parity.core_util import UTIL_CASES
-from tests.parity.draws import uniform
+from tests.parity.draws import power_of_ten, powers_of_ten, uniform
 
 SEED = 20261124
 MILLION = 1_000_000
@@ -58,6 +58,8 @@ TIE_MAX_BITS = 54
 TIE_MAX_SHIFT = 40
 TIE_MIN_DIGITS = 16
 TINY_STEP = 1e-300
+# Powers of ten whose seeded multiples in [1, 10) reach from the subnormals to 1e-290.
+TINY_EXPONENTS = (-323, -290)
 DIGIT_TIES = ((165.035919189453125, 2e-14), (-649435869553220.25, 0.2))
 # Sizes v0.4.0 answered as the core does: values it refused with the size error, numpy ints and
 # bools it took, text it refused with TypeError. Sizes whose answer changed are in core_text.
@@ -140,11 +142,13 @@ def plain_decimal_floats(e8s: ModuleType, count: int) -> np.ndarray:
     bits = rng.integers(0, 2**64, size=share * 3, dtype=np.uint64).view(np.float64)
     spread = uniform(rng, -1e6, 1e6, size=share * 3)
     places = rng.integers(0, 9, size=share)
-    short = np.round(uniform(rng, -1e4, 1e4, size=share), 3) / 10.0**places
+    short = np.round(uniform(rng, -1e4, 1e4, size=share), 3) / powers_of_ten(places)
     ties = (rng.integers(-(2**20), 2**20, size=share) + 0.5) / 2.0 ** rng.integers(
         0, 12, size=share
     )
-    tiny = 10.0 ** uniform(rng, -324.0, -290.0, size=share)
+    tiny = uniform(rng, 1.0, 10.0, size=share) * powers_of_ten(
+        rng.integers(*TINY_EXPONENTS, size=share)
+    )
     pool = np.concatenate([bits, spread, short, ties, tiny])
     shuffled = rng.permutation(pool[np.isfinite(pool)])
     return np.concatenate([np.array(SPECIAL_FLOATS), shuffled])
@@ -269,8 +273,8 @@ def _digit_ties(e8s: ModuleType) -> list[tuple[float, float]]:
         shown = _significant(repr(value))
         if len(shown) < TIE_MIN_DIGITS or len(exact) != len(shown) + 1 or exact[-1] != "5":
             continue
-        place = math.floor(math.log10(value)) - len(shown) + 1
-        for step in (10.0**place, 2.0 * 10.0**place, 10.0 ** (place + 1)):
+        place = Decimal(value).adjusted() - len(shown) + 1
+        for step in (power_of_ten(place), 2.0 * power_of_ten(place), power_of_ten(place + 1)):
             ties += [(value, step), (-value, step)]
     return ties
 

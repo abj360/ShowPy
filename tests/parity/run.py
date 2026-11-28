@@ -66,7 +66,7 @@ SPEED_LAUNCHES = 5
 # each platform's C math library (2026-11-24, controller ruling on PR #92: Windows and Linux
 # differed on time.clock_on_200_seeded_timelines/val:seconds and val:counts_back), so their
 # cross-cell differences are reported, not gated. A lane adds its area when its port lands.
-PORTED_AREAS: frozenset[str] = frozenset()
+PORTED_AREAS: frozenset[str] = frozenset({"core"})
 EVERY_AREA_SUFFIX = ".all"
 ORACLE_SIDE = "oracle"
 CORE_SIDE = "core"
