@@ -2,8 +2,6 @@
 pinning.py --- designer locks: records pins and sets the flags they cover
 
 Contains:
-    covers_placement(): tells whether any held pin covers a spot's placement in a set
-    covers_form(): tells whether any held pin covers a form
     pin_key(): returns the stored spelling of a pin ID
     pin(): locks a spot, form, set or transition and records why
     unpin(): removes a lock, keeping flags other pins still cover
@@ -11,7 +9,6 @@ Contains:
 
 from collections.abc import Sequence
 
-from e8s.choreo.match_ops import forms_of_set
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathRow
 from e8s.core.errors import UnknownRefError
@@ -20,6 +17,7 @@ from e8s.core.util import close_matches
 from e8s.show.changes import store_paths
 from e8s.show.collab_models import PathsOp
 from e8s.show.models import Pin, PinTarget, Show
+from e8s.show.pin_flags import covers_form, covers_placement
 
 
 def _require_target(show: Show, target: PinTarget, target_id: str) -> None:
@@ -36,36 +34,6 @@ def _require_target(show: Show, target: PinTarget, target_id: str) -> None:
             hint=f"did you mean {', '.join(close)}?" if close else "check the form id",
             context={"form": target_id},
         )
-
-
-def covers_placement(held: Sequence[Pin], set_id: str, entity: str) -> bool:
-    """Tells whether an entity pin on the spot or a set pin on the set covers the placement.
-
-    >>> from e8s.show.models import Pin
-    >>> covers_placement((Pin(target="set", id="2"),), "2", "T1")
-    True
-    """
-    return any(
-        (p.target == "entity" and p.id == entity) or (p.target == "set" and p.id == set_id)
-        for p in held
-    )
-
-
-def covers_form(show: Show, held: Sequence[Pin], form_id: str) -> bool:
-    """Tells whether a form pin on the form or a set pin on a set listing it covers the form.
-
-    >>> from e8s.examples import two_set_show
-    >>> from e8s.show.models import Pin
-    >>> covers_form(two_set_show(), (Pin(target="form", id="row"),), "row")
-    True
-    """
-    # a set pin may name a set that no longer exists; forms_of_set would raise on it
-    return any(
-        (p.target == "form" and p.id == form_id)
-        or (p.target == "set" and form_id in forms_of_set(show, p.id))
-        for p in held
-        if p.target == "form" or p.id in show.set_ids()
-    )
 
 
 def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:

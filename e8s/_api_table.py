@@ -57,6 +57,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("EntityFacing", "e8s.choreo.path_models", "EntityFacing"),
     ("EntityState", "e8s.choreo.engine_models", "EntityState"),
     ("ErrorCode", "e8s.core.error_codes", "ErrorCode"),
+    ("FAR_OFF_SHEET_M", "e8s.show.validate_placements", "FAR_OFF_SHEET_M"),
     ("FORMAT", "e8s.show.migrate", "FORMAT"),
     ("FacingMode", "e8s.choreo.path_models", "FacingMode"),
     ("FacingOverride", "e8s.choreo.path_models", "FacingOverride"),

@@ -25,6 +25,14 @@ Contains:
         transition pin on a vanished pair
     test_regression_error_messages_truncate_echoed_input: echoes at most about 80 characters of a
         10,000-character scheme name
+    test_regression_insert_subset_drops_the_pin_of_the_transition_it_splits: drops a transition
+        pin whose sets are no longer consecutive, keeps other pins, and validates clean
+    test_regression_set_counts_keeps_a_stale_transition_pin_without_force: keeps a transition pin
+        that was already stale before the edit, for validate_show to report, and needs no force
+    test_regression_remove_set_never_brings_a_stale_transition_pin_to_life: drops a stale
+        transition pin whose sets the edit makes consecutive, without force
+    test_regression_remove_set_never_brings_a_stale_transition_spec_to_life: drops a stale
+        transition spec with locked rows whose sets the edit makes consecutive, with its pin
 """
 
 import sys
@@ -61,6 +69,7 @@ from e8s.show.documents import decode_show, encode_show
 from e8s.show.manage import add_set, insert_subset, new_show, remove_set, set_counts
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Pin, Show
+from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
 from e8s.show.set_queries import index, set_at_count, transition_at_count, transitions
 from e8s.show.show_io import load_show, save_show
@@ -558,3 +567,51 @@ def test_regression_error_messages_truncate_echoed_input() -> None:
     with pytest.raises(UnknownRefError) as excinfo:
         renumber(two_set_show(), "x" * LONG_INPUT_CHARS)
     assert len(excinfo.value.message) <= MAX_ECHOING_MESSAGE_CHARS
+
+
+def test_regression_insert_subset_drops_the_pin_of_the_transition_it_splits() -> None:
+    """Drops a transition pin whose sets are no longer consecutive; other pins stay."""
+    pinned = pin(pin(two_set_show(), "transition", "1->2"), "entity", "T1")
+    split, _ = insert_subset(pinned, "1", 3.0, force=True)
+    assert [(p.target, p.id) for p in split.pins] == [("entity", "T1")]
+    assert validate_show(split).ok
+
+
+def test_regression_set_counts_keeps_a_stale_transition_pin_without_force() -> None:
+    """Keeps a transition pin already stale before an edit; validate_show reports it."""
+    stale = Pin(target="transition", id="1→3")
+    show = add_set(two_set_show(), "3", 4.0)
+    show = show.replace(pins=(*show.pins, stale))
+    retimed = set_counts(show, "2", 6.0)
+    assert stale in retimed.pins
+    assert "UNKNOWN_PIN" in {i.code for i in validate_show(retimed).issues}
+
+
+def test_regression_remove_set_never_brings_a_stale_transition_pin_to_life() -> None:
+    """Drops a stale 1→3 pin when removing set 2 joins sets 1 and 3; needs no force."""
+    stale = Pin(target="transition", id="1→3")
+    show = add_set(two_set_show(), "3", 4.0)
+    show = show.replace(pins=(*show.pins, stale))
+    assert "UNKNOWN_PIN" in {i.code for i in validate_show(show).issues}
+    removed = remove_set(show, "2")
+    assert removed.transition_ids() == [("1", "3")]
+    assert stale not in removed.pins
+    assert {i.code for i in validate_show(removed).issues}.isdisjoint(
+        {"UNKNOWN_PIN", "BAD_TRANSITION", "PIN_MISMATCH"}
+    )
+
+
+def test_regression_remove_set_never_brings_a_stale_transition_spec_to_life() -> None:
+    """Drops a stale 1→3 spec with locked rows and its pin when removing set 2 joins 1 and 3."""
+    show = add_set(two_set_show(), "3", 4.0)
+    locked = pin(show, "transition", "1→2").transition(("1", "2"))
+    stale_spec = locked.replace(id=("1", "3"))
+    assert any(row.locked for row in stale_spec.rows.values())
+    stale = show.replace(
+        transitions=(*show.transitions, stale_spec),
+        pins=(*show.pins, Pin(target="transition", id="1→3")),
+    )
+    removed = remove_set(stale, "2")
+    assert removed == remove_set(show, "2")
+    assert not any(row.locked for row in removed.transition(("1", "3")).rows.values())
+    assert validate_show(removed).issues == ()

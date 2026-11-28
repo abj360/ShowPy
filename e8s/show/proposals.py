@@ -39,9 +39,10 @@ from e8s.show.history_models import Revision
 from e8s.show.item_table import set_keys_by_id, transition_key
 from e8s.show.items import changes
 from e8s.show.locks import locked_changes, require_unlocked
-from e8s.show.manage import late_routes, late_rows
 from e8s.show.merge import merge
+from e8s.show.merge_refs import dangling_conflicts
 from e8s.show.models import Show
+from e8s.show.retiming import late_routes, late_rows
 from e8s.show.show_io import load_show, load_show_at
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.workspace import Workspace
@@ -315,6 +316,8 @@ def _merge_onto_head(ws: Workspace, proposal: Proposal, head: Show) -> MergeResu
     found += _head_retime_conflicts(base, head, theirs)
     if result.show is not None and not found:
         found = _overrun_conflicts(head, result.show)
+    if result.show is not None:
+        found += dangling_conflicts(base, head, result.show)
     for conflict in found:
         if conflict.key.sort_key() not in known:
             known.add(conflict.key.sort_key())
@@ -416,10 +419,12 @@ def accept(ws: Workspace, proposal_id: str, at: datetime) -> Revision:
     """Merges an open proposal into the head show and marks it accepted in one revision.
 
     The change is applied to the show at the proposal's base and merged with the head, so edits
-    made since land beside it. If an item changed differently on both sides, ConflictError with
-    code PROPOSAL_STALE lists the items. A proposal made before any show was saved merges with
-    the head as its base. Pins and locks on the head still hold: unpin first to accept edits to
-    pinned items. The stored proposal records the head it was merged onto.
+    made since land beside it. If an item changed differently on both sides, or the merge leaves
+    a reference dangling that the base and head did not hold (a form member or path row naming a
+    spot outside the cast),
+    ConflictError with code PROPOSAL_STALE lists the items. A proposal made before any show was
+    saved merges with the head as its base. Pins and locks on the head still hold: unpin first to
+    accept edits to pinned items. The stored proposal records the head it was merged onto.
 
     Args:
         ws: Workspace; it moves to the head, then to the new revision.
