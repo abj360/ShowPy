@@ -47,6 +47,8 @@ pub enum ErrorCode {
     CueNegative,
     /// The landmarks of a similarity fit sit on top of each other.
     Degenerate,
+    /// A placement lies more than FAR_OFF_SHEET_M meters past the sheet's bounding box.
+    FarOffSheet,
     /// Font bytes do not hash to the URI or pinned hash that names them.
     FontHashMismatch,
     /// A font registers under a name that is already bound to different font bytes.
@@ -57,6 +59,8 @@ pub enum ErrorCode {
     HoldNegative,
     /// Two holds of a timeline share one count.
     HoldOverlap,
+    /// A spot marked inactive stands on the field in a set.
+    InactiveOnField,
     /// The file system fails while a file repository reads or writes.
     Io,
     /// A mapping key differs from the ID of the item it holds.
@@ -109,7 +113,7 @@ pub enum ErrorCode {
     OldFormat,
     /// A write targets a layout-1 repository, which this release only reads until it is upgraded.
     OldLayout,
-    /// A facing override starts after the last count of the show.
+    /// A facing override starts on or after the last count of the show, so covers no show time.
     PastTheShow,
     /// A path instruction is invalid.
     Path,
@@ -147,7 +151,7 @@ pub enum ErrorCode {
     Stage,
     /// A form's set no longer places that form.
     StaleForm,
-    /// A transition holds paths for two sets that are not consecutive.
+    /// A transition holds paths for, or a comment anchors to, two sets that are not consecutive.
     StaleTransition,
     /// A show cannot be persisted or read back.
     Storage,
@@ -189,11 +193,11 @@ pub enum ErrorCode {
     UnknownPin,
     /// An ID, name or unit does not resolve.
     UnknownRef,
-    /// A form names a set that is not in the show.
+    /// A form or a comment anchor names a set that is not in the show.
     UnknownSet,
     /// The show's sheet reference does not resolve in the sheet store.
     UnknownSheet,
-    /// A set, transition, route or named selection names a spot that is not in the cast.
+    /// A set, transition, route, named selection or comment anchor names a spot not in the cast.
     UnknownSpot,
     /// The show's dependencies do not pin its sheet reference.
     UnpinnedSheet,
@@ -230,11 +234,13 @@ impl ErrorCode {
             Self::CueDuplicate => "CUE_DUPLICATE",
             Self::CueNegative => "CUE_NEGATIVE",
             Self::Degenerate => "DEGENERATE",
+            Self::FarOffSheet => "FAR_OFF_SHEET",
             Self::FontHashMismatch => "FONT_HASH_MISMATCH",
             Self::FontNameTaken => "FONT_NAME_TAKEN",
             Self::Geometry => "GEOMETRY",
             Self::HoldNegative => "HOLD_NEGATIVE",
             Self::HoldOverlap => "HOLD_OVERLAP",
+            Self::InactiveOnField => "INACTIVE_ON_FIELD",
             Self::Io => "IO",
             Self::KeyMismatch => "KEY_MISMATCH",
             Self::Locked => "LOCKED",

@@ -54,6 +54,12 @@ Contains:
         placement of a spot marked inactive
     test_regression_validate_show_reports_a_nonzero_first_set_count: reports a first set that has
         counts
+    test_regression_first_set_count_issue_carries_the_set_timing_item: gives the first-set count
+        issue the timing item of the first set and skips non-finite counts
+    test_regression_validate_show_reports_negative_set_counts_without_raising: reports a later
+        set with negative counts as TIME_RANGE instead of raising while checking its paths
+    test_regression_negative_infinite_counts_are_reported_once: leaves negative infinite counts to
+        NOT_FINITE alone
     test_regression_validate_show_reports_nan_counts_on_the_first_set: reports NaN counts on the
         first set by name
     test_regression_validate_show_reports_nan_waypoints: reports a path waypoint with a NaN
@@ -62,6 +68,8 @@ Contains:
         anchored to a set that does not exist
     test_regression_validate_show_reports_a_show_longer_than_max_counts: reports a show whose set
         counts add up past MAX_COUNTS
+    test_regression_validate_show_reports_counts_whose_sum_overflows: reports set counts whose sum
+        overflows a float as SHOW_TOO_LONG instead of raising OverflowError
     test_regression_validate_show_warns_about_stale_forms: warns about a form its set no longer
         lists
     test_validate_show_accepts_a_set_whose_forms_are_all_listed: raises no stale-form warning when
@@ -112,7 +120,8 @@ from e8s.show.change_models import ItemKey
 from e8s.show.collab_models import Comment
 from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
-from e8s.show.pinning import covers_placement, pin
+from e8s.show.pin_flags import covers_placement
+from e8s.show.pinning import pin
 from e8s.show.validate import (
     validate_dependencies,
     validate_paths,
@@ -218,6 +227,7 @@ def test_show_flags_stale_transitions_and_zero_counts() -> None:
 NOTE_AT = datetime(2026, 11, 11, tzinfo=UTC)
 FAR_OFF_SHEET_M = 1_000_000.0
 PAST_SHOW_COUNT = 777.0
+HUGE_COUNTS = 1e308
 FORM_ID = "f1"
 SET_TWO = "2"
 GHOST = "GHOST"
@@ -412,8 +422,6 @@ def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     assert _mentions(_edited(transitions=(spec,)), "inf")
 
 
-@pytest.mark.defect("UP-9.7-79")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-79")
 def test_regression_validate_show_warns_about_placements_far_off_the_sheet() -> None:
     """Warns about a placement a million meters off the sheet (audit 9.7 validation gaps)."""
     moved = (
@@ -472,8 +480,6 @@ def test_regression_validate_show_reports_set_ids_that_cannot_be_stored() -> Non
     assert _mentions(_edited(sets=(show.sets[0], renamed)), "a/b")
 
 
-@pytest.mark.defect("UP-9.7-83")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-83")
 def test_regression_validate_show_reports_placements_of_inactive_spots() -> None:
     """Reports an on-field placement of a spot marked inactive (audit 9.7 validation gaps)."""
     cast = two_set_show().cast
@@ -481,13 +487,41 @@ def test_regression_validate_show_reports_placements_of_inactive_spots() -> None
     assert _mentions(_edited(cast=cast.replace(spots=spots)), "T1")
 
 
-@pytest.mark.defect("UP-9.7-84")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-84")
 def test_regression_validate_show_reports_a_nonzero_first_set_count() -> None:
     """Reports a first set that has counts (audit 9.7 validation gaps)."""
     show = two_set_show()
     first = show.sets[0].replace(counts=3.5)
     assert _mentions(_edited(sets=(first, show.sets[1])), "3.5")
+
+
+def test_regression_first_set_count_issue_carries_the_set_timing_item() -> None:
+    """Gives the first-set count issue the timing item of the first set; NaN is NOT_FINITE's."""
+    show = two_set_show()
+    counted = _edited(sets=(show.sets[0].replace(counts=3.5), show.sets[1]))
+    (issue,) = [i for i in validate_show(counted).issues if i.code == "TIME_RANGE"]
+    assert issue.level == "error"
+    assert ItemKey.model_validate(issue.context["item"]) == ItemKey(
+        kind="set", path=("1",), role="timing"
+    )
+    nan_first = _edited(sets=(show.sets[0]._copied(update={"counts": math.nan}), show.sets[1]))
+    assert "TIME_RANGE" not in _codes(validate_show(nan_first))
+
+
+def test_regression_validate_show_reports_negative_set_counts_without_raising() -> None:
+    """Reports a later set with negative counts as TIME_RANGE instead of raising."""
+    report = validate_show(_edited(sets=_set_two_with(counts=-4.0)))
+    (issue,) = [i for i in report.issues if i.code == "TIME_RANGE"]
+    assert "-4" in issue.message
+    assert ItemKey.model_validate(issue.context["item"]) == ItemKey(
+        kind="set", path=("2",), role="timing"
+    )
+
+
+def test_regression_negative_infinite_counts_are_reported_once() -> None:
+    """Leaves negative infinite counts to NOT_FINITE alone, never TIME_RANGE as well."""
+    codes = [i.code for i in validate_show(_edited(sets=_set_two_with(counts=-math.inf))).issues]
+    assert "NOT_FINITE" in codes
+    assert "TIME_RANGE" not in codes
 
 
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
@@ -511,8 +545,6 @@ def test_regression_validate_show_reports_nan_waypoints() -> None:
     assert _mentions(_edited(transitions=(spec,)), "nan")
 
 
-@pytest.mark.defect("UP-9.7-90")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-90")
 def test_regression_validate_show_reports_comments_anchored_to_missing_items() -> None:
     """Reports a comment anchored to a set that does not exist (audit 9.7 validation gaps)."""
     validate: Callable[..., ValidationReport] = validate_show  # comments= is the audit's new API
@@ -531,6 +563,16 @@ def test_regression_validate_show_reports_a_show_longer_than_max_counts() -> Non
     assert "MAX_COUNTS" in issue.message
     assert f"{MAX_COUNTS:,}" in issue.hint
     assert dict(issue.context) == {"total": MAX_COUNTS + 1.0, "max": MAX_COUNTS}
+
+
+def test_regression_validate_show_reports_counts_whose_sum_overflows() -> None:
+    """Reports set counts whose sum overflows a float as SHOW_TOO_LONG, never OverflowError."""
+    show = two_set_show()
+    huge = show.sets[1]._copied(update={"counts": HUGE_COUNTS})
+    third = huge._copied(update={"id": "3", "key": "3"})
+    report = validate_show(show._copied(update={"sets": (show.sets[0], huge, third)}))
+    (issue,) = [i for i in report.issues if i.code == "SHOW_TOO_LONG"]
+    assert dict(issue.context) == {"total": "inf", "max": MAX_COUNTS}
 
 
 def test_regression_validate_show_warns_about_stale_forms() -> None:

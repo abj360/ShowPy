@@ -492,16 +492,14 @@ def test_regression_commit_refuses_deep_or_huge_json(path: str, raw: bytes) -> N
     assert repo.head(SHOW_ID) == head
 
 
-@pytest.mark.defect("UP-9.7-94")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-94")
 def test_regression_commit_refuses_a_cast_spot_still_placed() -> None:
     """Refuses a show.json that drops a cast spot some set still places (ruling L-A3)."""
     repo, head = _repo()
-    body = json.loads(encode_show(two_set_show())[SHOW_DOC])
-    dropped = body["cast"]["spots"].pop()["id"]
+    body = json.loads(encode_show(two_set_show())[CAST_DOC])
+    dropped = body["spots"].pop()["id"]
     assert dropped in {p.entity for p in two_set_show().set("1").placements}
     with pytest.raises(SchemaError):
-        _commit(repo, head, {SHOW_DOC: dump_json(body)})
+        _commit(repo, head, {CAST_DOC: dump_json(body)})
     assert repo.head(SHOW_ID) == head
 
 

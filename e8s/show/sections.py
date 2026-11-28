@@ -15,6 +15,7 @@ from e8s.choreo.path_models import FacingOverride
 from e8s.core.errors import SchemaError, TimelineError, VersionError
 from e8s.core.ids import FormId, SetId, parse_tid
 from e8s.core.types import Count
+from e8s.show.manage import drop_joined_pairs
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import free_set_key, set_key
 from e8s.show.set_queries import index
@@ -406,7 +407,8 @@ def join_sections(a: Show, b: Show) -> Show:
     second half's ends. A track only the second half holds returns within 1e-9 seconds of its
     sync offset and 1e-9 counts of its section, since the shift out and back is float arithmetic.
     One pin is kept per target and ID; when both halves pin the same spot, form, set or
-    transition, `a`'s pin wins.
+    transition, `a`'s pin wins. A stale spec or pin in either half on the pair the join makes
+    adjacent (`a`'s last set to `b`'s first) is dropped.
 
     >>> from e8s.examples import two_set_show
     >>> from e8s.show.manage import add_set
@@ -416,7 +418,7 @@ def join_sections(a: Show, b: Show) -> Show:
     """
     _require_compatible(a, b)
     offset = index(a).total_counts
-    return a.replace(
+    joined = a.replace(
         sets=(*a.sets, *_keyed_after(a, _tail_sets(a, b))),
         forms=_merged_forms(a, b),
         transitions=(*a.transitions, *b.transitions),
@@ -426,3 +428,5 @@ def join_sections(a: Show, b: Show) -> Show:
         timeline=_joined_timeline(a.timeline, b.timeline, offset),
         revision="",
     )
+    before = {*a.transition_ids(), *b.transition_ids()}
+    return drop_joined_pairs(joined, set(joined.transition_ids()) - before)

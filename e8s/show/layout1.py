@@ -32,7 +32,7 @@ from e8s.show.backend import (
 )
 from e8s.show.durable_io import mapped_io
 from e8s.show.durable_reads import lstat_mode, read_capped
-from e8s.show.history_models import Revision
+from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.storage import ROOT_REVISION
 
@@ -219,12 +219,18 @@ class Layout1Reader:
     def _stored_revision(self, show_id: str, revision_id: str, source: Path) -> Revision:
         """Decodes a stored revision; v0.1 and v0.2 records lose their authorship keys.
 
+        A time stored with no timezone reads as UTC.
+
         The file is never rewritten: its ID still hashes the dropped keys, and stays as stored.
         """
         stored = self._record(show_id, revision_id, source)["revision"]
         if isinstance(stored, dict):
             stored = {k: v for k, v in stored.items() if k not in LEGACY_REVISION_KEYS}
-        return Revision._validated(stored)
+        try:
+            return Revision._validated(stored, context={STORED_TIME_KEY: True})
+        except SchemaError as error:
+            path = self._tree_path(show_id, revision_id, source)
+            raise self._corrupt(show_id, path, "stored revision is malformed") from error
 
     @_guarded
     def dropped_fields(self, show_id: str, revision_id: str) -> tuple[str, ...]:
