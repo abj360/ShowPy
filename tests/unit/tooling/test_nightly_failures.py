@@ -9,8 +9,8 @@ Contains:
         own failure
     step_script(): returns the literal block of one step's `run: |` script
     job_permissions(): reads one job's permissions, comments dropped
-    test_regression_each_nightly_reports_from_main_only: both nightly workflows end with a report
-        job that needs the check job, runs only on main, and alone may write issues
+    test_regression_each_nightly_reports_from_main_only: each nightly workflow ends with a report
+        job that needs its check job, runs only on main, and alone may write issues
     test_report_workflow_is_only_callable_and_least_privileged: workflow_call only, no default
         permissions, no checkout, a timeout and the job's own token
     test_regression_report_passes_inputs_and_run_data_only_through_env: no expression inside the
@@ -50,6 +50,7 @@ from tests.unit.tooling.test_noxfile import (
 
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly.yml"
 NIGHTLY_CORE_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-core.yml"
+NIGHTLY_STORAGE_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-storage.yml"
 REPORT_WORKFLOW = ROOT / ".github" / "workflows" / "report-nightly.yml"
 NIGHTLY_JOB = "nightly"
 CHECK_SESSIONS = ("tests", "slow", "fuzz", "bench")
@@ -57,7 +58,11 @@ NOX_SESSION = re.compile(r"\bnox -s (\w+)")
 SYNCED = "${{ !cancelled() && steps.sync.outcome == 'success' }}"
 SYNC_STEP = "id: sync\n        run: uv sync --locked\n"
 NIGHTLY_JOB_NAME = "tests, slow, fuzz and large benchmarks"
-CHECK_JOBS = {NIGHTLY_WORKFLOW: NIGHTLY_JOB, NIGHTLY_CORE_WORKFLOW: "core"}
+CHECK_JOBS = {
+    NIGHTLY_WORKFLOW: NIGHTLY_JOB,
+    NIGHTLY_CORE_WORKFLOW: "core",
+    NIGHTLY_STORAGE_WORKFLOW: "storage-fuzz",
+}
 REPORT_JOB = "report"
 REPORT_CONDITION = "${{ !cancelled() && github.ref == 'refs/heads/main' }}"
 REPORT_CALL = "$/.github/workflows/report-nightly.yml"

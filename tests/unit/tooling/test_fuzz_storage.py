@@ -11,7 +11,7 @@ Contains:
     test_regression_storage_fuzz_refuses_an_empty_glob: no matching file exits non-zero
     test_regression_storage_fuzz_refuses_a_file_without_a_target: a matching file with no
         target exits non-zero
-    test_list_prints_the_ids_as_one_json_line: the matrix input
+    test_list_prints_the_ids_as_one_json_line: the target IDs as JSON
     test_regression_runner_leaves_the_active_hypothesis_profile_unchanged: a known profile
         loaded before main is still the active one after it
     test_regression_command_line_loads_the_nightly_profile_before_discovery: the script run as
@@ -33,10 +33,12 @@ Contains:
     test_fuzz_in_own_process_stops_a_target_that_runs_past_its_slot: the grace bound holds
     test_storagefuzz_session_is_on_demand_and_runs_the_nightly_profile: not a default session
     test_atheris_is_a_linux_x86_64_dev_dependency: the marker keeps it off other hosts
-    test_storage_fuzz_workflow_lists_then_fuzzes_each_test: list job feeds the matrix
-    test_storage_fuzz_workflow_caches_the_corpus_per_test: restore always, save from main
-    test_storage_fuzz_workflow_uploads_crashes_on_failure: per-test artifact name
-    test_storage_fuzz_workflow_keeps_the_conventions: pins, permissions, no inline expressions
+    test_regression_storage_fuzz_workflow_runs_every_test_in_one_check_job: one check job runs
+        the session with no target after a synced environment, then the report job
+    test_storage_fuzz_workflow_caches_one_corpus: restore on every run, save from main
+    test_storage_fuzz_workflow_uploads_crashes_on_failure: one artifact for every target
+    test_storage_fuzz_workflow_keeps_the_conventions: pins, permissions, no inline expressions,
+        a timeout that covers every target's slot and grace
     test_docker_image_holds_every_path_the_storage_fuzz_tests_read: the image copies the workflow
 """
 
@@ -55,6 +57,7 @@ import pytest
 from hypothesis import settings
 
 from tests.unit.tooling.test_dockerfile import DOCKERFILE, DOCKERIGNORE, missing_image_paths
+from tests.unit.tooling.test_nightly_failures import REPORT_CALL, REPORT_JOB, SYNC_STEP, SYNCED
 from tests.unit.tooling.test_noxfile import (
     NOXFILE,
     ROOT,
@@ -75,8 +78,11 @@ SCRIPT = ROOT / "scripts" / "fuzz_storage.py"
 NIGHTLY = ROOT / ".github" / "workflows" / "nightly.yml"
 NIGHTLY_STORAGE = ROOT / ".github" / "workflows" / "nightly-storage.yml"
 STORAGE_FUZZ_SESSION = "storagefuzz"
-LIST_JOB = "storage-fuzz-list"
 FUZZ_JOB = "storage-fuzz"
+FUZZ_RUN = "uv run nox -s storagefuzz"
+CORPUS_KEY = "storage-fuzz-corpus-${{ github.run_id }}"
+CORPUS_PREFIX = "storage-fuzz-corpus-"
+WITH_INDENT = 10
 NOT_A_TARGET = "not a fuzz target"
 HELPERS = """
 from hypothesis import given, strategies as st
@@ -595,66 +601,70 @@ def _nightly() -> str:
     return NIGHTLY_STORAGE.read_text(encoding="utf-8")
 
 
-def test_storage_fuzz_workflow_lists_then_fuzzes_each_test() -> None:
+def _fuzz_steps() -> list[str]:
+    return job_steps(ci_job(_nightly(), FUZZ_JOB))
+
+
+def _step_index(steps: list[str], text: str) -> int:
+    return next(index for index, step in enumerate(steps) if text in step)
+
+
+def test_regression_storage_fuzz_workflow_runs_every_test_in_one_check_job() -> None:
+    """A per-test matrix job could never report a storage fuzz failure through the report job."""
     workflow = _nightly()
-    assert ci_job_names(workflow) == [LIST_JOB, FUZZ_JOB]
-    listing = ci_job(workflow, LIST_JOB)
-    assert "runs-on: ubuntu-24.04" in listing
-    assert "run: uv sync --locked" in listing
-    assert "uv run nox -s storagefuzz -- --list" in listing
-    assert "targets: ${{ steps.list.outputs.targets }}" in listing
-    fuzzing = ci_job(workflow, FUZZ_JOB)
-    assert "runs-on: ubuntu-24.04" in fuzzing
-    assert "needs: storage-fuzz-list" in fuzzing
-    assert "fail-fast: false" in fuzzing
-    assert "test: ${{ fromJSON(needs.storage-fuzz-list.outputs.targets) }}" in fuzzing
-    assert 'run: uv run nox -s storagefuzz -- --target "$TARGET"' in fuzzing
-    assert "TARGET: ${{ matrix.test }}" in fuzzing
-    assert "--seconds" not in fuzzing
+    assert ci_job_names(workflow) == [FUZZ_JOB, REPORT_JOB]
+    assert "matrix" not in workflow
+    job = ci_job(workflow, FUZZ_JOB)
+    assert "runs-on: ubuntu-24.04" in job
+    steps = job_steps(job)
+    fuzzing = [step for step in steps if "nox -s storagefuzz" in step]
+    assert [step_value(step, "run") for step in fuzzing] == [FUZZ_RUN]
+    assert step_value(fuzzing[0], "if") == SYNCED
+    assert steps.index(SYNC_STEP) < steps.index(fuzzing[0])
+    assert "--seconds" not in job
+    assert "--target" not in job
     assert workflow_section(workflow, "on").count("cron") == 1
 
 
-def test_storage_fuzz_workflow_caches_the_corpus_per_test() -> None:
-    steps = job_steps(ci_job(_nightly(), FUZZ_JOB))
-    key = "storage-fuzz-corpus-${{ steps.slug.outputs.slug }}-${{ github.run_id }}"
-    prefix = "storage-fuzz-corpus-${{ steps.slug.outputs.slug }}-"
-    restore = next(step for step in steps if "uses: actions/cache/restore@" in step)
-    assert step_value(restore, "path", 10) == "fuzz-corpus/"
-    assert step_value(restore, "key", 10) == key
-    assert step_value(restore, "restore-keys", 10).strip() == prefix
-    save = next(step for step in steps if "uses: actions/cache/save@" in step)
+def test_storage_fuzz_workflow_caches_one_corpus() -> None:
+    steps = _fuzz_steps()
+    restore = steps[_step_index(steps, "uses: actions/cache/restore@")]
+    assert step_value(restore, "if") == ""
+    assert step_value(restore, "path", WITH_INDENT) == "fuzz-corpus/"
+    assert step_value(restore, "key", WITH_INDENT) == CORPUS_KEY
+    assert step_value(restore, "restore-keys", WITH_INDENT).strip() == CORPUS_PREFIX
+    save = steps[_step_index(steps, "uses: actions/cache/save@")]
     assert step_value(save, "if") == f"${{{{ always() && {SAVE_FROM_MAIN} }}}}"
-    assert step_value(save, "key", 10) == key
-    assert step_value(save, "path", 10) == "fuzz-corpus/"
-    order = [steps.index(step) for step in (restore, save)]
-    assert order[0] < next(i for i, s in enumerate(steps) if "nox -s storagefuzz" in s) < order[1]
+    assert step_value(save, "key", WITH_INDENT) == CORPUS_KEY
+    assert step_value(save, "path", WITH_INDENT) == "fuzz-corpus/"
+    order = [_step_index(steps, text) for text in ("cache/restore@", "storagefuzz", "cache/save@")]
+    assert order == sorted(order)
 
 
 def test_storage_fuzz_workflow_uploads_crashes_on_failure() -> None:
-    steps = job_steps(ci_job(_nightly(), FUZZ_JOB))
-    upload = next(step for step in steps if "uses: actions/upload-artifact@" in step)
+    steps = _fuzz_steps()
+    upload = steps[_step_index(steps, "uses: actions/upload-artifact@")]
     assert step_value(upload, "if") == "${{ failure() }}"
-    assert step_value(upload, "name", 10) == "storage-fuzz-crashes-${{ steps.slug.outputs.slug }}"
-    assert step_value(upload, "path", 10) == "fuzz-crashes/"
-    slug = next(step for step in steps if "id: slug" in step)
-    assert "slug=${TARGET//::/__}" in slug
-    assert "TARGET: ${{ matrix.test }}" in slug
+    assert step_value(upload, "name", WITH_INDENT) == "storage-fuzz-crashes"
+    assert step_value(upload, "path", WITH_INDENT) == "fuzz-crashes/"
+    assert _step_index(steps, "storagefuzz") < steps.index(upload)
 
 
-def test_storage_fuzz_workflow_keeps_the_conventions() -> None:
+def test_storage_fuzz_workflow_keeps_the_conventions(runner: ModuleType) -> None:
     workflow = _nightly()
-    assert unpinned_actions(workflow) == []
+    assert unpinned_actions(workflow) == [f"uses: {REPORT_CALL}"]
     assert workflow_section(workflow, "permissions") == "permissions:\n  contents: read\n"
     assert workflow.count("uses: actions/checkout@") == workflow.count("persist-credentials: false")
-    assert not {LIST_JOB, FUZZ_JOB} & set(unprepared_rust_jobs(workflow))
-    for name in (LIST_JOB, FUZZ_JOB):
-        job = ci_job(workflow, name)
-        assert re.search(r"^    timeout-minutes: \d+$", job, re.MULTILINE)
-        for run in re.findall(r"run: (.*)", job):
-            assert "${{" not in run
-    limit = re.search(r"timeout-minutes: (\d+)", ci_job(workflow, FUZZ_JOB))
+    assert FUZZ_JOB not in unprepared_rust_jobs(workflow)
+    job = ci_job(workflow, FUZZ_JOB)
+    for run in re.findall(r"run: (.*)", job):
+        assert "${{" not in run
+    limit = re.search(r"^    timeout-minutes: (\d+)$", job, re.MULTILINE)
     assert limit is not None
-    assert int(limit[1]) * 60 > SYNC_BUDGET_SECONDS + 300
+    targets = runner.discover_targets(ROOT)
+    assert targets
+    slot = runner.FUZZ_SECONDS_PER_TEST + runner.TARGET_GRACE_SECONDS
+    assert int(limit[1]) * 60 >= SYNC_BUDGET_SECONDS + len(targets) * slot
 
 
 def test_nightly_job_keeps_its_steps() -> None:
