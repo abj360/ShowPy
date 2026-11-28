@@ -17,6 +17,7 @@ from e8s.show.storage_models import (
     FsckFinding,
     FsckReport,
     GcReport,
+    ShowUpgrade,
     UpgradeReport,
 )
 
@@ -24,7 +25,8 @@ MODELS: tuple[FrozenModel, ...] = (
     FsckFinding(code="MISSING_BLOB", path="blobs/ab", message="blob is gone"),
     FsckReport(findings=(FsckFinding(code="X", path="p", message="m"),), ok=False),
     GcReport(removed=("a", "b"), bytes_freed=12, dry_run=True),
-    UpgradeReport(shows=("s",), revisions=3, blobs_linked=2, blobs_copied=1),
+    ShowUpgrade(show="s", revisions=3, blobs_linked=2, blobs_copied=1, skipped=(("a", "b"),)),
+    UpgradeReport(shows=(ShowUpgrade(show="s"),), skipped=(("notes.txt", "not a show"),)),
     ConformanceReport(passed=("a",), failed=(("b", "no lock"),)),
 )
 
@@ -38,4 +40,4 @@ def test_report_counts_refuse_negative_numbers() -> None:
     with pytest.raises(SchemaError):
         GcReport(bytes_freed=-1)
     with pytest.raises(SchemaError):
-        UpgradeReport(revisions=-1)
+        ShowUpgrade(show="s", revisions=-1)

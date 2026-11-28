@@ -67,11 +67,12 @@ from e8s.show.file_repository import FileRepository
 from e8s.show.files import LIMITS_DOC, WAIVERS_DOC
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.layout1 import _FileBackend
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.show_io import load_show, save_show
 from e8s.show.storage import ROOT_REVISION, Repository
+from e8s.show.upgrade import upgrade_repository
 from e8s.show.workspace import open_workspace
+from tests.fixtures.layout1 import write_layout1_root
 from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries, fails_after, replaced_form_show
 
@@ -221,11 +222,18 @@ def test_regression_device_name_is_refused_before_its_path_is_touched(
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot create a device-name folder")
 def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) -> None:
-    """Reads and extends a show stored under a device name before the refusal existed."""
-    head = _create(DocumentRepository(_FileBackend(tmp_path)), SHOW_ID)
-    repo = FileRepository(tmp_path)
-    stored = repo.get_show(SHOW_ID)
-    (tmp_path / SHOW_ID).rename(tmp_path / "CON")
+    """Reads a show stored under a device name before the refusal existed, and extends it once
+    its layout-1 root is upgraded."""
+    memory = InMemoryRepository()
+    head = _create(memory, SHOW_ID)
+    write_layout1_root(memory, tmp_path / "old")
+    legacy = FileRepository(tmp_path / "old")
+    stored = legacy.get_show(SHOW_ID)
+    (tmp_path / "old" / SHOW_ID).rename(tmp_path / "old" / "CON")
+    assert legacy.shows() == ["CON"]
+    assert legacy.get_show("CON") == stored
+    upgrade_repository(tmp_path / "old", tmp_path / "new")
+    repo = FileRepository(tmp_path / "new")
     assert repo.shows() == ["CON"]
     assert repo.get_show("CON") == stored
     landed = repo.transaction("CON", {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
@@ -436,7 +444,7 @@ def _stored_hyphenated_show() -> tuple[InMemoryRepository, Revision]:
 
 
 def test_stored_show_id_outside_the_id_rule_keeps_committing(tmp_path: Path) -> None:
-    """Extends shows stored under hyphenated IDs, in memory and in a layout-1 root."""
+    """Extends shows stored under hyphenated IDs, in memory and in an upgraded layout-1 root."""
     repo, revision = _stored_hyphenated_show()
     landed = repo.transaction(
         STORED_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
@@ -445,10 +453,13 @@ def test_stored_show_id_outside_the_id_rule_keeps_committing(tmp_path: Path) -> 
     assert "/renders/a.txt" in repo.paths(STORED_HYPHENATED_ID)
     documents = repo.documents("seed")
     blobs = {blob_digest(documents[path]): documents[path] for path in documents}
-    _FileBackend(tmp_path).commit(
+    stored = InMemoryRepository()
+    stored.backend.commit(
         LAYOUT_1_HYPHENATED_ID, revision, dict(repo.backend.tree("seed", repo.head("seed"))), blobs
     )
-    legacy = FileRepository(tmp_path)
+    write_layout1_root(stored, tmp_path / "old")
+    upgrade_repository(tmp_path / "old", tmp_path / "new")
+    legacy = FileRepository(tmp_path / "new")
     extended = legacy.transaction(
         LAYOUT_1_HYPHENATED_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
     )

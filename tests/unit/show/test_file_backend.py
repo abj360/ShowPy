@@ -53,6 +53,8 @@ Contains:
     test_current_ids_are_required_when_the_manifest_has_no_legacy_before: refuses an old-scheme ID
         when the manifest names no legacy slots
     test_regression_cold_commit_on_a_legacy_head_lands: commits on a legacy head from a cold backend
+    test_regression_reads_refuse_legacy_before_past_the_slot_after_the_head: refuses a manifest
+        whose legacy_before passes the slot after the last, on every read and on a commit
     test_manifest_legacy_before_must_be_a_positive_integer: refuses a manifest whose legacy_before
         is not a positive integer
     test_regression_symlinked_show_folder_is_refused: refuses a symlinked shows, show, log, records,
@@ -96,8 +98,10 @@ from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
 from e8s.show.layout import read_layout
-from e8s.show.layout1 import _FileBackend
+from e8s.show.layout1 import Layout1Reader
 from e8s.show.show_folders import show_folder
+from tests.fixtures.fsck_repos import legacy_manifest
+from tests.fixtures.layout1 import stored_layout1
 from tests.fixtures.slot_race import RACE_SHOW_ID, race_once_per_trial
 from tests.helpers import context_entries
 
@@ -115,6 +119,7 @@ RACERS = 8
 RACE_TRIALS = 200
 RACE_TIMEOUT_S = 120.0
 UNKNOWN_ID = "f" * 64
+LEGACY_DIGEST = "0" * 64
 
 
 def _change(parent: str, n: int) -> tuple[Revision, dict[str, str], dict[str, bytes]]:
@@ -367,11 +372,11 @@ def test_commit_on_an_unlanded_parent_is_a_conflict(tmp_path: Path) -> None:
 
 
 def test_backend_refuses_to_write_a_layout_1_root(tmp_path: Path) -> None:
-    legacy = DocumentRepository(_FileBackend(tmp_path))
-    legacy.transaction("old", {RENDER: b"x"}, expected_revision="", at=AT)
+    stored_layout1(tmp_path, "old", {RENDER: b"x"}, at=AT)
     revision, tree, blobs = _change("", 0)
     with pytest.raises(VersionError) as caught:
         FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
+    assert caught.value.code == "OLD_LAYOUT"
     assert caught.value.context["layout"] == 1
     assert not (tmp_path / "layout.json").exists()
     assert not (tmp_path / "shows").exists()
@@ -554,11 +559,9 @@ def test_file_repository_writes_layout_2_and_keeps_layout_1_roots(tmp_path: Path
     assert read_layout(tmp_path / "new") == 2
     assert _slot(tmp_path / "new", 1).exists()
     assert FileRepository(tmp_path / "new").revisions(SHOW_ID) == [landed]
-    DocumentRepository(_FileBackend(tmp_path / "old")).transaction(
-        SHOW_ID, {RENDER: b"x"}, expected_revision="", at=AT
-    )
+    stored_layout1(tmp_path / "old", SHOW_ID, {RENDER: b"x"}, at=AT)
     legacy = FileRepository(tmp_path / "old")
-    assert isinstance(legacy.backend, _FileBackend)
+    assert isinstance(legacy.backend, Layout1Reader)
     assert legacy.head(SHOW_ID) == landed.id
 
 
@@ -593,6 +596,11 @@ def test_regression_repository_backend_is_read_only(tmp_path: Path) -> None:
 
 def _set_manifest(root: Path, **extra: object) -> None:
     (_folder(root) / "show.json").write_bytes(dump_json({"id": SHOW_ID, **extra}))
+
+
+def _set_legacy(root: Path, landed: list[Revision], legacy_before: int) -> None:
+    ids = [revision.id for revision in landed]
+    (_folder(root) / "show.json").write_bytes(legacy_manifest(SHOW_ID, ids, legacy_before))
 
 
 def _mixed_history(root: Path, legacy: int, total: int) -> list[Revision]:
@@ -645,12 +653,12 @@ def test_regression_log_checks_each_record_seq_against_its_slot(tmp_path: Path) 
 
 def test_legacy_ids_accepted_only_before_legacy_before(tmp_path: Path) -> None:
     landed = _mixed_history(tmp_path, legacy=2, total=4)
-    _set_manifest(tmp_path, legacy_before=3)
+    _set_legacy(tmp_path, landed, 3)
     backend = FileBackend(tmp_path)
     assert backend.log(SHOW_ID) == landed
     assert backend.tree(SHOW_ID, landed[0].id) == {RENDER: digest(b"render 0")}
     for legacy_before, bad_slot in ((2, 2), (1, 1)):
-        _set_manifest(tmp_path, legacy_before=legacy_before)
+        _set_legacy(tmp_path, landed, legacy_before)
         with pytest.raises(StorageError) as caught:
             FileBackend(tmp_path).log(SHOW_ID)
         assert caught.value.code == "CORRUPT"
@@ -667,10 +675,33 @@ def test_current_ids_are_required_when_the_manifest_has_no_legacy_before(tmp_pat
 def test_regression_cold_commit_on_a_legacy_head_lands(tmp_path: Path) -> None:
     """Commits on a head with an old-scheme ID from a backend that has read nothing yet."""
     landed = _mixed_history(tmp_path, legacy=2, total=2)
-    _set_manifest(tmp_path, legacy_before=3)
+    _set_legacy(tmp_path, landed, 3)
     revision, tree, blobs = _change(landed[-1].id, 7)
     FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs)
     assert FileBackend(tmp_path).log(SHOW_ID) == [*landed, revision]
+
+
+def test_regression_reads_refuse_legacy_before_past_the_slot_after_the_head(
+    tmp_path: Path,
+) -> None:
+    """Refuses a manifest whose legacy_before passes the slot after the last, which no upgrade
+    writes, so a forged record in a slot past the head is never read unverified."""
+    landed = _mixed_history(tmp_path, legacy=2, total=2)
+    _set_legacy(tmp_path, landed, 4)
+    revision, tree, blobs = _change(landed[-1].id, 7)
+    for read in (
+        lambda: FileBackend(tmp_path).head(SHOW_ID),
+        lambda: FileBackend(tmp_path).log(SHOW_ID),
+        lambda: FileBackend(tmp_path).tree(SHOW_ID, landed[0].id),
+        lambda: FileBackend(tmp_path).commit(SHOW_ID, revision, tree, blobs),
+    ):
+        with pytest.raises(StorageError) as caught:
+            read()
+        assert caught.value.code == "CORRUPT"
+        assert caught.value.context["file"] == "show.json"
+        assert "legacy_before 4" in caught.value.message
+    _set_legacy(tmp_path, landed, 3)
+    assert FileBackend(tmp_path).log(SHOW_ID) == landed
 
 
 @pytest.mark.parametrize("legacy_before", [0, -1, True, "2", 1.5, None])
@@ -678,7 +709,9 @@ def test_manifest_legacy_before_must_be_a_positive_integer(
     tmp_path: Path, legacy_before: object
 ) -> None:
     _landed(FileBackend(tmp_path), 1)
-    _set_manifest(tmp_path, legacy_before=legacy_before)
+    _set_manifest(
+        tmp_path, legacy_before=legacy_before, legacy_count=1, legacy_digest=LEGACY_DIGEST
+    )
     with pytest.raises(StorageError) as caught:
         FileBackend(tmp_path).log(SHOW_ID)
     assert caught.value.code == "CORRUPT"

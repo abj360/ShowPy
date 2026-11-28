@@ -25,9 +25,9 @@ from e8s.core.util import ASSET_PREFIX, asset_uri
 from e8s.show.durable_io import NO_HARDLINK_ERRNOS
 from e8s.show.durable_reads import read_capped
 from e8s.show.integrity import blob_digest
-from e8s.show.layout1 import BLOB_MAX_BYTES, TEMP_PREFIX
+from e8s.show.layout import ASSET_DIR, holds_layout_1, require_usable_path
+from e8s.show.layout1 import BLOB_MAX_BYTES, TEMP_PREFIX, old_layout_error
 
-ASSET_DIR = "assets"
 TEMP_DIR = "tmp"
 ASSET_NAME_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
@@ -178,7 +178,8 @@ class FileAssetStore:
     Each new asset is written to a temp file under `<root>/tmp/`, flushed and linked into place,
     so an existing asset is never overwritten; where the file system cannot hard-link, the file
     is created in place exclusively. Reads re-hash the bytes and raise `StorageError` (code
-    `CORRUPT`) when they do not match the name.
+    `CORRUPT`) when they do not match the name. A layout-1 root is read-only: `put` raises
+    `VersionError` (code `OLD_LAYOUT`) there, whose hint copies the root into layout 2.
 
     Attributes:
         root: Folder holding the `assets/` and `tmp/` folders.
@@ -191,7 +192,21 @@ class FileAssetStore:
     """
 
     def __init__(self, root: Path) -> None:
+        require_usable_path(root)
         self.root = root
+        self._is_writable = False
+
+    def _require_writable(self) -> None:
+        """Refuses a layout-1 root, which this release only reads; once checked, never again.
+
+        No release writes a layout-1 root any more, so a root found to be another layout stays
+        writable.
+        """
+        if self._is_writable:
+            return
+        if holds_layout_1(self.root):
+            raise old_layout_error(self.root)
+        self._is_writable = True
 
     def put(self, data: bytes) -> str:
         """Stores bytes and returns their URI; equal bytes give the same URI.
@@ -217,6 +232,7 @@ class FileAssetStore:
                 context={"size": len(data), "cap": BLOB_MAX_BYTES},
                 code=ErrorCode.TOO_LARGE,
             )
+        self._require_writable()
         directory = self.root / ASSET_DIR
         path = directory / blob_digest(data)
         with _mapped_io(path):

@@ -13,18 +13,20 @@ Contains:
     stored_revision(): checks a stored revision and returns it, reading a naive time as UTC
     hashed_time(): returns the time a stored revision's ID was hashed from, naive if stored so
     parsed_slot(): checks the bytes of a slot and returns its revision, or raises TORN_SLOT
-    parsed_manifest(): checks a parsed manifest and returns its show ID and `legacy_before` slot
     require_blob_digest(): raises CORRUPT unless a stored blob's bytes hash to its file name
+    recomputes(): tells whether a revision's ID is the current scheme's hash of what it holds
     Record: holds a revision record's slot number, revision and tree
     parsed_record(): checks a parsed revision record against its name and returns it
     require_slot_record(): raises CORRUPT unless a slot's record holds its number and revision
     ReadBudget: counts the bytes one log read takes and refuses to pass its limit
+    last_present(): gallops from a slot known present and bisects back to the last present one
     refuse_redirect(): refuses a folder that is a symlink or a junction
     require_plain_folders(): refuses the first listed folder that is a symlink or a junction
     require_caller_ids(): refuses a commit whose revision, parent, blob or tree IDs are malformed
+    require_readable_sizes(): refuses a commit holding a blob larger than reads accept
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, TypedDict
@@ -37,15 +39,14 @@ from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show import document_repository, durable_reads
+from e8s.show.backend import REVISION_ID_PATTERN
 from e8s.show.history_models import STORED_TIME_KEY, Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.layout1 import REVISION_ID_PATTERN
-from e8s.show.show_folders import show_folder
+from e8s.show.layout1 import BLOB_MAX_BYTES
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.torn_reads import is_unfinished_line
 
 CORRUPT_HINT = "restore the show folder from a backup or remove the damaged file"
-MANIFEST_KEYS = frozenset({"id", "legacy_before"})
 RECORD_KEYS = frozenset({"revision", "seq", "tree"})
 SLOT_KEYS = frozenset({"id", "parent", "at", "changed"})
 FIRST_SEQ = 1
@@ -187,27 +188,6 @@ def parsed_slot(show_id: str, path: Path, raw: bytes) -> Revision:
     return stored_revision(show_id, path, stored)
 
 
-def parsed_manifest(show_id: str, path: Path, stored: JsonValue) -> tuple[str, int]:
-    """Checks a parsed manifest and returns the show ID it names and its `legacy_before` slot.
-
-    Args:
-        show_id: Show being read, named in errors; empty when it is not known yet.
-        path: The manifest file, whose folder must be the one its show ID encodes.
-        stored: Parsed JSON of the manifest.
-
-    Returns:
-        manifest: The listed show ID and the first slot whose revision ID is recomputable.
-    """
-    if not isinstance(stored, dict) or not {"id"} <= stored.keys() <= MANIFEST_KEYS:
-        raise corrupt(show_id, path, "manifest must hold id and may hold legacy_before")
-    listed, legacy_before = stored["id"], stored.get("legacy_before", FIRST_SEQ)
-    if not isinstance(listed, str) or show_folder(listed) != path.parent.name:
-        raise corrupt(show_id, path, "manifest names a show stored in another folder")
-    if not isinstance(legacy_before, int) or isinstance(legacy_before, bool) or legacy_before < 1:
-        raise corrupt(show_id, path, "manifest legacy_before is not a positive integer")
-    return listed, legacy_before
-
-
 def require_blob_digest(show_id: str, path: Path, data: bytes) -> None:
     """Raises CORRUPT unless a stored blob's bytes hash to its file name."""
     if blob_digest(data) != path.name:
@@ -222,6 +202,25 @@ class Record(NamedTuple):
     tree: dict[str, str]
 
 
+def recomputes(
+    revision: Revision, tree: Mapping[str, str], hashed_at: datetime | None = None
+) -> bool:
+    """Tells whether a revision's ID is the current scheme's hash of its parent, time and changes.
+
+    Args:
+        revision: The revision.
+        tree: Path to blob digest at the revision; a changed path it lacks was deleted.
+        hashed_at: The time the ID hashes: the revision's time exactly as stored; the revision's
+            own time when omitted.
+
+    Returns:
+        is_current: False for an ID of the older scheme, or one that names other content.
+    """
+    at = revision.at if hashed_at is None else hashed_at
+    changes = {changed: tree.get(changed) for changed in revision.changed}
+    return document_repository.revision_id(revision.parent, at, changes) == revision.id
+
+
 def _require_scheme_id(
     show_id: str, path: Path, record: Record, legacy_before: int, hashed_at: datetime
 ) -> None:
@@ -229,11 +228,7 @@ def _require_scheme_id(
 
     `hashed_at` is the revision's time exactly as stored, which its ID hashes.
     """
-    revision = record.revision
-    if record.seq < legacy_before:
-        return
-    changes = {changed: record.tree.get(changed) for changed in revision.changed}
-    if document_repository.revision_id(revision.parent, hashed_at, changes) != revision.id:
+    if record.seq >= legacy_before and not recomputes(record.revision, record.tree, hashed_at):
         raise corrupt(show_id, path, "record does not hash to its name")
 
 
@@ -347,3 +342,53 @@ def require_plain_folders(show_id: str, *folders: Path) -> None:
         mode = durable_reads.lstat_mode(show_id, path)
         if mode is not None:
             refuse_redirect(path, mode, show_id)
+
+
+def require_readable_sizes(
+    show_id: str, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+) -> None:
+    """Refuses blobs over BLOB_MAX_BYTES before any write, since reads would refuse them.
+
+    Args:
+        show_id: Show the commit belongs to, named in the error.
+        tree: The commit's tree, which names the paths of the oversized blobs.
+        blobs: The commit's blob bytes by digest.
+    """
+    oversized = {d for d, data in blobs.items() if len(data) > BLOB_MAX_BYTES}
+    if not oversized:
+        return
+    paths = sorted(p for p, d in tree.items() if d in oversized)
+    raise StorageError(
+        f"files of {show_id} over the {BLOB_MAX_BYTES}-byte cap: {', '.join(paths)}",
+        hint="keep each file under the cap; store larger media outside the repository",
+        context={"show": show_id, "paths": paths, "cap": BLOB_MAX_BYTES},
+        code=ErrorCode.TOO_LARGE,
+    )
+
+
+def last_present(is_present: Callable[[int], bool], seq: int) -> int:
+    """Gallops from slot `seq + 1`, known present, and bisects back to the last present slot.
+
+    Slots are created in order, so at most 2 log2(n) + 2 lookups find the last of n slots.
+
+    Args:
+        is_present: Looks one slot number up.
+        seq: Slot before the first one known present.
+
+    Returns:
+        last: The number of the last present slot.
+
+    >>> last_present(lambda seq: seq <= 5, 0)
+    5
+    """
+    present, step = seq + 1, 2
+    while is_present(seq + step):
+        present, step = seq + step, step * 2
+    absent = seq + step
+    while absent - present > 1:
+        middle = (present + absent) // 2
+        if is_present(middle):
+            present = middle
+        else:
+            absent = middle
+    return present

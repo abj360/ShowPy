@@ -12,6 +12,9 @@ Contains:
 import hashlib
 import re
 
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import StorageError
+
 SHOW_FOLDER_DOMAIN = b"e8s.show-folder\n"
 SLUG_MAX_CHARS = 32
 FOLDER_HASH_CHARS = 16
@@ -34,9 +37,22 @@ def show_folder(show_id: str) -> str:
     Returns:
         folder: The folder name under the repository's `shows/` folder.
 
+    Raises:
+        StorageError: The ID holds a surrogate UTF-8 cannot encode (BAD_PATH); no stored show
+            has one, since every stored ID passed the show ID rule.
+
     >>> show_folder("Show"), show_folder("show")
     ('show-f2227dcc569c0978', 'show-7e56e2f6502dbdf4')
     """
+    try:
+        encoded = show_id.encode()
+    except UnicodeEncodeError as error:
+        raise StorageError(
+            f"show id {show_id!r} holds a surrogate UTF-8 cannot encode",
+            hint="use letters, digits, _, . and - only, starting with a letter or digit",
+            context={"show": show_id.encode(errors="backslashreplace").decode()},
+            code=ErrorCode.BAD_PATH,
+        ) from error
     slug = OUTSIDE_SLUG.sub("_", show_id.lower())[:SLUG_MAX_CHARS]
-    digest = hashlib.sha256(SHOW_FOLDER_DOMAIN + show_id.encode()).hexdigest()
+    digest = hashlib.sha256(SHOW_FOLDER_DOMAIN + encoded).hexdigest()
     return f"{slug}-{digest[:FOLDER_HASH_CHARS]}"

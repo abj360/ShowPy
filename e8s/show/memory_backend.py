@@ -11,11 +11,15 @@ from typing import override
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError
-from e8s.show.backend import RepositoryBackend, conflict_error, unknown_revision_error
+from e8s.show.backend import (
+    REVISION_ID_PATTERN,
+    RepositoryBackend,
+    conflict_error,
+    unknown_revision_error,
+)
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.layout1 import REVISION_ID_PATTERN
 from e8s.show.storage import ROOT_REVISION
 
 

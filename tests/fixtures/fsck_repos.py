@@ -14,6 +14,7 @@ Contains:
     NS_PER_SECOND: converts a nanosecond time to the float seconds of an lstat time
     numbered_change(): builds revision n, which changes the render path only after the first
     landed_revisions(): commits revisions 0 to count - 1 through FileBackend
+    legacy_manifest(): encodes a manifest whose legacy prefix ends before a slot
     show_path(): names a show's folder
     slot_path(): names a slot of SHOW_ID
     record_path(): names the record of a revision of SHOW_ID
@@ -37,10 +38,12 @@ from pathlib import Path
 import pytest
 
 from e8s.show.backend import digest
+from e8s.show.document_dump import dump_json
 from e8s.show.document_repository import revision_id
 from e8s.show.file_backend import SLOT_DIGITS, FileBackend
 from e8s.show.fsck import fsck
 from e8s.show.history_models import Revision
+from e8s.show.manifests import legacy_digest
 from e8s.show.show_folders import show_folder
 
 AT = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
@@ -176,3 +179,25 @@ def list_like_windows(monkeypatch: pytest.MonkeyPatch, *, by_descriptor: bool = 
     monkeypatch.setattr(os, "scandir", scandir)
     if by_descriptor:
         monkeypatch.setattr(os, "supports_fd", os.supports_fd | {scandir})
+
+
+def legacy_manifest(show_id: str, revision_ids: list[str], legacy_before: int) -> bytes:
+    """Encodes a manifest whose legacy prefix holds the slots before `legacy_before`.
+
+    The digest covers as many of `revision_ids` as the prefix has slots; a prefix longer than the
+    history gets the digest of the whole history, as a manifest edited by hand would.
+
+    Args:
+        show_id: The show.
+        revision_ids: IDs of the show's slots in order.
+        legacy_before: First slot after the prefix; 1 gives a manifest with no prefix.
+    """
+    count = legacy_before - 1
+    if count == 0:
+        return dump_json({"id": show_id})
+    prefix = {
+        "legacy_before": legacy_before,
+        "legacy_count": count,
+        "legacy_digest": legacy_digest(revision_ids[:count]),
+    }
+    return dump_json({"id": show_id, **prefix})

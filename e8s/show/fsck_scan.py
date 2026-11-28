@@ -19,7 +19,6 @@ from typing import NamedTuple
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError, UnknownRefError, VersionError
-from e8s.show.assets import ASSET_DIR
 from e8s.show.backend_checks import corrupt
 from e8s.show.commit_writes import LAYOUT_BYTES, STALE_TEMP_AGE
 from e8s.show.durable_io import TEMP_PREFIX, is_stale_temp, mapped_io
@@ -37,6 +36,7 @@ from e8s.show.fsck_findings import (
 )
 from e8s.show.fsck_show import scan_show
 from e8s.show.layout import (
+    ASSET_DIR,
     CURRENT_LAYOUT,
     HOUSEKEEPING_NAMES,
     LAYOUT_FILE,
@@ -44,6 +44,7 @@ from e8s.show.layout import (
     TEMP_DIR,
     read_layout,
 )
+from e8s.show.layout1 import old_layout_error
 from e8s.show.show_folders import SHOW_FOLDER_PATTERN, show_folder
 from e8s.show.storage_models import FsckFinding
 from e8s.show.torn_reads import is_short_of
@@ -77,10 +78,13 @@ def _missing_root(root: Path) -> StorageError:
 
 
 def _layout_1(root: Path) -> VersionError:
+    """Builds the OLD_LAYOUT error for a layout-1 root, whose hint copies it into layout 2."""
+    error = old_layout_error(root)
     return VersionError(
         f"repository at {root} is layout 1, which fsck and gc do not check",
-        hint="open it with FileRepository, which reads layout 1; fsck and gc check layout 2 only",
-        context={"layout": 1, "supported": CURRENT_LAYOUT, "root": str(root)},
+        hint=error.hint,
+        context=error.context,
+        code=error.code,
     )
 
 
@@ -177,7 +181,7 @@ class _RootCheck:
         """Checks the folder of one show, which must exist under a plain shows folder."""
         try:
             folder = self.root / SHOWS_DIR / show_folder(show_id)
-        except UnicodeEncodeError as error:
+        except StorageError as error:
             raise self._no_show(show_id) from error
         for path in (self.root / SHOWS_DIR, folder):
             info = lstat_info(show_id, path)
