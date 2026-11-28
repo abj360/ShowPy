@@ -17,6 +17,11 @@ Contains:
     test_round_to_checks_the_value_before_the_step: raises SchemaError for a bad value and
         TypeError for a step that is not a number, as v0.4.0 did
     test_core_constants_match_the_model_layer: keeps the ID patterns and reserved names in step
+    test_regression_require_size_refuses_out_of_range_floats_as_v040_did: raises v0.4.0's
+        SchemaError, with the float in the message and context, for NaN, infinities and floats
+        below 0 or over the cap
+    test_regression_require_size_refuses_floats_v040_let_through: raises TypeError for a float
+        in range, which v0.4.0 accepted without truncating
 """
 
 import inspect
@@ -140,3 +145,35 @@ def test_round_to_checks_the_value_before_the_step() -> None:
         core.round_to(math.nan, cast("float", "x"))
     with pytest.raises(TypeError):
         core.round_to(1.0, cast("float", "x"))
+
+
+SIZE_CAP = 1_000_000
+
+
+@pytest.mark.parametrize(
+    ("requested", "shown", "is_negative"),
+    [
+        (math.nan, "nan", False),
+        (math.inf, "inf", False),
+        (-math.inf, "-inf", True),
+        (2e6, "2000000.0", False),
+        (1_000_000.5, "1000000.5", False),
+        (-1.5, "-1.5", True),
+        (np.float64(-2.0), "-2.0", True),
+    ],
+)
+def test_regression_require_size_refuses_out_of_range_floats_as_v040_did(
+    requested: float, shown: str, is_negative: bool
+) -> None:
+    with pytest.raises(SpacingError) as caught:
+        core.require_size(cast("int", requested), SIZE_CAP, what="points", error=SpacingError)
+    tail = "which is negative" if is_negative else f"over the cap of {SIZE_CAP}"
+    assert caught.value.message == f"points would need {shown}, {tail}"
+    assert caught.value.context["what"] == "points"
+    assert caught.value.context["cap"] == SIZE_CAP
+
+
+@pytest.mark.parametrize("requested", [3.0, 3.5, -0.0, 1e6, np.float64(2.0)])
+def test_regression_require_size_refuses_floats_v040_let_through(requested: float) -> None:
+    with pytest.raises(TypeError):
+        core.require_size(cast("int", requested), SIZE_CAP, what="points")

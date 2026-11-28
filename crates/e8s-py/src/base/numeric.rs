@@ -249,7 +249,17 @@ fn context_of<'py>(py: Python<'py>, err: &CoreError) -> PyResult<Bound<'py, PyDi
     Ok(context)
 }
 
-/// Rejects a size too large for 64 bits: it is over every cap, or below zero.
+/// Tells whether a real number that is not an int lies outside [0, cap], so v0.4.0's
+/// comparisons rejected it with the size error; NaN compares false and is rejected too.
+fn is_rejected_real(requested: &Bound<'_, PyAny>, cap: i64) -> PyResult<bool> {
+    let is_real = requested.is_instance_of::<PyFloat>()
+        || requested.is_instance(REAL.import(requested.py(), "numbers", "Real")?.as_any())?;
+    Ok(is_real && !(requested.ge(0)? && requested.le(cap)?))
+}
+
+/// Rejects a size that is not a 64-bit int: an int beyond 64 bits is over every cap or below
+/// zero, and a real number outside [0, cap] gets the same error, as v0.4.0 compared it. Any other
+/// value, a float in range included, raises TypeError: a size is a count.
 fn require_huge_size(
     requested: &Bound<'_, PyAny>,
     cap: i64,
@@ -257,7 +267,7 @@ fn require_huge_size(
     error: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let py = requested.py();
-    if !requested.is_instance_of::<PyInt>() {
+    if !requested.is_instance_of::<PyInt>() && !is_rejected_real(requested, cap)? {
         return Err(requested.extract::<i64>().err().unwrap_or_else(|| {
             pyo3::exceptions::PyTypeError::new_err("requested must be an int")
         }));
