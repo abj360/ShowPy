@@ -55,10 +55,11 @@ CASE_PATHS = (
     "/renders/straße.txt",
     "/renders/日本.txt",
 )
-CASE_SHOW_PAIRS = (
-    ("Case_show", "case_show"),
-    ("show_É", "show_é"),
-    ("nfc_é", "nfc_é"),
+# Both follow the repository's show ID rule, so a backend must keep them as two shows.
+CASE_SHOW_IDS = ("Case_show", "case_show")
+UNICODE_SHOW_PAIRS = (
+    ("show_\u00c9", "show_\u00e9"),
+    ("nfc_\u00e9", "nfc_e\u0301"),
 )
 LONG_NAME_CHARS = 1_024
 LONG_SEGMENT_CHARS = 255
@@ -347,19 +348,38 @@ def _stored_or_refused(backend: RepositoryBackend, show_id: str, commit: Commit)
     return True
 
 
+def _pair_kept_apart(backend: RepositoryBackend, first_id: str, second_id: str) -> bool | None:
+    """Writes two shows whose IDs differ only in case or Unicode form, one after the other.
+
+    Returns:
+        is_apart: True when both landed as two shows, False when the second was refused, None
+            when the first was refused.
+    """
+    first = next_commit(ROOT_REVISION, {}, {A_PATH: first_id.encode()})
+    if not _stored_or_refused(backend, first_id, first):
+        return None
+    second = next_commit(ROOT_REVISION, {}, {A_PATH: second_id.encode()})
+    is_apart = _stored_or_refused(backend, second_id, second)
+    kept_blob = backend.blob(first_id, first.tree[A_PATH]) == first_id.encode()
+    kept = backend.head(first_id) == first.revision.id and kept_blob
+    require(f"writing show {second_id!r} changed show {first_id!r}", holds=kept)
+    if is_apart:
+        require("shows() merges two IDs", holds={first_id, second_id} <= set(backend.shows()))
+    return is_apart
+
+
 def unicode_and_case_paths(backend: RepositoryBackend) -> None:
-    """Checks that names differing in case or Unicode form stay apart or fail, never merge."""
+    """Checks that names differing in case or Unicode form stay apart or fail, never merge.
+
+    Show IDs that differ only in ASCII case must both be stored; a backend may refuse an ID
+    outside the repository's show ID rule, such as one with accents.
+    """
     paths = {path: path.encode() for path in CASE_PATHS}
     _stored_or_refused(backend, SHOW_ID, next_commit(ROOT_REVISION, {}, paths))
-    for first_id, second_id in CASE_SHOW_PAIRS:
-        first = _first(backend, first_id, first_id.encode())
-        second = next_commit(ROOT_REVISION, {}, {A_PATH: second_id.encode()})
-        is_apart = _stored_or_refused(backend, second_id, second)
-        kept_blob = backend.blob(first_id, first.tree[A_PATH]) == first_id.encode()
-        kept = backend.head(first_id) == first.revision.id and kept_blob
-        require(f"writing show {second_id!r} changed show {first_id!r}", holds=kept)
-        if is_apart:
-            require("shows() merges two IDs", holds={first_id, second_id} <= set(backend.shows()))
+    is_apart = _pair_kept_apart(backend, *CASE_SHOW_IDS)
+    require("show IDs differing only in case are not two shows", holds=is_apart is True)
+    for first_id, second_id in UNICODE_SHOW_PAIRS:
+        _pair_kept_apart(backend, first_id, second_id)
 
 
 def long_names(backend: RepositoryBackend) -> None:

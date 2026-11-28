@@ -10,6 +10,8 @@ Contains:
     test_a_backend_that_lets_two_writers_win_fails_the_kit: fails one_winner_per_parent
     test_each_broken_rule_fails_its_check: fails the check of each rule an adapter breaks
     test_a_check_that_raises_fails_alone: reports the exception and still runs every check
+    test_regression_a_backend_refusing_ids_outside_the_show_id_rule_conforms: passes every check
+        when show IDs outside SHOW_ID_PATTERN are refused with StorageError
 """
 
 import errno
@@ -20,9 +22,11 @@ from pathlib import Path
 
 import pytest
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ConflictError, StorageError
 from e8s.show.backend import RepositoryBackend
 from e8s.show.conformance import CHECK_NAMES, check_backend
+from e8s.show.document_repository import SHOW_ID_PATTERN
 from e8s.show.file_backend import FileBackend
 from e8s.show.history_models import Revision
 from e8s.show.memory_backend import _MemoryBackend
@@ -234,3 +238,22 @@ def test_a_check_that_raises_fails_alone() -> None:
     assert failed["read_your_writes"] == "raised RuntimeError: backend crashed"
     assert "one_winner_per_parent" in report.passed
     assert len(report.passed) + len(failed) == len(CHECK_NAMES)
+
+
+class _StrictShowIds(_Adapter):
+    """Refuses to store a show whose ID breaks the repository's show ID rule."""
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+    ) -> None:
+        if not SHOW_ID_PATTERN.fullmatch(show_id):
+            raise StorageError(
+                f"show id {show_id!r} cannot be stored",
+                hint="use letters, digits, _, . and - only",
+                code=ErrorCode.BAD_PATH,
+            )
+        super().commit(show_id, revision, tree, blobs)
+
+
+def test_regression_a_backend_refusing_ids_outside_the_show_id_rule_conforms() -> None:
+    _require_conforms(check_backend(_StrictShowIds))
